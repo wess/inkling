@@ -187,12 +187,13 @@ and skip otherwise, so `bun test` stays zero-setup.
 
 ## Documentation
 
+- **[wess.io/inkling](https://wess.io/inkling/)** — the site
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module layout, data model,
   plugin system, realtime, previews, AI, and the dialect-portability rules
-- [`docs/llms.txt`](docs/llms.txt) — the same ground in one pass, written to be
-  read by an agent before it touches the code
-- [`CLAUDE.md`](CLAUDE.md) — conventions and the gotchas that cost real bugs
+- [`llms.txt`](https://wess.io/inkling/llms.txt) — the same ground in one pass,
+  written to be read by an agent before it touches the code
 - [`.env.example`](.env.example) — every configuration variable
 
-`docs/` is also the site. Set GitHub Pages to serve from **main → /docs** and
-`llms.txt` lands at the site root, where agents look for it.
+`docs/` is the site. Anything committed there publishes to the `gh-pages` branch
+on push (`.github/workflows/pages.yml`), so `llms.txt` lands at the site root
+where agents look for it.
