@@ -1,0 +1,138 @@
+# Inkling
+
+> A content platform. You define the shapes your content has; editors fill them
+> in; your sites read the result over one HTTP API. Content is stored, not
+> rendered — Inkling never produces your markup.
+
+Named `llms.txt` after the llmstxt.org convention, so agents find it at
+`/llms.txt` without being told. This file is the fast path: it is written to be
+read whole, and it links to the long documents rather than repeating them.
+
+## Orientation
+
+- **One process, one port.** The admin, the API, delivery, media, and the socket
+  share an origin and are separated by path. No proxy, no second server, no dev
+  server. `src/server.ts` is the only entry point.
+- Everything session-gated is mounted through `prefixed("/api", …)`. Everything
+  public keeps a root path, because those paths live in other people's code.
+  Whatever the router does not claim is the admin — so `/settings` is a screen
+  and `/api/settings` is the API.
+- Mount by audience, not by module: a feature with both kinds of route exports
+  two arrays (`mediaRoutes` / `mediaFileRoutes`, `previewRoutes` /
+  `previewPublicRoutes`, `realtime.routes` / `realtime.publicRoutes`).
+- Two surfaces. **Admin API**: session bearer token, role-gated, everything.
+  **Delivery API**: `X-Api-Key`, read-only, published content only.
+- A delivery key can never see a draft, a user's email, or a deleted row.
+  Reference expansion re-checks publication status *and* the key's type scopes,
+  so a reference cannot leak content the key could not have fetched directly.
+- Two deliberate exceptions, both narrow: a **preview token** names one entry and
+  expires in an hour; the **realtime socket** tells a key holder that published
+  content moved, carrying ids and never payloads.
+- Postgres is the store. SQLite exists only so the test suite runs in memory.
+- No build step for the API. Verify with `bunx tsc --noEmit` and `bun test` —
+  both must be clean.
+
+## Delivery API (what a website calls)
+
+| Route | Returns |
+|---|---|
+| `GET /content` | Types this key may read, with field shapes |
+| `GET /content/:type` | Published entries; `?term=`, `?locale=`, `?sort=`, `?include=terms,author` |
+| `GET /content/:type/:slug` | One published entry (`/single` for single-entry types) |
+| `GET /site/settings` | Site settings, with media ids resolved to URLs |
+| `GET /site/menus/:name` | One menu tree |
+| `GET /preview/:token` | One entry at any status, until the token expires |
+| `POST /realtime/delivery/ticket` | A 30-second ticket to open the socket |
+
+Media and reference fields arrive expanded, so a page render is one request.
+
+## Realtime
+
+Open `ws://host/realtime?ticket=…` after exchanging a credential for a ticket
+(`POST /api/realtime/ticket` for a session, `POST /realtime/delivery/ticket` for
+a key — the key route stays at the root because consuming sites call it).
+A browser cannot set headers on a handshake and query strings reach logs, so the
+ticket is single-use and dies in 30 seconds.
+
+Client frames: `{"action":"subscribe"|"unsubscribe","topic":…}` and
+`{"action":"ping"}`. Topics: `site`, `content:<type>`, `entry:<id>`.
+Server frames: `{topic, event, data}` plus `ready` / `subscribed` / `pong` /
+`error`. Entry topics also carry `presence`.
+
+Keys are refused entry topics entirely and hear only `entry.published`,
+`entry.unpublished`, `entry.deleted`. Frames carry `id`, `slug`, `type` — never
+content. Re-read through `/content` when one arrives.
+
+## Admin API (shape only — see the source for the full list)
+
+All under `/api`: `/api/auth/*`, `/api/users`, `/api/types`,
+`/api/types/:type/entries`, `/api/entries/:id`,
+`/api/entries/:id/{publish,unpublish,status,duplicate,preview,revisions}`,
+`/api/entries/bulk`, `/api/media`, `/api/taxonomies`, `/api/menus`,
+`/api/settings`, `/api/keys`, `/api/webhooks`, `/api/search`, `/api/stats`,
+`/api/audit`, `/api/plugins`, `/api/ai/*`, `/api/realtime/ticket`.
+
+A new session-gated route goes inside the `prefixed("/api", […])` block in
+`src/server.ts`. At the root it would shadow an admin screen — `/settings`,
+`/types`, `/media`, `/menus`, `/plugins`, `/keys`, `/users`, and `/webhooks` are
+all admin URLs.
+
+Roles are a ladder: `viewer < author < editor < admin < owner`. Capabilities are
+predicates in `src/auth/roles.ts` — routes guard with `requireCan(can.x, "…")`
+rather than comparing role strings.
+
+## AI
+
+Optional and absent until an operator connects a provider in the admin. Keys are
+stored encrypted (AES-GCM under a key derived from `SECRET`) in their own table,
+never in `settings`, and are never returned by the API.
+
+- `POST /ai/assist` — editorial assistant, SSE. Intents: `draft`, `rewrite`,
+  `shorten`, `expand`, `summarize`, `titles`, `seo`, `translate`, `ask`.
+- `POST /ext/assistant/ask` — the optional public assistant (a plugin), answering
+  from published content only, grounded in the page the visitor is on.
+
+Content is fenced in `<content>` / `<selection>` tags and the model is instructed
+to treat it as material, never as instructions.
+
+## Plugins
+
+A plugin is a plain object from `definePlugin()` at `plugins/<name>/index.ts`. It
+may add content types, taxonomies, settings, admin panels, routes, its own
+migrations, and hook listeners. Routes are declared relative and namespaced to
+`/ext/<name>/…`, resolved per request — enabling one needs no restart.
+
+`emit` hooks observe and can never break the core path. `filter` hooks transform,
+and a throwing filter degrades to a no-op rather than blanking the payload.
+
+Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`.
+
+## Gotchas that cost real bugs
+
+1. **Never use camelCase SQL column names.** Identifiers are emitted unquoted;
+   Postgres folds them to lowercase and SQLite does not, so the same column comes
+   back under two different keys. Field *keys* inside an entry's `data` JSON are a
+   different thing and are camelCase — they never touch SQL.
+2. **Don't hand a whole multi-statement `.sql` file to `db.execute`.** SQLite runs
+   only the first statement and reports success. `src/migrate` splits them.
+3. **Aggregates and joins need the string-table form** (`from("entries", "e")`),
+   through `rows()` / `one()` / `countRows()` in `src/db/dialect.ts`. Avoid
+   `.distinct()` — it compiles to Postgres-only syntax.
+4. **`parseMultipart` yields `{ fields, files }`**, not one flat body.
+5. **Media must set `Cross-Origin-Resource-Policy: cross-origin`**, or every
+   `<img>` on a consuming site fails silently on a valid 200.
+6. **`await` inside a `.where()` callback is a syntax error** — the predicate is
+   synchronous.
+7. **Don't collect ids into an `IN (…)` list** for anything unbounded. One bound
+   parameter per row means a popular filter eventually exceeds the driver's
+   parameter ceiling. Join instead.
+8. **The admin fallback keys on Atlas answering an unmatched path with a
+   plain-text 404**, while every `HttpError` renders as JSON. Change that and the
+   admin stops loading; `tests/routing.test.ts` asserts it.
+
+## Files
+
+- [Architecture](https://github.com/wess/inkling/blob/main/docs/ARCHITECTURE.md) — module layout, data model, dialect portability, plugins, realtime, previews, AI
+- [README](https://github.com/wess/inkling/blob/main/README.md) — quick start and a worked delivery example
+- [CLAUDE.md](https://github.com/wess/inkling/blob/main/CLAUDE.md) — conventions and commands
+- [.env.example](https://github.com/wess/inkling/blob/main/.env.example) — every configuration variable, documented in place
