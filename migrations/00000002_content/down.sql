@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS revisions;
+DROP TABLE IF EXISTS entries;
+DROP TABLE IF EXISTS content_types;

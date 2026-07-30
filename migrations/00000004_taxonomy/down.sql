@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS entry_terms;
+DROP TABLE IF EXISTS terms;
+DROP TABLE IF EXISTS taxonomies;

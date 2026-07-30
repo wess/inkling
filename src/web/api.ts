@@ -1,0 +1,393 @@
+// Typed client for the admin API. Everything goes through /api/*, which
+// src/web/serve.ts proxies to the API process — the browser never talks to the
+// API port directly, so the bearer token rides one origin.
+
+const TOKEN_KEY = "inkling_token"
+
+export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY)
+export const setToken = (token: string): void => localStorage.setItem(TOKEN_KEY, token)
+export const clearToken = (): void => localStorage.removeItem(TOKEN_KEY)
+
+export type ApiError = Error & { status: number; code?: string; details?: unknown }
+
+const fail = (status: number, message: string, code?: string, details?: unknown): ApiError => {
+  const error = new Error(message) as ApiError
+  error.status = status
+  error.code = code
+  error.details = details
+  return error
+}
+
+type Options = { method?: string; body?: unknown; form?: FormData; query?: Record<string, string | number | undefined> }
+
+export const request = async <T>(path: string, options: Options = {}): Promise<T> => {
+  const url = new URL(`/api${path}`, location.origin)
+  for (const [key, value] of Object.entries(options.query ?? {})) {
+    if (value !== undefined && value !== "") url.searchParams.set(key, String(value))
+  }
+
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.authorization = `Bearer ${token}`
+  if (options.body !== undefined) headers["content-type"] = "application/json"
+
+  const response = await fetch(url, {
+    method: options.method ?? (options.body !== undefined || options.form ? "POST" : "GET"),
+    headers,
+    body: options.form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
+  })
+
+  if (response.status === 204) return undefined as T
+
+  const payload = await response.json().catch(() => ({}) as Record<string, unknown>)
+
+  if (!response.ok) {
+    // A dead session should drop the user at the login screen rather than
+    // leaving every panel showing its own 401.
+    if (response.status === 401) clearToken()
+    throw fail(
+      response.status,
+      typeof payload.error === "string" ? payload.error : `Request failed (${response.status})`,
+      payload.code as string | undefined,
+      payload.details,
+    )
+  }
+
+  return payload as T
+}
+
+export type Identity = { id: string; email: string; name: string; role: string; avatarId: string | null }
+
+export type FieldOption = { value: string; label: string }
+
+export type Field = {
+  key: string
+  type: string
+  label: string
+  help?: string
+  required?: boolean
+  localized?: boolean
+  multiple?: boolean
+  default?: unknown
+  options?: FieldOption[]
+  min?: number
+  max?: number
+  pattern?: string
+  of?: string
+  fields?: Field[]
+}
+
+export type ContentType = {
+  id: string
+  name: string
+  label: string
+  pluralLabel: string
+  description: string | null
+  kind: "collection" | "single"
+  previewUrl: string | null
+  fields: Field[]
+  icon: string | null
+  sortOrder: number
+  ownerPlugin: string | null
+  entryCount?: number
+}
+
+export type Entry = {
+  id: string
+  type?: string
+  contentTypeId: string
+  slug: string
+  title: string
+  data: Record<string, unknown>
+  status: string
+  locale: string
+  authorId: string | null
+  sortOrder: number
+  publishedAt: string | null
+  scheduledAt: string | null
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+}
+
+export type Media = {
+  id: string
+  filename: string
+  url: string
+  mime: string
+  size: number
+  width: number | null
+  height: number | null
+  alt: string | null
+  caption: string | null
+  folder: string | null
+  createdAt: string
+  deletedAt: string | null
+}
+
+export type PluginPanel = {
+  id: string
+  label: string
+  icon?: string
+  kind: "settings" | "collection" | "table" | "stats"
+  contentType?: string
+  endpoint?: string
+  columns?: { key: string; label: string }[]
+  ranges?: number[]
+  description?: string
+}
+
+// Mirrors PluginStats in src/plugins/define.ts. Values arrive pre-formatted —
+// the plugin decides what a number means and how it reads.
+export type PluginStatsPayload = {
+  tiles: { label: string; value: string; hint?: string }[]
+  series?: { label: string; points: { label: string; value: number }[] }
+  tables?: { label: string; columns: { key: string; label: string }[]; rows: Record<string, string | number>[] }[]
+}
+
+export type PluginSetting = {
+  key: string
+  label: string
+  type: "text" | "textarea" | "number" | "boolean" | "select"
+  help?: string
+  default?: unknown
+  options?: FieldOption[]
+}
+
+export type Plugin = {
+  name: string
+  label: string
+  version: string
+  description: string | null
+  author: string | null
+  requires: string[]
+  enabled: boolean
+  installedVersion: string | null
+  error: string | null
+  upgradable: boolean
+  contentTypes: string[]
+  taxonomies: string[]
+  panels: PluginPanel[]
+  settings: PluginSetting[]
+  settingsValues?: Record<string, unknown>
+}
+
+export type Taxonomy = {
+  id: string
+  name: string
+  label: string
+  hierarchical: boolean
+  ownerPlugin: string | null
+}
+
+export type Term = {
+  id: string
+  taxonomyId: string
+  parentId: string | null
+  slug: string
+  label: string
+  description: string | null
+  sortOrder: number
+}
+
+export type MenuItem = {
+  label: string
+  url?: string
+  entryId?: string
+  target?: "_self" | "_blank"
+  children?: MenuItem[]
+}
+
+export type Menu = { id: string; name: string; label: string; items: MenuItem[] }
+
+export type Webhook = {
+  id: string
+  name: string
+  url: string
+  events: string[]
+  active: boolean
+  createdAt: string
+  lastStatus: number | null
+  lastFiredAt: string | null
+}
+
+export type Stats = {
+  entries: number
+  published: number
+  drafts: number
+  review: number
+  scheduled: number
+  media: number
+  types: number
+  recent: { id: string; title: string; status: string; updatedAt: string; type: string }[]
+}
+
+export type AuditEvent = {
+  id: string
+  event: string
+  metadata: Record<string, unknown> | null
+  ip: string | null
+  userName: string | null
+  createdAt: string
+}
+
+type Wrapped<T> = { data: T }
+type Paged<T> = { data: T[]; meta: { total: number; page: number; limit: number } }
+
+export const api = {
+  setupStatus: () => request<{ required: boolean }>("/auth/setup"),
+  setup: (name: string, email: string, password: string) =>
+    request<{ token: string; user: Identity }>("/auth/setup", { body: { name, email, password } }),
+  login: (email: string, password: string) =>
+    request<{ token: string; user: Identity }>("/auth/login", { body: { email, password } }),
+  me: () => request<Identity>("/auth/me"),
+  logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/password", { method: "POST", body: { currentPassword, newPassword } }),
+
+  stats: () => request<Wrapped<Stats>>("/stats").then(r => r.data),
+  audit: (query: Record<string, string | number | undefined> = {}) => request<Paged<AuditEvent>>("/audit", { query }),
+  search: (q: string) =>
+    request<{
+      data: {
+        entries: {
+          id: string
+          slug: string
+          title: string
+          status: string
+          updatedAt: string
+          type: { name: string; label: string }
+        }[]
+        media: { id: string; filename: string; url: string; mime: string }[]
+      }
+    }>("/search", { query: { q } }).then(r => r.data),
+
+  types: () => request<Wrapped<ContentType[]>>("/types").then(r => r.data),
+  type: (name: string) => request<ContentType>(`/types/${name}`),
+  createType: (input: Partial<ContentType>) => request<ContentType>("/types", { body: input }),
+  updateType: (name: string, input: Partial<ContentType>) =>
+    request<ContentType>(`/types/${name}`, { method: "PUT", body: input }),
+  deleteType: (name: string) => request<{ deleted: boolean }>(`/types/${name}`, { method: "DELETE" }),
+
+  entries: (type: string, query: Record<string, string | number | undefined> = {}) =>
+    request<Paged<Entry>>(`/types/${type}/entries`, { query }),
+  entry: (id: string) => request<Entry>(`/entries/${id}`),
+  createEntry: (type: string, input: Partial<Entry>) => request<Entry>(`/types/${type}/entries`, { body: input }),
+  updateEntry: (id: string, input: Partial<Entry>) => request<Entry>(`/entries/${id}`, { method: "PUT", body: input }),
+  publishEntry: (id: string, at?: string) =>
+    request<Entry>(`/entries/${id}/publish`, { method: "POST", query: { at } }),
+  unpublishEntry: (id: string) => request<Entry>(`/entries/${id}/unpublish`, { method: "POST" }),
+  setEntryStatus: (id: string, status: "draft" | "review" | "archived") =>
+    request<Entry>(`/entries/${id}/status`, { method: "POST", body: { status } }),
+  deleteEntry: (id: string) => request<{ deleted: boolean }>(`/entries/${id}`, { method: "DELETE" }),
+  trashEntries: () => request<Wrapped<Entry[]>>("/trash/entries").then(result => result.data),
+  restoreEntry: (id: string) => request<Entry>(`/trash/entries/${id}/restore`, { method: "POST" }),
+  purgeEntry: (id: string) => request<{ purged: boolean }>(`/trash/entries/${id}`, { method: "DELETE" }),
+  revisions: (id: string) =>
+    request<
+      Wrapped<
+        {
+          id: string
+          title: string
+          status: string
+          authorName: string | null
+          note: string | null
+          createdAt: string
+        }[]
+      >
+    >(`/entries/${id}/revisions`).then(r => r.data),
+  revision: (id: string) =>
+    request<{
+      id: string
+      entryId: string
+      title: string
+      data: Record<string, unknown>
+      status: string
+      createdAt: string
+    }>(`/revisions/${id}`),
+  restoreRevision: (id: string) => request<Entry>(`/revisions/${id}/restore`, { method: "POST" }),
+
+  media: (query: Record<string, string | number | undefined> = {}) => request<Paged<Media>>("/media", { query }),
+  mediaItem: (id: string) => request<Media>(`/media/${id}`),
+  uploadMedia: (file: File, extra: Record<string, string> = {}) => {
+    const form = new FormData()
+    form.set("file", file)
+    for (const [key, value] of Object.entries(extra)) form.set(key, value)
+    return request<Media>("/media", { form })
+  },
+  updateMedia: (id: string, input: Partial<Media>) => request<Media>(`/media/${id}`, { method: "PUT", body: input }),
+  deleteMedia: (id: string) => request<{ deleted: boolean }>(`/media/${id}`, { method: "DELETE" }),
+  trashMedia: () => request<Wrapped<Media[]>>("/trash/media").then(result => result.data),
+  restoreMedia: (id: string) => request<Media>(`/trash/media/${id}/restore`, { method: "POST" }),
+  purgeMedia: (id: string) => request<{ purged: boolean }>(`/trash/media/${id}`, { method: "DELETE" }),
+
+  settings: () =>
+    request<{ data: Record<string, unknown>; schema: { key: string; label: string; type: string }[] }>("/settings"),
+  saveSettings: (input: Record<string, unknown>) =>
+    request<Wrapped<Record<string, unknown>>>("/settings", { method: "PUT", body: input }),
+
+  plugins: () => request<Wrapped<Plugin[]>>("/plugins").then(r => r.data),
+  plugin: (name: string) => request<Plugin>(`/plugins/${name}`),
+  enablePlugin: (name: string) => request<{ enabled: string[] }>(`/plugins/${name}/enable`, { method: "POST" }),
+  disablePlugin: (name: string) => request<Wrapped<Plugin>>(`/plugins/${name}/disable`, { method: "POST" }),
+  savePluginSettings: (name: string, input: Record<string, unknown>) =>
+    request<Wrapped<Record<string, unknown>>>(`/plugins/${name}/settings`, { method: "PUT", body: input }),
+  pluginTable: (endpoint: string) => request<{ data: Record<string, unknown>[] }>(endpoint).then(r => r.data),
+  pluginStats: (endpoint: string, days?: number) =>
+    request<Wrapped<PluginStatsPayload>>(endpoint, { query: { days } }).then(r => r.data),
+
+  keys: () =>
+    request<
+      Wrapped<
+        {
+          id: string
+          name: string
+          prefix: string
+          scopes: string[]
+          createdAt: string
+          lastUsedAt: string | null
+          expiresAt: string | null
+          revokedAt: string | null
+        }[]
+      >
+    >("/keys").then(r => r.data),
+  createKey: (name: string, scopes: string[], expiresAt?: string) =>
+    request<{ id: string; key: string; prefix: string }>("/keys", { body: { name, scopes, expiresAt } }),
+  revokeKey: (id: string) => request<{ revoked: boolean }>(`/keys/${id}`, { method: "DELETE" }),
+
+  users: () => request<{ data: Identity[]; roles: FieldOption[] }>("/users", { query: { limit: 200 } }),
+  createUser: (input: { email: string; name: string; password: string; role: string }) =>
+    request<Identity>("/users", { body: input }),
+  updateUser: (id: string, input: Record<string, unknown>) =>
+    request<Identity>(`/users/${id}`, { method: "PUT", body: input }),
+  deleteUser: (id: string) => request<{ deleted: boolean }>(`/users/${id}`, { method: "DELETE" }),
+
+  taxonomies: () => request<Wrapped<Taxonomy[]>>("/taxonomies").then(r => r.data),
+  createTaxonomy: (input: { label: string; hierarchical: boolean }) =>
+    request<Taxonomy>("/taxonomies", { body: input }),
+  deleteTaxonomy: (name: string) => request<{ deleted: boolean }>(`/taxonomies/${name}`, { method: "DELETE" }),
+  terms: (name: string) => request<Wrapped<Term[]>>(`/taxonomies/${name}/terms`).then(r => r.data),
+  createTerm: (name: string, input: { label: string; slug?: string; parentId?: string; description?: string }) =>
+    request<Term>(`/taxonomies/${name}/terms`, { body: input }),
+  updateTerm: (id: string, input: Partial<Term>) => request<Term>(`/terms/${id}`, { method: "PUT", body: input }),
+  deleteTerm: (id: string) => request<{ deleted: boolean }>(`/terms/${id}`, { method: "DELETE" }),
+  entryTerms: (id: string) =>
+    request<Wrapped<{ id: string; label: string; taxonomyId: string }[]>>(`/entries/${id}/terms`).then(r => r.data),
+  setEntryTerms: (id: string, termIds: string[]) =>
+    request<{ termIds: string[] }>(`/entries/${id}/terms`, { method: "PUT", body: { termIds } }),
+
+  menus: () => request<Wrapped<Menu[]>>("/menus").then(r => r.data),
+  saveMenu: (name: string, label: string, items: MenuItem[]) =>
+    request<Menu>(`/menus/${name}`, { method: "PUT", body: { label, items } }),
+  createMenu: (label: string) => request<Menu>("/menus", { body: { label, items: [] } }),
+  deleteMenu: (name: string) => request<{ deleted: boolean }>(`/menus/${name}`, { method: "DELETE" }),
+
+  webhooks: () => request<{ data: Webhook[]; events: string[] }>("/webhooks"),
+  createWebhook: (input: { name: string; url: string; events: string[]; active: boolean }) =>
+    request<Webhook & { secret: string }>("/webhooks", { body: input }),
+  updateWebhook: (id: string, input: Partial<Webhook>) =>
+    request<Webhook>(`/webhooks/${id}`, { method: "PUT", body: input }),
+  deleteWebhook: (id: string) => request<{ deleted: boolean }>(`/webhooks/${id}`, { method: "DELETE" }),
+  testWebhook: (id: string) =>
+    request<{ delivered: boolean; status: number }>(`/webhooks/${id}/test`, { method: "POST" }),
+}

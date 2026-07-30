@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS plugin_sample (id TEXT PRIMARY KEY);

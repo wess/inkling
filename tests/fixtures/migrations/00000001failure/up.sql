@@ -1,0 +1,2 @@
+CREATE TABLE should_rollback (id TEXT PRIMARY KEY);
+THIS IS NOT SQL;
