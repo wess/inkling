@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inkling — the cutting room for your content</title>
+<meta name="description" content="Write, stage, and cut content live. Inkling holds every word, image, and structure your sites read from, and pushes the change the moment you make it.">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Inkling — the cutting room for your content">
+<meta property="og:description" content="Write, stage, and cut content live.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ————————————————————————————————————————————————
+   Cutting Room.
+   Two materials: plate (the deep violet-black of a press bed) and light
+   (what appears only when something goes live). Registration marks are the
+   structural device — they are how a press aligns plates, and here they mark
+   every frame that matters. Frame numbers are real: the capability grid is a
+   contact sheet, and a contact sheet is a sequence.
+   ———————————————————————————————————————————————— */
+
+:root {
+  --ink:      #08070F;
+  --plate:    #100E20;
+  --wash:     #211A44;
+  --edge:     #2E2856;
+  --cyan:     #56E4EA;
+  --magenta:  #FF5CA8;
+  --light:    #EDEAF5;
+  --muted:    #8F8AB0;
+
+  --display: "Bodoni Moda", "Didot", "Playfair Display", serif;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --gutter: clamp(1.25rem, 5vw, 5rem);
+  --frame: 1100px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--light);
+  font-family: var(--sans);
+  font-weight: 300;
+  font-size: clamp(1rem, 0.95rem + 0.2vw, 1.075rem);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; line-height: 0.95; }
+
+a { color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.wrap { width: min(100% - (var(--gutter) * 2), var(--frame)); margin-inline: auto; }
+
+/* Registration marks — the corner brackets a press aligns to. Used instead of
+   rules or cards, because alignment is the honest metaphor for this product. */
+.reg { position: relative; }
+.reg::before, .reg::after {
+  content: "";
+  position: absolute;
+  width: 14px; height: 14px;
+  border: 1px solid var(--edge);
+  pointer-events: none;
+}
+.reg::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.reg::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ———————————————————————— title sequence ———————————————————————— */
+
+.sequence {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  align-content: center;
+  padding-block: clamp(6rem, 16vh, 11rem) clamp(3rem, 8vh, 6rem);
+  isolation: isolate;
+}
+
+/* Letterboxing. Thin, fixed, and always present — the frame you are watching
+   this through. */
+.bar {
+  position: fixed;
+  left: 0; right: 0;
+  height: clamp(14px, 2.2vh, 26px);
+  background: var(--ink);
+  z-index: 40;
+}
+.bar-top { top: 0; border-bottom: 1px solid rgba(46, 40, 86, 0.55); }
+.bar-bottom { bottom: 0; border-top: 1px solid rgba(46, 40, 86, 0.55); }
+
+/* The ink wash: two slow, offset plates bleeding through each other. */
+.wash-a, .wash-b {
+  position: absolute;
+  inset: -30% -20% auto -20%;
+  height: 90vh;
+  z-index: -1;
+  filter: blur(90px);
+  opacity: 0.85;
+}
+.wash-a {
+  background: radial-gradient(45% 60% at 30% 40%, var(--wash) 0%, transparent 70%);
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+.wash-b {
+  background: radial-gradient(40% 55% at 72% 30%, rgba(86, 228, 234, 0.16) 0%, transparent 70%);
+  animation: drift-b 34s ease-in-out infinite alternate;
+}
+@keyframes drift-a { to { transform: translate3d(4%, 6%, 0) scale(1.15); } }
+@keyframes drift-b { to { transform: translate3d(-6%, 3%, 0) scale(1.1); } }
+
+.mark {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  margin-bottom: clamp(2rem, 6vh, 3.5rem);
+}
+.mark::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--edge), transparent);
+}
+
+.title {
+  font-size: clamp(4rem, 15.5vw, 13.5rem);
+  /* Bodoni's serifs are wide and its hairlines long. Negative tracking that
+     would flatter a grotesque makes these letterforms collide, so this stays
+     near zero and the size carries the impact instead. */
+  letter-spacing: -0.005em;
+  line-height: 1.02;
+  font-weight: 400;
+  margin: 0;
+}
+/* Each letter is its own plate, dropping into registration on load. */
+.title span {
+  display: inline-block;
+  animation: seat 1s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes seat {
+  from { opacity: 0; transform: translateY(0.28em); filter: blur(9px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+
+.lede {
+  max-width: 34ch;
+  margin: clamp(1.75rem, 5vh, 2.75rem) 0 0;
+  font-size: clamp(1.1rem, 1rem + 0.55vw, 1.45rem);
+  line-height: 1.45;
+  color: var(--light);
+  animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1) 0.75s backwards;
+}
+.lede em { font-family: var(--display); font-style: italic; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(1rem); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ———————————————————————— the signature: the cut ————————————————————————
+   A filmstrip of the states a piece of writing actually passes through. One
+   frame is held; on a beat it advances, and the last one lights. This is the
+   product's whole claim in one object — the moment a change goes live. */
+
+.strip {
+  display: flex;
+  gap: 2px;
+  margin-top: clamp(2rem, 5vh, 3rem);
+  border: 1px solid var(--edge);
+  padding: 2px;
+  background: rgba(16, 14, 32, 0.6);
+  overflow-x: auto;
+  scrollbar-width: none;
+  animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1) 1s backwards;
+}
+/* pre carries its own UA font stack and size; without this the sample renders
+   at the browser's default monospace size instead of the one set on .screen. */
+.screen pre { font: inherit; margin: 0; }
+.strip::-webkit-scrollbar { display: none; }
+
+.frame {
+  flex: 1 0 auto;
+  min-width: 8.5rem;
+  padding: 1.1rem 1rem 0.9rem;
+  background: var(--plate);
+  display: grid;
+  gap: 0.55rem;
+  transition: background 0.5s ease, color 0.5s ease;
+}
+.frame-no {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  transition: color 0.5s ease;
+}
+.frame-state {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.frame-bar { height: 2px; background: var(--edge); transition: background 0.5s ease; }
+
+.frame[data-on="true"] { background: var(--wash); }
+.frame[data-on="true"] .frame-bar { background: var(--cyan); }
+.frame[data-on="true"] .frame-no { color: var(--light); }
+
+/* The live frame is the only place light is spent. */
+.frame[data-live="true"] {
+  background: var(--light);
+  color: var(--ink);
+}
+.frame[data-live="true"] .frame-no { color: rgba(8, 7, 15, 0.55); }
+.frame[data-live="true"] .frame-bar { background: var(--magenta); }
+
+.beat {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin-top: 0.85rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.beat b { color: var(--cyan); font-weight: 500; }
+
+/* ———————————————————————— sections ———————————————————————— */
+
+section { padding-block: clamp(5rem, 14vh, 9rem); }
+
+.head { display: grid; gap: 1.1rem; max-width: 44ch; margin-bottom: clamp(2.5rem, 7vh, 4rem); }
+.head h2 { font-size: clamp(2.4rem, 6vw, 4.2rem); letter-spacing: -0.02em; }
+.head p { margin: 0; color: var(--muted); font-size: 1.05rem; }
+
+/* Contact sheet — a real sequence, so the frames are numbered. */
+.sheet {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1px;
+  background: var(--edge);
+  border: 1px solid var(--edge);
+}
+.cell {
+  background: var(--plate);
+  padding: clamp(1.75rem, 4vw, 2.5rem);
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  transition: background 0.35s ease;
+}
+.cell:hover, .cell:focus-within { background: var(--wash); }
+.cell h3 { font-size: 1.6rem; letter-spacing: -0.01em; }
+.cell p { margin: 0; color: var(--muted); font-size: 0.97rem; }
+.cell .no {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+}
+
+/* Split: the delivery surface, shown rather than described. */
+.split {
+  display: grid;
+  gap: clamp(2rem, 5vw, 4rem);
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+@media (min-width: 900px) { .split { grid-template-columns: 0.85fr 1.15fr; } }
+
+.screen {
+  background: var(--plate);
+  border: 1px solid var(--edge);
+  padding: 1.5rem clamp(1.25rem, 3vw, 2rem);
+  font-family: var(--mono);
+  font-size: clamp(0.74rem, 0.68rem + 0.28vw, 0.86rem);
+  line-height: 1.85;
+  overflow-x: auto;
+  color: var(--muted);
+}
+.screen .k { color: var(--cyan); }
+.screen .s { color: var(--light); }
+.screen .m { color: var(--magenta); }
+.screen .c { color: #5C5680; }
+
+/* Credits — role on the left, what it does on the right, like a title card. */
+.credits { display: grid; gap: 0; border-top: 1px solid var(--edge); }
+.credit {
+  display: grid;
+  gap: 0.35rem 2.5rem;
+  grid-template-columns: 1fr;
+  padding-block: 1.5rem;
+  border-bottom: 1px solid var(--edge);
+}
+@media (min-width: 720px) { .credit { grid-template-columns: 16rem 1fr; } }
+.credit dt {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  padding-top: 0.35rem;
+}
+.credit dd { margin: 0; color: var(--light); font-size: 1.05rem; max-width: 52ch; }
+.credit dd span { color: var(--muted); }
+
+/* ———————————————————————— closing ———————————————————————— */
+
+.close { text-align: center; padding-block: clamp(6rem, 18vh, 11rem); }
+.close h2 { font-size: clamp(2.6rem, 8vw, 6rem); letter-spacing: -0.03em; }
+.close p { color: var(--muted); margin: 1.25rem auto 2.75rem; max-width: 40ch; }
+
+.start {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  background: var(--light);
+  color: var(--ink);
+  padding: 1rem 1.6rem;
+  text-decoration: none;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.start:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(86, 228, 234, 0.18); }
+
+.foot {
+  border-top: 1px solid var(--edge);
+  padding-block: 2.5rem 4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.foot a { text-decoration: none; }
+.foot a:hover { color: var(--cyan); }
+
+/* Scroll reveal. */
+.enter { opacity: 0; transform: translateY(1.5rem); transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+.enter.seen { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .enter { opacity: 1; transform: none; }
+  .wash-a, .wash-b { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="bar bar-top" aria-hidden="true"></div>
+<div class="bar bar-bottom" aria-hidden="true"></div>
+
+<header class="sequence">
+  <div class="wash-a" aria-hidden="true"></div>
+  <div class="wash-b" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <p class="mark">Reel 01 &nbsp;·&nbsp; The cutting room</p>
+
+    <!-- The word is in the markup so it renders without script; the animation
+         only re-wraps what is already there. -->
+    <h1 class="title" id="title">Inkling</h1>
+
+    <p class="lede">
+      Every word, image, and shape your sites are made of, held in one place —
+      and <em>cut to air</em> the moment you say so.
+    </p>
+
+    <!-- The signature. States a piece of writing actually moves through. -->
+    <div class="strip" role="img" aria-label="A piece of writing moving from draft through review and scheduling to live">
+      <div class="frame" data-frame><span class="frame-no">FR 01</span><span class="frame-state">Draft</span><span class="frame-bar"></span></div>
+      <div class="frame" data-frame><span class="frame-no">FR 02</span><span class="frame-state">Review</span><span class="frame-bar"></span></div>
+      <div class="frame" data-frame><span class="frame-no">FR 03</span><span class="frame-state">Scheduled</span><span class="frame-bar"></span></div>
+      <div class="frame" data-frame data-final><span class="frame-no">FR 04</span><span class="frame-state">Live</span><span class="frame-bar"></span></div>
+    </div>
+
+    <p class="beat"><span>On air in</span> <b id="beat">—</b></p>
+  </div>
+</header>
+
+<main>
+
+  <section class="wrap">
+    <div class="head enter">
+      <p class="eyebrow">What it holds</p>
+      <h2>Shape the content, not the page.</h2>
+      <p>
+        You describe what a product, a post, or a landing page is made of. Inkling
+        gives your team the screens to fill it in, and gives your sites one clean
+        way to read it back.
+      </p>
+    </div>
+
+    <div class="sheet enter">
+      <article class="cell">
+        <span class="no">FR 01</span>
+        <h3>Your own shapes</h3>
+        <p>Build the models your work actually has — repeating sections, image galleries, links between records. No field type you have to work around.</p>
+      </article>
+      <article class="cell">
+        <span class="no">FR 02</span>
+        <h3>A real edit history</h3>
+        <p>Every save keeps what it replaced. Read an old version before you restore it, and put anything back without losing the thing you're replacing.</p>
+      </article>
+      <article class="cell">
+        <span class="no">FR 03</span>
+        <h3>Show work early</h3>
+        <p>Send an unpublished piece to anyone with a link that opens for an hour and expires on its own. No account, no access to anything else.</p>
+      </article>
+      <article class="cell">
+        <span class="no">FR 04</span>
+        <h3>Move together</h3>
+        <p>See who else is in a record while you're in it. Lists update as your colleagues work, so nobody edits a version that changed ten minutes ago.</p>
+      </article>
+      <article class="cell">
+        <span class="no">FR 05</span>
+        <h3>Publish on a schedule</h3>
+        <p>Set the hour and step away. Anything that no longer fits its model comes back to review instead of going out broken.</p>
+      </article>
+      <article class="cell">
+        <span class="no">FR 06</span>
+        <h3>Roles that hold</h3>
+        <p>Writers keep to their own drafts, editors publish, admins shape the model. Change someone's role and it takes effect on their next click.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="split">
+      <div class="head enter" style="margin-bottom:0">
+        <p class="eyebrow">What your sites read</p>
+        <h2>One request, whole page.</h2>
+        <p>
+          Ask for a piece of content and the images and linked records come back
+          filled in — not as references you have to go and fetch. Drafts never
+          appear here, whoever asks.
+        </p>
+      </div>
+
+      <!-- No registration marks here: this element scrolls horizontally, and
+           overflow would clip the corner brackets. -->
+      <div class="screen enter" aria-label="An example of the content a site receives">
+<pre><span class="c">→ the site asks for one product</span>
+
+{
+  <span class="k">"slug"</span>: <span class="s">"blue-lotus"</span>,
+  <span class="k">"title"</span>: <span class="s">"Blue Lotus Refresher"</span>,
+  <span class="k">"publishedAt"</span>: <span class="s">"2026-07-30T09:12:04Z"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"price"</span>: <span class="m">7.5</span>,
+    <span class="k">"image"</span>: {
+      <span class="k">"url"</span>: <span class="s">"…/blue-lotus.jpg"</span>,
+      <span class="k">"alt"</span>: <span class="s">"A tall glass, condensation"</span>,
+      <span class="k">"width"</span>: <span class="m">1600</span>
+    }
+  }
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="head enter">
+      <p class="eyebrow">Reel 02</p>
+      <h2>The change arrives on its own.</h2>
+      <p>
+        When something goes live, your sites are told. No timer polling for news,
+        no cache you have to guess the age of — the page that changed is the page
+        that refreshes.
+      </p>
+    </div>
+
+    <dl class="credits enter">
+      <div class="credit">
+        <dt>Live updates</dt>
+        <dd>Your sites hear the moment a piece is published, pulled, or replaced. <span>They're told what changed, then read it back the same way they always do.</span></dd>
+      </div>
+      <div class="credit">
+        <dt>In the room</dt>
+        <dd>Names appear on a record while your colleagues have it open. <span>Nobody discovers the collision at save time.</span></dd>
+      </div>
+      <div class="credit">
+        <dt>Working assistant</dt>
+        <dd>Bring your own assistant and it works on <em>this</em> content. <span>Draft into a field, tighten a paragraph, write the summary, suggest titles — it can see your models, so it answers about your site instead of in general.</span></dd>
+      </div>
+      <div class="credit">
+        <dt>Answers for visitors</dt>
+        <dd>Turn on the public assistant and readers can ask questions of the page they're on. <span>It answers from what you've published and says so plainly when the answer isn't there.</span></dd>
+      </div>
+      <div class="credit">
+        <dt>Many at once</dt>
+        <dd>Select a season's worth of posts and publish, archive, or retire them together. <span>Each one is checked on its own, and you're told exactly which didn't pass.</span></dd>
+      </div>
+      <div class="credit">
+        <dt>Extendable</dt>
+        <dd>Add your own sections, screens, and content shapes as self-contained pieces. <span>Switch one on and it's there — nothing restarts, nothing rebuilds.</span></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="wrap close">
+    <h2 class="enter">Roll it.</h2>
+    <p class="enter">Run it, open the admin, and start writing. The first person through the door becomes the owner.</p>
+    <!-- The reveal lives on the wrapper: putting .enter on the anchor would let
+         its `transform: none` win over the hover lift. -->
+    <div class="enter">
+      <a class="start" href="https://github.com/wess/inkling">
+        Get Inkling
+        <span aria-hidden="true">→</span>
+      </a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap foot">
+  <span>Inkling</span>
+  <nav>
+    <a href="https://github.com/wess/inkling">Source</a>
+    &nbsp;·&nbsp;
+    <!-- Absolute: Pages serves a bare .md as plain text rather than rendering it. -->
+    <a href="https://github.com/wess/inkling/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+    &nbsp;·&nbsp;
+    <a href="llms.txt">llms.txt</a>
+  </nav>
+</footer>
+
+<script>
+// Each letter becomes its own plate so they can seat into registration one at a
+// time. The word is already in the markup — this only wraps it, so the heading
+// still reads correctly to anything that never runs this.
+(function () {
+  const el = document.getElementById("title");
+  const word = el.textContent.trim();
+  el.setAttribute("aria-label", word);
+  el.innerHTML = word
+    .split("")
+    .map((ch, i) => `<span aria-hidden="true" style="animation-delay:${0.15 + i * 0.06}s">${ch}</span>`)
+    .join("");
+})();
+
+// The cut. Frames advance on a beat; the last one lights and holds, then the
+// sequence starts over — the loop a piece of content actually lives in.
+(function () {
+  const frames = Array.from(document.querySelectorAll("[data-frame]"));
+  const beat = document.getElementById("beat");
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  if (reduced.matches) {
+    frames.forEach(f => f.setAttribute("data-on", "true"));
+    frames[frames.length - 1].setAttribute("data-live", "true");
+    beat.textContent = "now";
+    return;
+  }
+
+  let index = 0;
+  const labels = ["4s", "3s", "2s", "now"];
+
+  const tick = () => {
+    frames.forEach((frame, i) => {
+      frame.setAttribute("data-on", String(i <= index));
+      frame.removeAttribute("data-live");
+    });
+    if (frames[index].hasAttribute("data-final")) {
+      frames[index].setAttribute("data-live", "true");
+    }
+    beat.textContent = labels[index];
+    index = (index + 1) % frames.length;
+  };
+
+  tick();
+  setInterval(tick, 1600);
+})();
+
+// Reveal on scroll.
+(function () {
+  const items = document.querySelectorAll(".enter");
+  if (!("IntersectionObserver" in window)) {
+    items.forEach(i => i.classList.add("seen"));
+    return;
+  }
+  const io = new IntersectionObserver(
+    entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("seen");
+          io.unobserve(entry.target);
+        }
+      });
+    },
+    { rootMargin: "0px 0px -12% 0px" }
+  );
+  items.forEach(i => io.observe(i));
+})();
+</script>
+
+</body>
+</html>

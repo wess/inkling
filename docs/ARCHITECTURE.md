@@ -5,18 +5,22 @@ plugins. It stores content, and websites read it over an HTTP delivery API.
 It does not render your site.
 
 ```
-                    ┌──────────────────┐
-                    │  admin SPA :4310 │   React 19, proxies /api/* → API
-                    └────────┬─────────┘
-                             │ bearer session
-                    ┌────────▼─────────┐
-   your website ───▶│    API :4300     │───▶ Postgres or SQLite
-   (delivery key)   │  src/server.ts   │───▶ blob storage (local | S3)
-                    └────────┬─────────┘
-                             │
-                    ┌────────▼─────────┐
-                    │  plugins/*       │  content types, routes, hooks
-                    └──────────────────┘
+                     one process, one port :4300
+   ┌───────────────────────────────────────────────────────┐
+   │  src/server.ts                                        │
+   │                                                       │
+   │   /api/…      session      ─┐                         │
+   │   /content    api key       │                         ├──▶ Postgres
+   │   /preview    token         ├─ router                 ├──▶ blob storage
+   │   /media/file public        │                         ├──▶ AI provider
+   │   /ext/…      plugins      ─┘                         │    (optional)
+   │   /realtime   websocket                               │
+   │                                                       │
+   │   anything else ─────────▶ the admin (Bun.build)      │
+   └───────────────────────────────────────────────────────┘
+             ▲                            ▲
+      your website                    your team
+     (delivery key)                (session + socket)
 ```
 
 ## Two audiences, two surfaces
@@ -25,8 +29,25 @@ It does not render your site.
 |---|---|---|
 | Auth | session JWT (`Authorization: Bearer`) | API key (`X-Api-Key`) |
 | Access | everything, role-gated | published content only, read-only |
-| Routes | `/auth`, `/types`, `/entries`, `/media`, `/plugins`, … | `/content/*`, `/site/*` |
-| Consumers | the admin SPA | your websites |
+| Routes | `/api/auth`, `/api/types`, `/api/entries`, … | `/content/*`, `/site/*` |
+| Consumers | the admin | your websites |
+
+They share one origin and are separated by path. Everything session-gated is
+mounted through `prefixed("/api", …)`; everything public keeps a root path,
+because those paths are pasted into other people's code — a media URL is stored
+in a row, a preview link is sent to a stakeholder, `/content` is integrated once
+and left alone. Whatever the router does not claim is the admin, which is why
+`/settings` can be a screen while `/api/settings` is the API.
+
+Mounting is by *audience*, not by module: a feature with both kinds of route
+exports two arrays (`mediaRoutes` / `mediaFileRoutes`) rather than being mounted
+twice under different prefixes.
+
+There are two deliberate exceptions to "published only", each narrow enough to
+state in a sentence. A **preview token** (`/preview/:token`) names one entry,
+expires within the hour, and is signed rather than stored — it is how a draft
+reaches someone without an account. The **realtime socket** (`/realtime`) tells a
+key holder that published content moved, carrying ids and never payloads.
 
 A delivery key can never see a draft, a user's email, or a soft-deleted row.
 Referenced entries are re-checked for `published` status and the delivery key's
@@ -42,13 +63,15 @@ and vary on the credentials that shape them.
 2. Bootstrap the first owner from `BOOTSTRAP_*` when supplied. Otherwise the
    one-time `/auth/setup` flow lets the first admin visit claim an empty site;
    it closes permanently as soon as an owner exists
-3. Build the storage driver and the hook bus; bridge core hooks → webhooks
+3. Build the storage driver and the hook bus; bridge core hooks → webhooks and
+   → the realtime socket
 4. Load plugins in dependency order, auto-enabling `PLUGIN_AUTOENABLE` on a
    fresh install
 5. Assemble routes from feature factories
 6. Start background sweeps (`setInterval`): scheduled publishing every 60s,
    rate-limit cleanup hourly
-7. `Bun.serve` wrapped in `withSecurityHeaders`
+7. `Bun.serve` wrapped in `withSecurityHeaders`, with a `fetch` that attempts the
+   WebSocket upgrade first — once it returns a `Response` the handshake is gone
 
 Each feature is `src/<feature>/index.ts` exporting a route factory. Signatures
 vary by dependency: `authRoutes(db)`, `entryRoutes(db, hooks)`,
@@ -56,8 +79,13 @@ vary by dependency: `authRoutes(db)`, `entryRoutes(db, hooks)`,
 
 ## Dialect portability
 
-One migration set runs on both Postgres and SQLite. That is only possible
-because every column type round-trips to the same JS value on both drivers:
+Postgres is the store. The SQLite driver remains wired up because the test
+suite runs against it in memory — which keeps `bun test` free of setup, and
+keeps a second dialect exercising the schema.
+
+That second dialect is why the column choices below look conservative: every
+type round-trips to the same JS value on both drivers, so a row read in a test
+has the same shape as a row read in production.
 
 | Concept | Column | Why not the obvious choice |
 |---|---|---|
@@ -90,9 +118,10 @@ and executes each file transactionally. It also namespaces plugin migrations in
 
 ## Data model
 
-16 core tables. The spine is `content_types` → `entries` → `revisions`, with
+17 core tables. The spine is `content_types` → `entries` → `revisions`, with
 `media`, `taxonomies`/`terms`/`entry_terms`, `menus`, `settings`, `api_keys`,
-`webhooks`, `plugins`, `users`/`sessions`, and `audit_events`/`rate_limits`.
+`webhooks`, `plugins`, `users`/`sessions`, `ai_credentials`, and
+`audit_events`/`rate_limits`.
 
 **Content types** are user-defined shapes. `fields` holds an ordered array of
 field definitions as JSON; `kind` is `collection` (many entries) or `single`
@@ -161,6 +190,84 @@ silently.
 `GET /content` lists the types a key may read, with their field shapes, so a
 consumer can discover the model.
 
+`?term=<slug>` filters by taxonomy term through a **join** on `entry_terms`, not
+by collecting ids into an `IN (…)` list. One bound parameter per tagged entry
+means a term applied to enough content eventually exceeds the driver's parameter
+ceiling and the query fails outright rather than merely slowing down.
+
+## Realtime
+
+`src/realtime` adds one WebSocket per client at `/realtime`. It exists because
+the admin showed stale lists whenever two people worked at once, and because a
+consuming site had no way to learn that published content changed short of
+polling on a timer.
+
+**The socket grants no authority the HTTP surface doesn't.** A session sees what
+its role already permits; a delivery key hears only that published content moved,
+filtered by the same scopes `/content` applies. Payloads never carry an entry's
+`data` — a frame says *what* changed and the consumer re-reads it through the API,
+where the boundary is enforced on the way out.
+
+**Tickets, not tokens in URLs.** A browser cannot set headers on a WebSocket
+handshake, which leaves the query string — and query strings land in access logs.
+So `POST /realtime/ticket` (session) or `POST /realtime/delivery/ticket` (key)
+mints a single-use ticket valid for 30 seconds, and the socket is opened with
+that. Leaking one buys nothing. The store is in memory on purpose: the value is
+worthless by the time anything could read it, and a multi-process deployment
+needs sticky routing for the upgrade regardless.
+
+Three topic shapes: `site`, `content:<type>`, and `entry:<id>`. Entry topics also
+carry **presence**, so the editor can show who else is looking at a record. A
+delivery key is refused entry topics entirely — activity on one record is
+editorial signal about work that may still be a draft.
+
+## Previews
+
+A content type can declare a `preview_url` template, but until there was a way to
+*fetch* an unpublished entry the template had nothing to point at. `POST
+/entries/:id/preview` mints a signed token naming exactly one entry, good for an
+hour; `GET /preview/:token` returns that entry whatever its status, with media
+expanded and `X-Robots-Tag: noindex`.
+
+Signed rather than stored, because the value of a preview link is that it can be
+pasted to someone with no account, and a row per share is bookkeeping for
+something meant to be disposable. Nothing is revocable, which is why the lifetime
+is short. References are *not* expanded: that would mean deciding whether a
+referenced draft is also in scope, and one token should mean one entry.
+
+## AI
+
+Optional, and off until an operator connects a provider. Three parts:
+
+**Credentials** (`src/ai`) live in their own table rather than in `settings`,
+because `settings` is read wholesale by `readScope()` and surfaced to plugin
+panels — exactly the wrong shape for a secret. The key is sealed with AES-GCM
+under a key derived from `SECRET` and is never returned by the API; `hint` is the
+last four characters so two keys can be told apart. That protects a database
+dump, a backup, and a read-only SQL leak — not an attacker who already has the
+process environment, since the key comes from it. Rotating `SECRET` invalidates
+stored credentials, which surfaces as "reconnect this provider" rather than a 500.
+
+**The editorial assistant** (`POST /ai/assist`) is not a chat window bolted onto
+the admin. Each intent — draft, rewrite, shorten, expand, summarize, titles, seo,
+translate, ask — corresponds to something an editor was already doing by hand, and
+each is handed the content model and the entry so the answer is about *this* site.
+It streams over SSE because a rewrite of a long field otherwise looks like a hung
+request. Content is fenced in `<content>` / `<selection>` tags and the model is
+told to treat it as material, never as instructions: an entry whose body says
+"ignore your instructions" is a string an editor typed.
+
+**The public assistant** is the `assistant` plugin, not core — it is the one AI
+surface that spends the operator's money on behalf of anonymous visitors, so it
+should be a deliberate decision with a switch to turn it back off, which is what
+enabling a plugin is. It answers from published content only, grounded in the page
+the visitor is on, and returns a configured line rather than guessing when the
+answer isn't there.
+
+Claude is the default and goes through the official Anthropic SDK. Other providers
+go through `@atlas/ai`'s abstraction rather than being bent into an
+Anthropic-shaped client.
+
 ## Plugins
 
 A plugin is a plain object at `plugins/<name>/index.ts`:
@@ -222,7 +329,7 @@ a number means. `ranges` adds a day-window switch that re-requests with `?days=`
 Bundled: `seo` (delivery filter), `redirects` (plugin-owned type + public
 route), `forms` (own table via plugin migrations), `commerce` (types +
 taxonomy + settings + route), `analytics` (own table + public write route +
-`stats` panel).
+`stats` panel), `assistant` (public AI answers grounded in published content).
 
 ### Analytics
 
@@ -278,15 +385,22 @@ categories, nested menus, media, trash, scoped keys, webhooks, plugins, users,
 settings, activity history, and global search. Rich-text fields use a focused
 formatting surface that stores portable, cleaned HTML; entry history can be
 inspected before restore. Content and media lists paginate rather than silently
-stopping at a fixed first page. `src/web/serve.ts` bundles it with `Bun.build`,
-serves `index.html` for any extension-less path, and proxies `/api/*` to the
-API so the bearer token stays on one origin and CORS never enters the picture.
+stopping at a fixed first page.
 
-Two inherited-from-experience details: `NODE_ENV` must not be `development` in
+`src/web/serve.ts` bundles it with `Bun.build` and hands back a *handler*, not a
+server. `src/server.ts` calls it once at boot and falls through to it for
+anything the router doesn't claim, so there is no second process and no proxy —
+the bearer token is same-origin by construction and CORS never enters the
+picture. `bun --hot` re-runs the module on change, which rebuilds the bundle.
+
+Three inherited-from-experience details. `NODE_ENV` must not be `development` in
 production or Bun bundles against the dev JSX runtime while resolving React to
-the production build that lacks `jsxDEV`; and the `crossorigin` attribute
-Bun.build injects is stripped, because Safari otherwise fetches same-origin
-assets in CORS mode, fails, and offers to download the bundle.
+the production build that lacks `jsxDEV`. The `crossorigin` attribute Bun.build
+injects is stripped, because Safari otherwise fetches same-origin assets in CORS
+mode, fails, and offers to download the bundle. And emitted chunk paths are
+rewritten from `./chunk-…` to `/chunk-…`: the relative form resolves against the
+current URL, which is fine at `/` and 404s on any deep link like
+`/c/post/<id>` — a blank admin on every refresh.
 
 ## Storage
 

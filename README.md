@@ -3,7 +3,7 @@
 A headless CMS with a plugin system, built on [Atlas](https://github.com/wess/atlas).
 
 Content lives here; your websites read it over an HTTP delivery API. Runs on
-Postgres or SQLite from the same migration set, with no build step for the API.
+Postgres, with no build step for the API.
 
 ## Quick start
 
@@ -13,16 +13,38 @@ cp .env.example .env
 bun run dev
 ```
 
-- Admin — http://localhost:4310
-- API — http://localhost:4300
+Open **http://localhost:4300**. That is the whole thing — one process, one port.
 
 On the first visit, the admin asks you to create the owner account. After that,
 the same screen becomes the normal sign-in form; there is no public signup.
 `BOOTSTRAP_EMAIL` and `BOOTSTRAP_PASSWORD` remain available for unattended
 deployments.
 
-SQLite is the default (`sqlite://./inkling.db`) and needs no setup. For
-Postgres, point `DATABASE_URL` at it — the schema is identical.
+## One origin, split by path
+
+There is no separate admin server, no proxy, and no bundler running alongside.
+One process serves everything, and the URL says which audience a request belongs
+to:
+
+| Path | Who calls it |
+|---|---|
+| `/` | The admin. Any path the router doesn't claim is an admin screen |
+| `/api/…` | Everything that needs a session — the admin's whole surface |
+| `/content`, `/site` | Your websites, with an API key |
+| `/preview/:token` | Whoever you sent a share link to |
+| `/media/file/…` | Anything rendering an image |
+| `/ext/…` | Plugin routes |
+| `/realtime` | The WebSocket |
+
+The split is by audience rather than by module: a feature with both a public and
+a session-gated route exports two arrays instead of being mounted twice. That is
+what keeps `/settings` — an admin screen — from colliding with `/api/settings`,
+the API, and six other paths with it.
+
+Point `DATABASE_URL` at a Postgres database — the same engine in development
+as in production, so a dialect difference cannot wait until deploy day to
+appear. The test suite runs on in-memory SQLite, so `bun test` still needs no
+database of its own.
 
 ## What's in the box
 
@@ -35,6 +57,16 @@ Postgres, point `DATABASE_URL` at it — the schema is identical.
 - **Taxonomies**, menus, and site settings
 - **Delivery API** — key-authenticated, published-only, with media and
   references expanded inline
+- **Realtime** — one WebSocket that pushes content changes to the admin (with
+  presence, so you can see who else is in a record) and to consuming sites, so
+  caches invalidate without polling
+- **Shareable previews** — a signed, hour-long link that shows an unpublished
+  entry to someone who has no account
+- **Bulk actions** and one-click duplication across a selection
+- **An editorial assistant** — connect your own AI provider and get drafting,
+  rewriting, summarizing, titles, and metadata that know your content model.
+  Optional, off until you connect one, and available to the public site as a
+  page-aware plugin
 - **Webhooks** on content events, HMAC-signed
 - **Activity history** for sign-ins, edits, publishing, and media changes
 - **Plugins** that add content types, routes, settings, admin panels, and their
@@ -45,7 +77,7 @@ Postgres, point `DATABASE_URL` at it — the schema is identical.
 
 ## Plugins
 
-Drop a directory into `plugins/` and enable it in the admin. Five ship with it:
+Drop a directory into `plugins/` and enable it in the admin. Six ship with it:
 
 | Plugin | Demonstrates |
 |---|---|
@@ -54,6 +86,7 @@ Drop a directory into `plugins/` and enable it in the admin. Five ship with it:
 | `forms` | A plugin with its own table via plugin-scoped migrations |
 | `commerce` | Content type + taxonomy + settings + a convenience route |
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
+| `assistant` | A public, page-aware assistant answering from published content only |
 
 ```ts
 import { definePlugin } from "../../src/plugins/define.ts"
@@ -110,6 +143,30 @@ Media and reference fields arrive expanded, so rendering a page takes one
 request. `?include=terms` attaches taxonomy terms; `GET /content` lists the
 types a key may read along with their field shapes.
 
+### Staying in sync
+
+Rather than polling, hold a socket. Exchange your key for a short-lived ticket,
+connect, and subscribe to the types you render:
+
+```js
+const { ticket } = await fetch("http://localhost:4300/realtime/delivery/ticket", {
+  method: "POST",
+  headers: { "x-api-key": process.env.INKLING_KEY },
+}).then(r => r.json())
+
+const socket = new WebSocket(`ws://localhost:4300/realtime?ticket=${ticket}`)
+socket.onopen = () => socket.send(JSON.stringify({ action: "subscribe", topic: "content:product" }))
+socket.onmessage = event => {
+  const { event: name, data } = JSON.parse(event.data)
+  if (name === "entry.published") revalidate(`/products/${data.slug}`)
+}
+```
+
+Frames carry the id, slug, and type — never the content. Re-read the entry
+through `/content` when you get one, so scopes and publication status are
+enforced on the way out. A key hears only about published content, and only for
+types it is scoped to.
+
 `/Users/wess/Desktop/apothecary` is a worked example: a real site whose every
 word, product, and image comes from Inkling while its markup and CSS stay
 hand-written.
@@ -118,10 +175,9 @@ hand-written.
 
 | | |
 |---|---|
-| `bun run dev` | API + admin, hot-reloading |
-| `bun run api` / `bun run web` | either half alone |
-| `bun src/start.ts` | production entry, both processes |
-| `bun run test` | test suite |
+| `bun run dev` | Everything, hot-reloading |
+| `bun run start` | Production entry |
+| `bun run test` | Test suite |
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun run tidy` | Biome format + lint with fixes |
 
@@ -132,6 +188,11 @@ and skip otherwise, so `bun test` stays zero-setup.
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module layout, data model,
-  plugin system, and the dialect-portability rules
+  plugin system, realtime, previews, AI, and the dialect-portability rules
+- [`docs/llms.txt`](docs/llms.txt) — the same ground in one pass, written to be
+  read by an agent before it touches the code
 - [`CLAUDE.md`](CLAUDE.md) — conventions and the gotchas that cost real bugs
 - [`.env.example`](.env.example) — every configuration variable
+
+`docs/` is also the site. Set GitHub Pages to serve from **main → /docs** and
+`llms.txt` lands at the site root, where agents look for it.
