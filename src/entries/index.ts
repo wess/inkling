@@ -20,7 +20,7 @@ import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import type { ContentTypeRow } from "../contenttypes/index.ts"
 import { byId as typeById, byName as typeByName } from "../contenttypes/index.ts"
-import { contains, countRows, paging, rows } from "../db/dialect.ts"
+import { contains, countRows, embeds, paging, rows } from "../db/dialect.ts"
 import type { Field } from "../fields/index.ts"
 import { blank, validate } from "../fields/index.ts"
 import { body, either, optionalText } from "../http/index.ts"
@@ -266,28 +266,56 @@ const includesReference = (fields: readonly Field[], data: Record<string, unknow
   return false
 }
 
+// Does this field set declare a reference to `target` anywhere, including inside
+// a nested list? A type that doesn't cannot possibly point at an entry of that
+// type, so it never has to be read.
+const declaresReferenceTo = (fields: readonly Field[], target: string): boolean =>
+  fields.some(
+    field =>
+      (field.type === "reference" && field.of === target) ||
+      (field.type === "list" && field.fields !== undefined && declaresReferenceTo(field.fields, target)),
+  )
+
+// Finding what points at an entry means looking inside a JSON `data` blob, which
+// neither dialect can query portably. Rather than parse every row, the candidate
+// set is narrowed twice in SQL first: to types that actually declare a reference
+// to this entry's type, and to rows whose `data` literally contains the id. Only
+// those survivors are parsed, which is what confirms the id is in a reference
+// field rather than incidentally present in some text.
 const entryUsage = async (
   db: Connection,
-  entryId: string,
+  entry: { id: string; content_type_id: string },
   includeDeleted: boolean,
 ): Promise<{ id: string; title: string }[]> => {
+  const ownType = await typeById(db, entry.content_type_id)
+  if (!ownType) return []
+
   const types = await db.all<{ id: string; fields: string }>(from(contentTypes).select("id", "fields"))
   const fieldsByType = new Map(types.map(type => [type.id, decodeArray<Field>(type.fields)]))
+  const candidateTypes = types
+    .filter(type => declaresReferenceTo(fieldsByType.get(type.id) ?? [], ownType.name))
+    .map(type => type.id)
+  if (candidateTypes.length === 0) return []
+
   const base = from(entries)
     .select("id", "title", "content_type_id", "data")
-    .where(q => q("id").notEquals(entryId))
+    .where(q => q("id").notEquals(entry.id))
+    .where(q => q("content_type_id").inList(candidateTypes))
+    .where(q => q.raw(embeds("data", entry.id)))
   const candidates = await db.all<{ id: string; title: string; content_type_id: string; data: string }>(
     includeDeleted ? base : base.where(q => q("deleted_at").isNull()),
   )
   return candidates
-    .filter(entry =>
-      includesReference(fieldsByType.get(entry.content_type_id) ?? [], decodeObject(entry.data), entryId),
-    )
-    .map(entry => ({ id: entry.id, title: entry.title }))
+    .filter(row => includesReference(fieldsByType.get(row.content_type_id) ?? [], decodeObject(row.data), entry.id))
+    .map(row => ({ id: row.id, title: row.title }))
 }
 
-const assertEntryUnused = async (db: Connection, entryId: string, includeDeleted: boolean): Promise<void> => {
-  const usage = await entryUsage(db, entryId, includeDeleted)
+const assertEntryUnused = async (
+  db: Connection,
+  entry: { id: string; content_type_id: string },
+  includeDeleted: boolean,
+): Promise<void> => {
+  const usage = await entryUsage(db, entry, includeDeleted)
   if (usage.length === 0) return
   throw conflict(
     `This entry is referenced by ${usage.length} other ${usage.length === 1 ? "entry" : "entries"}. Remove those links first.`,
@@ -304,6 +332,88 @@ const parseLocale = (value: string | null, fallback: string): string => {
     throw badRequest("Locale must be a language code such as en or en-US", { code: "BAD_LOCALE" })
   }
   return locale
+}
+
+// Publishing one entry. Extracted so the single-entry route and the bulk route
+// share it rather than each carrying their own copy of the revalidation, the
+// snapshot, and the hook order — a second implementation of this is exactly how
+// "bulk publish skipped validation" becomes a bug.
+const publishOne = async (
+  db: Connection,
+  hooks: Hooks,
+  existing: EntryRow,
+  type: ContentTypeRow,
+  identity: Identity,
+  scheduledAt: string | null,
+): Promise<EntryRow> => {
+  const timestamp = now()
+  const status: Status = scheduledAt && scheduledAt > timestamp ? "scheduled" : "published"
+
+  // Republishing is a no-op rather than an error — the button in the UI
+  // shouldn't fail just because someone else got there first.
+  if (existing.status === "published" && status === "published") return existing
+
+  // A type may have gained required fields while this entry was a draft.
+  // Refuse to publish data that no longer satisfies the current schema.
+  const data = validateAgainstType(type, decodeObject(existing.data), {})
+  await validateRelations(db, type, data)
+
+  await hooks.emit("entry.beforePublish", { entry: existing, type, identity })
+
+  const next = {
+    status,
+    published_at: status === "published" ? (existing.published_at ?? timestamp) : null,
+    scheduled_at: status === "scheduled" ? scheduledAt : null,
+    updated_at: timestamp,
+  }
+
+  await db.transaction(async tx => {
+    await snapshot(tx, existing, identity.id, status === "scheduled" ? "Before scheduling" : "Before publish")
+    await tx.execute(
+      from(entries)
+        .update(next)
+        .where(q => q("id").equals(existing.id)),
+    )
+  })
+
+  const updated = { ...existing, ...next } as EntryRow
+  await hooks.emit("entry.afterPublish", { entry: updated, type, identity })
+  return updated
+}
+
+// The editorial statuses, plus unpublish. Shares the same reasoning as
+// publishOne: one place that knows a transition snapshots first and tells the
+// hook bus afterwards.
+const transitionOne = async (
+  db: Connection,
+  hooks: Hooks,
+  existing: EntryRow,
+  identity: Identity,
+  status: "draft" | "review" | "archived",
+  note: string,
+): Promise<EntryRow> => {
+  const next = { status, published_at: null, scheduled_at: null, updated_at: now() }
+
+  await db.transaction(async tx => {
+    await snapshot(tx, existing, identity.id, note)
+    await tx.execute(
+      from(entries)
+        .update(next)
+        .where(q => q("id").equals(existing.id)),
+    )
+  })
+
+  const updated = { ...existing, ...next } as EntryRow
+  // Going off-air is the event a consumer cares about, so it is announced only
+  // when the entry was actually live.
+  if (existing.status === "published" || existing.status === "scheduled") {
+    await hooks.emit("entry.afterUnpublish", {
+      entry: updated,
+      type: await typeById(db, existing.content_type_id),
+      identity,
+    })
+  }
+  return updated
 }
 
 export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
@@ -514,39 +624,8 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         if (requestedAt && !scheduledAt) {
           throw badRequest("The scheduled publishing time is invalid", { code: "BAD_SCHEDULE" })
         }
-        const timestamp = now()
-        const status: Status = scheduledAt && scheduledAt > timestamp ? "scheduled" : "published"
 
-        if (existing.status === "published" && status === "published") {
-          return json(c, 200, present(existing, type.name))
-        }
-
-        // A type may have gained required fields while this entry was a draft.
-        // Refuse to publish data that no longer satisfies the current schema.
-        const data = validateAgainstType(type, decodeObject(existing.data), {})
-        await validateRelations(db, type, data)
-
-        await hooks.emit("entry.beforePublish", { entry: existing, type, identity })
-
-        const next = {
-          status,
-          published_at: status === "published" ? (existing.published_at ?? timestamp) : null,
-          scheduled_at: status === "scheduled" ? scheduledAt : null,
-          updated_at: timestamp,
-        }
-
-        await db.transaction(async tx => {
-          await snapshot(tx, existing, identity.id, status === "scheduled" ? "Before scheduling" : "Before publish")
-          await tx.execute(
-            from(entries)
-              .update(next)
-              .where(q => q("id").equals(existing.id)),
-          )
-        })
-
-        const updated = { ...existing, ...next } as EntryRow
-        await hooks.emit("entry.afterPublish", { entry: updated, type, identity })
-
+        const updated = await publishOne(db, hooks, existing, type, identity, scheduledAt)
         return json(c, 200, present(updated, type.name))
       }),
     ),
@@ -562,20 +641,8 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
 
         const type = await typeById(db, existing.content_type_id)
         if (existing.status === "draft") return json(c, 200, present(existing, type?.name))
-        const next = { status: "draft" as const, published_at: null, scheduled_at: null, updated_at: now() }
 
-        await db.transaction(async tx => {
-          await snapshot(tx, existing, identity.id, "Before unpublish")
-          await tx.execute(
-            from(entries)
-              .update(next)
-              .where(q => q("id").equals(existing.id)),
-          )
-        })
-
-        const updated = { ...existing, ...next } as EntryRow
-        await hooks.emit("entry.afterUnpublish", { entry: updated, type, identity })
-
+        const updated = await transitionOne(db, hooks, existing, identity, "draft", "Before unpublish")
         return json(c, 200, present(updated, type?.name))
       }),
     ),
@@ -598,25 +665,167 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
           )
         }
 
-        const next = { status, published_at: null, scheduled_at: null, updated_at: now() }
-        await db.transaction(async tx => {
-          await snapshot(tx, existing, identity.id, `Before ${status}`)
-          await tx.execute(
-            from(entries)
-              .update(next)
-              .where(q => q("id").equals(existing.id)),
-          )
-        })
-
-        const updated = { ...existing, ...next } as EntryRow
-        if (existing.status === "published" || existing.status === "scheduled") {
-          await hooks.emit("entry.afterUnpublish", {
-            entry: updated,
-            type: await typeById(db, existing.content_type_id),
-            identity,
-          })
-        }
+        const updated = await transitionOne(
+          db,
+          hooks,
+          existing,
+          identity,
+          status as "draft" | "review" | "archived",
+          `Before ${status}`,
+        )
         return json(c, 200, present(updated))
+      }),
+    ),
+
+    // Copying an entry is how most editorial work actually starts — a new issue
+    // of a recurring page, a variant of a product. The copy is always a draft
+    // credited to whoever made it, never inheriting published state.
+    post(
+      "/entries/:id/duplicate",
+      act(async c => {
+        const source = await loadEntry(c.params.id ?? "")
+        const identity = auth(c)
+        const type = await typeById(db, source.content_type_id)
+        if (!type) throw notFound("Content type not found")
+
+        // A single-entry type already has its one entry by definition.
+        if (type.kind === "single") {
+          throw conflict(`"${type.label}" is a single-entry type and cannot be duplicated`, { code: "SINGLE_EXISTS" })
+        }
+
+        const title = `${source.title} (copy)`
+        const slug = await uniqueSlug(db, type.id, source.locale, `${source.slug}-copy`)
+        const timestamp = now()
+
+        // Data is copied verbatim rather than revalidated. A draft is allowed to
+        // be incomplete, and publish revalidates against the current schema — so
+        // re-checking here would refuse to copy an entry the editor can already
+        // see and wants to work from.
+        const row: EntryRow = {
+          ...source,
+          id: id(),
+          slug,
+          title,
+          status: "draft",
+          author_id: identity.id,
+          published_at: null,
+          scheduled_at: null,
+          created_at: timestamp,
+          updated_at: timestamp,
+          deleted_at: null,
+        }
+
+        await db.transaction(async tx => {
+          await tx.execute(from(entries).insert(row))
+          await snapshot(tx, row, identity.id, `Duplicated from ${source.slug}`)
+        })
+        await hooks.emit("entry.afterSave", { entry: row, type, identity, created: true })
+
+        return json(c, 201, present(row, type.name))
+      }),
+    ),
+
+    // One request for an action an editor is applying to a selection. Results are
+    // per-entry rather than all-or-nothing: a partial failure is the normal case
+    // (one entry in the selection fails validation, the rest publish), and
+    // rolling back the successes to punish it would be the wrong answer.
+    post(
+      "/entries/bulk",
+      write(async c => {
+        const input = body(c)
+        const identity = auth(c)
+
+        const raw = input.ids
+        if (!Array.isArray(raw) || raw.some(value => typeof value !== "string") || raw.length === 0) {
+          throw badRequest("`ids` must be a non-empty array of entry ids", { code: "BAD_IDS" })
+        }
+        // Bounded before deduping, so an absurd body is refused on its face
+        // rather than after being collapsed into something small.
+        if (raw.length > 200) throw badRequest("At most 200 entries at a time", { code: "TOO_MANY" })
+        const ids = [...new Set(raw as string[])]
+
+        const actions = ["publish", "unpublish", "draft", "review", "archive", "delete"] as const
+        const action = String(input.action ?? "")
+        if (!(actions as readonly string[]).includes(action)) {
+          throw badRequest(`\`action\` must be one of: ${actions.join(", ")}`, { code: "BAD_ACTION" })
+        }
+
+        const requestedAt = optionalText(input, "at")
+        const scheduledAt = parseIso(requestedAt)
+        if (requestedAt && !scheduledAt) {
+          throw badRequest("The scheduled publishing time is invalid", { code: "BAD_SCHEDULE" })
+        }
+
+        const results: { id: string; ok: boolean; status?: string; error?: string; code?: string }[] = []
+
+        for (const entryId of ids) {
+          try {
+            const existing = await db.one<EntryRow>(
+              from(entries)
+                .where(q => q("id").equals(entryId))
+                .where(q => q("deleted_at").isNull()),
+            )
+            if (!existing) {
+              results.push({ id: entryId, ok: false, error: "Entry not found", code: "NOT_FOUND" })
+              continue
+            }
+
+            // Every per-entry rule the single-entry routes apply is applied here
+            // too. Bulk is a convenience over the same permissions, not a way
+            // around them.
+            if (action === "publish" || action === "unpublish") {
+              if (!can.publishContent(identity.role)) {
+                throw forbidden("Publishing needs the editor role or higher", { code: "DENIED" })
+              }
+            } else {
+              assertMayEdit(identity, existing)
+            }
+
+            if (action === "publish") {
+              const type = await typeById(db, existing.content_type_id)
+              if (!type) throw notFound("Content type not found")
+              const updated = await publishOne(db, hooks, existing, type, identity, scheduledAt)
+              results.push({ id: entryId, ok: true, status: updated.status })
+              continue
+            }
+
+            if (action === "delete") {
+              await assertEntryUnused(db, existing, false)
+              await db.execute(
+                from(entries)
+                  .update({ deleted_at: now(), updated_at: now() })
+                  .where(q => q("id").equals(existing.id)),
+              )
+              await hooks.emit("entry.afterDelete", { entry: existing, identity })
+              results.push({ id: entryId, ok: true, status: "deleted" })
+              continue
+            }
+
+            const target = action === "unpublish" ? "draft" : action === "archive" ? "archived" : action
+            const updated = await transitionOne(
+              db,
+              hooks,
+              existing,
+              identity,
+              target as "draft" | "review" | "archived",
+              `Before ${target} (bulk)`,
+            )
+            results.push({ id: entryId, ok: true, status: updated.status })
+          } catch (error) {
+            // Anything thrown here is one entry's problem. The HttpError carries
+            // the message the single-entry route would have returned, so the UI
+            // can show the same text next to the row that failed.
+            const message = isHttpError(error) ? error.message : "Could not be updated"
+            const code = isHttpError(error) ? error.code : undefined
+            results.push({ id: entryId, ok: false, error: message, code })
+          }
+        }
+
+        const changed = results.filter(result => result.ok).length
+        return json(c, 200, {
+          data: results,
+          meta: { action, requested: ids.length, changed, failed: ids.length - changed },
+        })
       }),
     ),
 
@@ -627,7 +836,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         const existing = await loadEntry(c.params.id ?? "")
         const identity = auth(c)
         assertMayEdit(identity, existing)
-        await assertEntryUnused(db, existing.id, false)
+        await assertEntryUnused(db, existing, false)
 
         await db.execute(
           from(entries)
@@ -700,7 +909,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
             .where(q => q("deleted_at").isNotNull()),
         )
         if (!row) throw notFound("Entry not found in trash")
-        await assertEntryUnused(db, row.id, true)
+        await assertEntryUnused(db, row, true)
 
         // Revisions reference the entry, so they go first to avoid an FK error
         // on Postgres (SQLite would allow it only with foreign_keys off).

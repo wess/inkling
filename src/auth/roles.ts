@@ -38,4 +38,9 @@ export const can = {
   managePlugins: (role: string) => atLeast(role, "admin"),
   manageUsers: (role: string) => atLeast(role, "admin"),
   manageOwners: (role: string) => atLeast(role, "owner"),
+  // Connecting a provider means spending the operator's money, so it sits with
+  // the other administrative settings. *Using* the assistant only needs
+  // writeContent — an author drafting a post is the point of it.
+  manageAi: (role: string) => atLeast(role, "admin"),
+  useAi: (role: string) => atLeast(role, "author"),
 }

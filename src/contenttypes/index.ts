@@ -310,19 +310,35 @@ export const contentTypeRoutes = (db: Connection): Route[] => {
           )
         }
 
-        // Deleting a type would cascade every entry of that type. That is a
-        // one-way door, so it is refused while content exists — the operator
-        // has to clear the entries first and see how many there were.
-        const total = await countRows(
+        // Deleting a type would cascade every entry of that type, trashed ones
+        // included. That is a one-way door, so it is refused while any row
+        // survives — but the two counts are reported separately, because
+        // GET /types/:name counts only live entries and an operator told
+        // "still has 3 entries" about a type whose list reads empty has no way
+        // to find them without knowing the trash also counts.
+        const live = await countRows(
           db,
           from("entries", "e")
             .select("COUNT(*) as total")
-            .where(q => q("e.content_type_id").equals(existing.id)),
+            .where(q => q("e.content_type_id").equals(existing.id))
+            .where(q => q("e.deleted_at").isNull()),
         )
-        if (total > 0) {
-          throw conflict(`"${existing.name}" still has ${total} ${total === 1 ? "entry" : "entries"}`, {
+        const trashed = await countRows(
+          db,
+          from("entries", "e")
+            .select("COUNT(*) as total")
+            .where(q => q("e.content_type_id").equals(existing.id))
+            .where(q => q("e.deleted_at").isNotNull()),
+        )
+
+        if (live + trashed > 0) {
+          const parts = [
+            live > 0 ? `${live} ${live === 1 ? "entry" : "entries"}` : "",
+            trashed > 0 ? `${trashed} in the trash` : "",
+          ].filter(Boolean)
+          throw conflict(`"${existing.name}" still has ${parts.join(" and ")}`, {
             code: "NOT_EMPTY",
-            details: { entryCount: total },
+            details: { entryCount: live, trashedCount: trashed },
           })
         }
 

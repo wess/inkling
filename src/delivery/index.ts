@@ -5,7 +5,7 @@ import { forbidden, get, json, notFound, options, pipeline, putHeader } from "@a
 import type { ContentTypeRow } from "../contenttypes/index.ts"
 import { byName as typeByName } from "../contenttypes/index.ts"
 // Aliased — the list route already binds `rows` to its own page of entries.
-import { countRows, paging, rows as selectRows } from "../db/dialect.ts"
+import { countRows, one, paging, rows as selectRows } from "../db/dialect.ts"
 import type { EntryRow } from "../entries/index.ts"
 import type { Field } from "../fields/index.ts"
 import { cors, preflight } from "../http/index.ts"
@@ -15,7 +15,7 @@ import { keyAllows, keyIdentity, requireApiKey } from "../keys/index.ts"
 import type { MediaRow } from "../media/index.ts"
 import { present as presentMedia, publicUrl } from "../media/index.ts"
 import type { Hooks } from "../plugins/hooks.ts"
-import { contentTypes, entries, media, menus, terms as termsTable } from "../schema/index.ts"
+import { contentTypes, entries, media, menus } from "../schema/index.ts"
 import { siteSettings } from "../settings/index.ts"
 import { termsForEntries } from "../taxonomy/index.ts"
 import { now } from "../time/index.ts"
@@ -176,12 +176,19 @@ const loadExpansions = async (
   }
 }
 
+// Aliased, and every column qualified, because `?term=` joins this against
+// entry_terms and terms — which also carry `slug`, `created_at`, and
+// `sort_order`, so an unqualified sort or filter would be ambiguous.
+//
+// No `.select()` here on purpose: `addSelect` appends rather than replaces, so
+// the base has to stay column-free for the row fetch and the COUNT(*) to each
+// apply their own select to it.
 const publishedQuery = (typeId: string) =>
-  from("entries")
-    .where(q => q("content_type_id").equals(typeId))
-    .where(q => q("status").equals("published"))
-    .where(q => q("deleted_at").isNull())
-    .where(q => q("published_at").lessThanOrEqual(now()))
+  from("entries", "e")
+    .where(q => q("e.content_type_id").equals(typeId))
+    .where(q => q("e.status").equals("published"))
+    .where(q => q("e.deleted_at").isNull())
+    .where(q => q("e.published_at").lessThanOrEqual(now()))
 
 // Delivery responses depend on credentials, so a browser may cache its own
 // reads briefly but a CDN or proxy must never reuse one key's response for
@@ -273,31 +280,30 @@ export const deliveryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         const { limit, offset, page } = paging(c.query, 20, 100)
 
         let query = publishedQuery(type.id)
-        if (c.query.locale) query = query.where(q => q("locale").equals(c.query.locale as string))
+        if (c.query.locale) query = query.where(q => q("e.locale").equals(c.query.locale as string))
 
-        // ?term=<slug> filters to entries carrying that term.
+        // ?term=<slug> filters to entries carrying that term. This is a join
+        // rather than "collect every entry_id, then IN (…)": one bound parameter
+        // per tagged entry means a popular term eventually exceeds the driver's
+        // parameter ceiling (65535 on Postgres, 32766 on SQLite) and the query
+        // fails outright instead of just being slow. entry_terms is keyed on
+        // (entry_id, term_id), so the join cannot duplicate a row and the
+        // COUNT(*) below stays exact.
         if (c.query.term) {
-          const term = await db.one<{ id: string }>(
-            from(termsTable)
-              .select("id")
-              .where(q => q("slug").equals(c.query.term as string)),
-          )
-          if (!term) return json(c, 200, { data: [], meta: { total: 0, page, limit } })
-          const tagged = await db.all<{ entry_id: string }>(
-            from("entry_terms")
-              .select("entry_id")
-              .where(q => q("term_id").equals(term.id)),
-          )
-          const ids = tagged.map(t => t.entry_id)
-          if (ids.length === 0) return json(c, 200, { data: [], meta: { total: 0, page, limit } })
-          query = query.where(q => q("id").inList(ids))
+          query = query
+            .join("entry_terms", "et.entry_id = e.id", "et")
+            .join("terms", "t.id = et.term_id", "t")
+            .where(q => q("t.slug").equals(c.query.term as string))
         }
 
         const sortable = new Set(["published_at", "created_at", "updated_at", "title", "slug", "sort_order"])
         const sort = sortable.has(c.query.sort ?? "") ? (c.query.sort as string) : "published_at"
         const order = c.query.order === "asc" ? "ASC" : "DESC"
 
-        const rows = await db.all<EntryRow>(query.orderBy(sort, order).limit(limit).offset(offset))
+        const rows = await selectRows<EntryRow>(
+          db,
+          query.select("e.*").orderBy(`e.${sort}`, order).limit(limit).offset(offset),
+        )
         const total = await countRows(db, query.select("COUNT(*) as total"))
 
         const data = await shape(type, rows, included(c.query.include), keyIdentity(c))
@@ -318,9 +324,9 @@ export const deliveryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         const query =
           type.kind === "single" && (c.params.slug === "single" || c.params.slug === "_")
             ? publishedQuery(type.id)
-            : publishedQuery(type.id).where(q => q("slug").equals(c.params.slug ?? ""))
+            : publishedQuery(type.id).where(q => q("e.slug").equals(c.params.slug ?? ""))
 
-        const row = await db.one<EntryRow>(query)
+        const row = await one<EntryRow>(db, query.select("e.*"))
         if (!row) throw notFound("Entry not found")
 
         const [data] = await shape(type, [row], included(c.query.include), keyIdentity(c))

@@ -226,7 +226,22 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
         if (input.label !== undefined) changes.label = requireText(input, "label", "Label")
         if (input.description !== undefined) changes.description = optionalText(input, "description")
         if (input.sortOrder !== undefined) changes.sort_order = Number(input.sortOrder) || 0
-        if (input.slug !== undefined) changes.slug = slugify(requireText(input, "slug", "Slug"))
+        if (input.slug !== undefined) {
+          const slug = slugify(requireText(input, "slug", "Slug"))
+          // (taxonomy_id, slug) is UNIQUE in the schema, so without this the
+          // driver's constraint error surfaces as a 500 — while the create path
+          // right above returns a clean 409 for the same collision.
+          if (slug !== row.slug) {
+            const clash = await db.one(
+              from(terms)
+                .select("id")
+                .where(q => q("taxonomy_id").equals(row.taxonomy_id))
+                .where(q => q("slug").equals(slug)),
+            )
+            if (clash) throw conflict(`A term with slug "${slug}" already exists here`, { code: "DUPLICATE" })
+          }
+          changes.slug = slug
+        }
 
         if (Object.keys(changes).length > 0) {
           await db.execute(

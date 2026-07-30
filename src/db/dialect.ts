@@ -9,6 +9,19 @@ export const contains = (db: Connection, column: string, term: string) =>
     ? raw(`${column} ILIKE $1`, `%${term}%`)
     : raw(`LOWER(${column}) LIKE $1`, `%${term.toLowerCase()}%`)
 
+// LIKE treats % and _ as wildcards, so a literal needle has to escape them (and
+// the escape character itself) or a value containing one would silently widen
+// the match. Both dialects accept the same ESCAPE clause.
+const escapeLike = (value: string): string => value.replace(/[\\%_]/g, match => `\\${match}`)
+
+// Literal-substring predicate for *machine* values — an id embedded in a TEXT
+// column holding JSON. Distinct from `contains` above, which powers user-facing
+// search and is deliberately case-insensitive: this stays case-sensitive so the
+// database can use it as a cheap, highly selective prefilter before anything is
+// parsed in application memory.
+export const embeds = (column: string, literal: string) =>
+  raw(`${column} LIKE $1 ESCAPE '\\'`, `%${escapeLike(literal)}%`)
+
 export type AnyQuery = { readonly toSql: (dialect?: never) => SqlResult<unknown> }
 
 // `from(schema)` narrows .select() to the schema's own columns, so aggregates

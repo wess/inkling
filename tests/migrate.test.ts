@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { connect } from "@atlas/db"
-import { down, splitStatements, up } from "../src/migrate/index.ts"
+import { down, scan, splitStatements, up } from "../src/migrate/index.ts"
 
 const fresh = () => connect({ driver: "sqlite", path: ":memory:" })
 
@@ -68,9 +68,12 @@ test("rolls every migration back", async () => {
   const db = fresh()
   await up(db, "./migrations")
 
+  // Counted from the directory rather than hardcoded: the assertion that matters
+  // is "every migration rolled back", and a literal here just breaks every time
+  // one is added.
   let rolled = 0
   while (await down(db, "./migrations")) rolled++
-  expect(rolled).toBe(11)
+  expect(rolled).toBe(scan("./migrations").length)
 
   expect(await tableNames(db)).toEqual(["schema_migrations"])
   await db.close()

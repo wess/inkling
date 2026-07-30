@@ -4,9 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun src/dev.ts",
-    "api": "bun --hot src/server.ts",
-    "web": "bun --hot src/web/serve.ts",
+    "dev": "bun --hot src/server.ts",
     "start": "bun src/start.ts",
     "seed": "bun scripts/seed.ts",
     "test": "bun test tests/",
@@ -23,6 +21,7 @@
     "@types/react-dom": "latest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "atlas": "github:wess/atlas#main",
     "lucide-react": "^0.468.0",
     "react": "^19",

@@ -56,11 +56,19 @@ export const storageFromConfig = (): StorageDriver =>
 
 // Keys are `<yyyy>/<mm>/<random>/<sanitized name>` — dated so a bucket stays
 // browsable, randomized so two uploads of "logo.png" never collide.
+//
+// The random segment is 8 bytes rendered as 16 hex characters. It is sized for
+// unguessability rather than collision avoidance: media is served from an
+// unauthenticated route (see src/media), so the key is the only thing standing
+// between a URL and the file. An earlier version sliced 8 *characters* off a
+// UUID, which is 4 bytes — half the bits the comment there claimed.
 export const makeKey = (filename: string): string => {
   const stamp = new Date()
   const year = stamp.getUTCFullYear()
   const month = String(stamp.getUTCMonth() + 1).padStart(2, "0")
-  const unique = crypto.randomUUID().slice(0, 8)
+  const unique = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("")
   return `${year}/${month}/${unique}/${sanitize(filename)}`
 }
 

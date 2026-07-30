@@ -15,36 +15,51 @@ export type RateVerdict = { readonly ok: boolean; readonly remaining: number; re
 
 export const createRateLimit = (db: Connection) => ({
   // Fixed-window counter. `limit` requests per `windowSeconds` per bucket.
+  //
+  // One statement, deliberately. Reading the row and then writing it back lets
+  // two concurrent requests both observe "no row yet" and both settle the
+  // counter at 1, so the effective limit drifts above the configured one under
+  // exactly the load a limiter exists to handle. The upsert below decides
+  // inside the database instead: on conflict it either resets an expired window
+  // or increments a live one, and RETURNING hands back the value this caller
+  // actually claimed.
   check: async (bucket: string, limit: number, windowSeconds: number): Promise<RateVerdict> => {
     const cutoff = new Date(Date.now() - windowSeconds * 1000).toISOString()
-    const current = await db.one<{ bucket: string; count: number; window_started_at: string }>(
-      from(rateLimits).where(q => q("bucket").equals(bucket)),
+    const startedAt = now()
+
+    const [claimed] = await db.execute<{ count: number | string; window_started_at: string }>(
+      from(rateLimits)
+        .insert({ bucket, count: 1, window_started_at: startedAt })
+        .onConflict({
+          target: ["bucket"],
+          action: "update",
+          // Nothing comes from EXCLUDED — both columns are conditional on
+          // whether the stored window has expired, which EXCLUDED can't express.
+          updateColumns: [],
+          setExtra: {
+            count: raw(`CASE WHEN rate_limits.window_started_at <= $1 THEN 1 ELSE rate_limits.count + 1 END`, cutoff),
+            window_started_at: raw(
+              `CASE WHEN rate_limits.window_started_at <= $1 THEN $2 ELSE rate_limits.window_started_at END`,
+              cutoff,
+              startedAt,
+            ),
+          },
+        })
+        .returning("count", "window_started_at"),
     )
 
-    if (!current || current.window_started_at <= cutoff) {
-      const startedAt = now()
-      // The row may exist but be expired, so this is an upsert either way.
-      // Default updateColumns is the insert columns minus the target, set from
-      // EXCLUDED — exactly the count/window reset we want.
-      await db.execute(
-        from(rateLimits)
-          .insert({ bucket, count: 1, window_started_at: startedAt })
-          .onConflict({ target: ["bucket"], action: "update" }),
-      )
-      return { ok: true, remaining: limit - 1, retryAfter: 0 }
-    }
+    // A driver that declines to return the row leaves us no basis to deny on;
+    // failing open matches the rest of this module, which never lets limiter
+    // trouble become a request failure.
+    if (!claimed) return { ok: true, remaining: limit - 1, retryAfter: 0 }
 
-    if (current.count >= limit) {
-      const elapsed = (Date.now() - new Date(current.window_started_at).getTime()) / 1000
+    const count = Number(claimed.count)
+    if (count > limit) {
+      const elapsed = (Date.now() - new Date(claimed.window_started_at).getTime()) / 1000
       return { ok: false, remaining: 0, retryAfter: Math.max(1, Math.ceil(windowSeconds - elapsed)) }
     }
 
-    await db.execute(
-      from(rateLimits)
-        .update({ count: raw("count + 1") })
-        .where(q => q("bucket").equals(bucket)),
-    )
-    return { ok: true, remaining: limit - current.count - 1, retryAfter: 0 }
+    return { ok: true, remaining: Math.max(0, limit - count), retryAfter: 0 }
   },
 
   // Called after a successful login so a user who eventually gets it right
