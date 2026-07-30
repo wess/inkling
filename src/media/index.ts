@@ -398,7 +398,16 @@ export const mediaRoutes = (db: Connection, store: StorageDriver, hooks: Hooks):
         return json(c, 200, present({ ...row, deleted_at: null }))
       }),
     ),
+  ]
+}
 
+// Split out of mediaRoutes because it is the only media route that is public,
+// and public routes stay at the root of the origin while session-gated ones move
+// under /api. Media URLs are also stored in rows and resolved against
+// PUBLIC_URL, so this path has to stay put regardless of how the admin is
+// mounted.
+export const mediaFileRoutes = (db: Connection, store: StorageDriver): Route[] => {
+  return [
     // Binary read-back for the local driver. Wildcard because storage keys
     // contain slashes. Public by design: media is what a website renders, and
     // keys carry 8 bytes of randomness so they aren't guessable.

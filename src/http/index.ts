@@ -1,6 +1,15 @@
-import type { Conn, PipeFn } from "@atlas/server"
+import type { Conn, PipeFn, Route } from "@atlas/server"
 import { badRequest, halt, pipe, putHeader } from "@atlas/server"
 import { config } from "../config/index.ts"
+
+// Mounts a feature's routes under a base path. Every session-gated route lives
+// under /api so the rest of the origin is free for the admin's own URLs —
+// otherwise `/settings` would be ambiguous between the API and the screen, and
+// six other paths with it.
+//
+// The same shape the plugin registry uses to namespace /ext/<name>.
+export const prefixed = (base: string, routes: readonly Route[]): Route[] =>
+  routes.map(route => ({ ...route, pattern: `${base}${route.pattern === "/" ? "" : route.pattern}` }))
 
 // Bodies arriving as JSON are parsed by `parseJson`, but handlers still need a
 // safe object to destructure from — an absent or non-object body should read as

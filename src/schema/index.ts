@@ -189,6 +189,26 @@ export const rateLimits = defineSchema("rate_limits", {
   window_started_at: column.text(),
 })
 
+// AI provider credentials. `ciphertext`/`iv` hold the operator's key under
+// AES-GCM; nothing here is ever presented to a client except `hint`, which is
+// the last few characters so two keys can be told apart in a list.
+export const aiCredentials = defineSchema("ai_credentials", {
+  id: column.text().primaryKey(),
+  provider: column.text(),
+  label: column.text(),
+  model: column.text(),
+  base_url: column.text().nullable(),
+  ciphertext: column.text(),
+  iv: column.text(),
+  hint: column.text(),
+  is_default: column.integer().default(0),
+  created_by: column.text().nullable(),
+  created_at: column.text(),
+  updated_at: column.text(),
+  last_used_at: column.text().nullable(),
+  revoked_at: column.text().nullable(),
+})
+
 export const schemas = [
   users,
   sessions,
@@ -206,4 +226,5 @@ export const schemas = [
   plugins,
   auditEvents,
   rateLimits,
+  aiCredentials,
 ]

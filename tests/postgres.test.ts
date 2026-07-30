@@ -3,7 +3,7 @@ import { connect, from } from "@atlas/db"
 import { countRows } from "../src/db/dialect.ts"
 import { id } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"
-import { down, up } from "../src/migrate/index.ts"
+import { down, scan, up } from "../src/migrate/index.ts"
 import { contentTypes, entries } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 
@@ -43,7 +43,9 @@ if (!reachable) {
 
     const ran = await up(db, "./migrations")
     expect(ran).toContain("00000001_users")
-    expect(ran).toHaveLength(11)
+    // Every migration in the directory applied — derived, not a literal, so
+    // adding one doesn't fail a test that has nothing to do with it.
+    expect(ran).toHaveLength(scan("./migrations").length)
 
     const tables = await db.all<{ table_name: string }>({
       text: "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",

@@ -10,16 +10,17 @@ export const config = defineConfig({
   environment: env("NODE_ENV", { default: "development" }),
   port: env("PORT", { parse: Number, default: "4300" }),
   host: env("HOST", { default: "0.0.0.0" }),
-  webPort: env("WEB_PORT", { parse: Number, default: "4310" }),
-  apiUrl: env("API_URL", { default: "http://localhost:4300" }),
-  appUrl: env("APP_URL", { default: "http://localhost:4310" }),
-  // Public origin of this API. Media stored on the local driver is addressed
-  // relative to it, so consuming sites on another origin get a URL they can
-  // actually fetch.
+  // The one public origin. Admin, API, delivery, and media all answer here —
+  // they are separated by path, not by port. Media on the local driver is
+  // stored root-relative and resolved against this, so consuming sites on
+  // another origin get a URL they can actually fetch.
   publicUrl: env("PUBLIC_URL", { default: "http://localhost:4300" }),
   deliveryOrigins: env("DELIVERY_ORIGINS", { parse: list, default: "" }),
 
-  databaseUrl: env("DATABASE_URL", { default: "sqlite://./inkling.db" }),
+  // Postgres everywhere, development included. The SQLite driver is still
+  // reachable by URL and the tests use it in memory, but it is not a supported
+  // store for an install — see .env.example.
+  databaseUrl: env("DATABASE_URL", { default: "postgres://postgres:postgres@127.0.0.1:5432/inkling" }),
   dbPool: env("DB_POOL_SIZE", { parse: Number, default: "5" }),
 
   secret: env("SECRET", { default: "inkling-dev-secret-change-me" }),
