@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { from } from "@atlas/db"
+import { from } from "atlas/db"
 import { openDb } from "../src/db/index.ts"
 import { id } from "../src/ids/index.ts"
 import { up } from "../src/migrate/index.ts"

@@ -1,5 +1,5 @@
-import type { Connection } from "@atlas/db"
-import type { Conn, Route } from "@atlas/server"
+import type { Connection } from "atlas/db"
+import type { Conn, Route } from "atlas/server"
 import {
   badRequest,
   del,
@@ -13,7 +13,7 @@ import {
   pipeline,
   post,
   put,
-} from "@atlas/server"
+} from "atlas/server"
 import { requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body, corsAll, preflight } from "../http/index.ts"

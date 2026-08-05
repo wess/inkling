@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
-import { router } from "@atlas/server"
+import { connect, from } from "atlas/db"
+import { router } from "atlas/server"
 import { aiRoutes, resolveCredential } from "../src/ai/index.ts"
 import { open, seal } from "../src/ai/secrets.ts"
 import { issueSession } from "../src/auth/index.ts"

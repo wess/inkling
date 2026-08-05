@@ -1,4 +1,4 @@
-import { from } from "@atlas/db"
+import { from } from "atlas/db"
 import { definePlugin } from "../../../../src/plugins/define.ts"
 
 export default definePlugin({

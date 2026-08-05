@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { get, json, pipe, router } from "@atlas/server"
+import { get, json, pipe, router } from "atlas/server"
 import { prefixed } from "../src/http/index.ts"
 
 // One origin, split by path. These assert the split itself, because the whole

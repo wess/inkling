@@ -1,17 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Connection } from "@atlas/db"
-import type { Route } from "@atlas/server"
-import {
-  badRequest,
-  conflict,
-  json,
-  parseJson,
-  pipeline,
-  post,
-  putHeader,
-  stream,
-  tooManyRequests,
-} from "@atlas/server"
+import type { Connection } from "atlas/db"
+import type { Route } from "atlas/server"
+import { badRequest, conflict, json, parseJson, pipeline, post, putHeader, stream, tooManyRequests } from "atlas/server"
 import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body, optionalText, requireText } from "../http/index.ts"

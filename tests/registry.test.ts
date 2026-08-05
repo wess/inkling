@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
-import { options, pipeline, router } from "@atlas/server"
+import { connect, from } from "atlas/db"
+import { options, pipeline, router } from "atlas/server"
 import { corsFor, preflight } from "../src/http/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { createHooks } from "../src/plugins/hooks.ts"

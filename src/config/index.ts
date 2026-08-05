@@ -1,4 +1,4 @@
-import { defineConfig, env } from "@atlas/config"
+import { defineConfig, env } from "atlas/config"
 
 const list = (raw: string): readonly string[] =>
   raw

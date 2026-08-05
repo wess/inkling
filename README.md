@@ -199,7 +199,19 @@ credentials, and there is no reason for that blast radius to cross sites.
 ### Or mount it inside the site
 
 A site that would rather not deploy a second service can mount Inkling in its own
-process. `createInkling` returns a handler rather than a server:
+process. Install it from GitHub — there is no npm release:
+
+```bash
+bun add github:wess/inkling          # or github:wess/inkling#v0.2.0 to pin
+```
+
+Nothing else is needed to make it resolve: Inkling imports Atlas as bare
+`atlas/<pkg>` specifiers that go through Atlas's own `exports` map, so no
+`tsconfig.json` `paths` entry is involved. (An aliased `@atlas/<pkg>` would not
+survive the trip — Bun does not apply a consuming project's tsconfig paths to
+files under `node_modules`.)
+
+`createInkling` returns a handler rather than a server:
 
 ```ts
 import { createInkling } from "inkling"

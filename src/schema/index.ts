@@ -1,8 +1,8 @@
-import { column, defineSchema } from "@atlas/db"
+import { column, defineSchema } from "atlas/db"
 
 // The TypeScript mirror of `migrations/`. Migrations are the runtime source of
 // truth — this file is what gives queries their row types. When you change one,
-// change both. Column names are snake_case because @atlas/db emits identifiers
+// change both. Column names are snake_case because atlas/db emits identifiers
 // unquoted: Postgres folds unquoted camelCase to lowercase while SQLite keeps
 // it, so a camelCase column would come back as `contenttypeid` on one driver
 // and `contentTypeId` on the other. snake_case is identical on both.

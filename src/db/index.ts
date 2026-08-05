@@ -1,5 +1,5 @@
-import type { Connection } from "@atlas/db"
-import { connect } from "@atlas/db"
+import type { Connection } from "atlas/db"
+import { connect } from "atlas/db"
 import { config } from "../config/index.ts"
 
 // Inkling runs on either dialect from one migration set. The portability rules

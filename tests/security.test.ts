@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { withSecurityHeaders } from "@atlas/security"
-import { get, json, pipe, putHeader, router } from "@atlas/server"
+import { withSecurityHeaders } from "atlas/security"
+import { get, json, pipe, putHeader, router } from "atlas/server"
 import { clientIp } from "../src/security/index.ts"
 
 // The security wrapper is load-bearing for something its name does not suggest:

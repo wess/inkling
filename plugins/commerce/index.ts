@@ -1,5 +1,5 @@
-import { from } from "@atlas/db"
-import { get, json, pipeline } from "@atlas/server"
+import { from } from "atlas/db"
+import { get, json, pipeline } from "atlas/server"
 import { rows as query } from "../../src/db/dialect.ts"
 import { cors } from "../../src/http/index.ts"
 import { decodeObject } from "../../src/json/index.ts"

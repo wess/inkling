@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
-import { router } from "@atlas/server"
+import { connect, from } from "atlas/db"
+import { router } from "atlas/server"
 import { deliveryRoutes } from "../src/delivery/index.ts"
 import { id, secretToken, sha256 } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"

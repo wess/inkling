@@ -1,4 +1,4 @@
-import { badRequest, get, json, parseJson, pipeline, post, tooManyRequests } from "@atlas/server"
+import { badRequest, get, json, parseJson, pipeline, post, tooManyRequests } from "atlas/server"
 import { requireAuth, requireCan } from "../../src/auth/guard.ts"
 import { can } from "../../src/auth/roles.ts"
 import { corsAll } from "../../src/http/index.ts"

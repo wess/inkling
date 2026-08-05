@@ -1,5 +1,5 @@
-import { from } from "@atlas/db"
-import { badRequest, conflict, json, parseJson, pipeline, post, tooManyRequests } from "@atlas/server"
+import { from } from "atlas/db"
+import { badRequest, conflict, json, parseJson, pipeline, post, tooManyRequests } from "atlas/server"
 import { complete, resolveCredential } from "../../src/ai/index.ts"
 import { contains, rows as query } from "../../src/db/dialect.ts"
 import { corsAll } from "../../src/http/index.ts"

@@ -1,4 +1,4 @@
-import { createStore, download, remove, upload } from "@atlas/storage"
+import { createStore, download, remove, upload } from "atlas/storage"
 import type { StorageDriver } from "../index.ts"
 
 type S3Settings = {
@@ -10,7 +10,7 @@ type S3Settings = {
   readonly publicUrl: string
 }
 
-// Wraps @atlas/storage. Reads still flow through the media API rather than
+// Wraps atlas/storage. Reads still flow through the media API rather than
 // handing clients a bucket URL, so the driver exposes `get` as a stream and
 // never a presigned link — see the note in ../index.ts.
 export const createS3Driver = (settings: S3Settings): StorageDriver => {

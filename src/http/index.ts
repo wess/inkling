@@ -1,5 +1,5 @@
-import type { Conn, PipeFn, Route } from "@atlas/server"
-import { badRequest, halt, pipe, putHeader } from "@atlas/server"
+import type { Conn, PipeFn, Route } from "atlas/server"
+import { badRequest, halt, pipe, putHeader } from "atlas/server"
 import { config } from "../config/index.ts"
 
 // Mounts a feature's routes under a base path. Every session-gated route lives

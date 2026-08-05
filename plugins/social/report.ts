@@ -1,5 +1,5 @@
-import type { Connection } from "@atlas/db"
-import { from } from "@atlas/db"
+import type { Connection } from "atlas/db"
+import { from } from "atlas/db"
 import { rows as query } from "../../src/db/dialect.ts"
 import type { PluginStats } from "../../src/plugins/define.ts"
 import { byId, loadType, num, refId, text } from "./entries.ts"

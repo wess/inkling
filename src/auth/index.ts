@@ -1,7 +1,7 @@
-import { hash, token, verify } from "@atlas/auth"
-import type { Connection } from "@atlas/db"
-import { from } from "@atlas/db"
-import type { Route } from "@atlas/server"
+import { hash, token, verify } from "atlas/auth"
+import type { Connection } from "atlas/db"
+import { from } from "atlas/db"
+import type { Route } from "atlas/server"
 import {
   badRequest,
   conflict,
@@ -13,7 +13,7 @@ import {
   post,
   tooManyRequests,
   unauthorized,
-} from "@atlas/server"
+} from "atlas/server"
 import { config } from "../config/index.ts"
 import { countRows } from "../db/dialect.ts"
 import { body, noStore, requireText } from "../http/index.ts"

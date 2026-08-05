@@ -1,4 +1,4 @@
-import type { Connection } from "@atlas/db"
+import type { Connection } from "atlas/db"
 import type { PluginStats } from "../../src/plugins/define.ts"
 import { loadType, refId, text } from "./entries.ts"
 import { OPEN_STAGES } from "./model.ts"

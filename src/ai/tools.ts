@@ -1,5 +1,5 @@
-import type { Connection } from "@atlas/db"
-import { from } from "@atlas/db"
+import type { Connection } from "atlas/db"
+import { from } from "atlas/db"
 import type { ContentTypeRow } from "../contenttypes/index.ts"
 import { present as presentType, byId as typeById, byName as typeByName } from "../contenttypes/index.ts"
 import { contains, rows } from "../db/dialect.ts"

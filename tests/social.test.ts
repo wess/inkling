@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
+import { connect, from } from "atlas/db"
 import { tidyHashtags } from "../plugins/social/index.ts"
 import { overLimit } from "../plugins/social/networks.ts"
 import { buildQueue } from "../plugins/social/queue.ts"

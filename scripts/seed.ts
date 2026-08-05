@@ -1,4 +1,4 @@
-import { from } from "@atlas/db"
+import { from } from "atlas/db"
 import { config } from "../src/config/index.ts"
 import { countRows } from "../src/db/dialect.ts"
 import { db } from "../src/db/index.ts"

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { connect } from "@atlas/db"
+import { connect } from "atlas/db"
 import { down, scan, splitStatements, up } from "../src/migrate/index.ts"
 
 const fresh = () => connect({ driver: "sqlite", path: ":memory:" })

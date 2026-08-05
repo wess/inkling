@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
-import { router } from "@atlas/server"
+import { connect, from } from "atlas/db"
+import { router } from "atlas/server"
 import { issueSession } from "../src/auth/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { sessions } from "../src/schema/index.ts"

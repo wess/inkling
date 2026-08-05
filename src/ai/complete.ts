@@ -1,12 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk"
-import { createProvider } from "@atlas/ai"
+import { createProvider } from "atlas/ai"
 import type { ProviderName } from "./providers.ts"
 
 // The one place a model is actually called. Everything above this file deals in
 // prompts and credentials; everything below is provider SDK detail.
 //
 // Claude goes through the official Anthropic SDK. The other providers go through
-// @atlas/ai's provider abstraction — which is what it exists for — rather than
+// atlas/ai's provider abstraction — which is what it exists for — rather than
 // being bent into an Anthropic-shaped client.
 
 export type ResolvedCredential = {

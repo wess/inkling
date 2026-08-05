@@ -1,6 +1,6 @@
-import type { Connection } from "@atlas/db"
-import { from } from "@atlas/db"
-import type { Route } from "@atlas/server"
+import type { Connection } from "atlas/db"
+import { from } from "atlas/db"
+import type { Route } from "atlas/server"
 import {
   badRequest,
   conflict,
@@ -14,7 +14,7 @@ import {
   post,
   put,
   redirect,
-} from "@atlas/server"
+} from "atlas/server"
 import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body, optionalText, requireText } from "../http/index.ts"

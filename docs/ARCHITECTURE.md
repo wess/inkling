@@ -190,7 +190,7 @@ has the same shape as a row read in production.
 | Timestamp | `TEXT` ISO-8601 | Postgres `TIMESTAMPTZ` returns a `Date`; SQLite returns a string. ISO text also makes lexical sort equal chronological sort. |
 | Boolean | `INTEGER` 0/1 | Postgres `BOOLEAN` returns `true/false`; SQLite returns `0/1`. |
 | JSON | `TEXT` | Postgres `JSONB` arrives pre-parsed; SQLite doesn't. |
-| Column names | snake_case | `@atlas/db` emits identifiers **unquoted**. Postgres folds camelCase to lowercase, SQLite preserves it — so a camelCase column returns a differently-spelled key per driver. |
+| Column names | snake_case | `atlas/db` emits identifiers **unquoted**. Postgres folds camelCase to lowercase, SQLite preserves it — so a camelCase column returns a differently-spelled key per driver. |
 
 The two places dialects genuinely differ are isolated in `src/db/dialect.ts`:
 `contains()` picks `ILIKE` vs `LOWER(...) LIKE`, and `countRows()` normalizes
@@ -205,7 +205,7 @@ reachable, and skips otherwise so the default `bun test` needs no setup.
 
 ### The migration runner
 
-`src/migrate/index.ts` replaces `@atlas/migrate#up`, which hands a whole
+`src/migrate/index.ts` replaces `atlas/migrate#up`, which hands a whole
 `up.sql` to `db.execute` as a single statement — and bun:sqlite's
 `prepare(sql).run()` executes only the *first* statement of a multi-statement
 string while reporting success. Ours splits on statement-terminating semicolons
@@ -407,7 +407,7 @@ the visitor is on, and returns a configured line rather than guessing when the
 answer isn't there.
 
 Claude is the default and goes through the official Anthropic SDK. Other providers
-go through `@atlas/ai`'s abstraction rather than being bent into an
+go through `atlas/ai`'s abstraction rather than being bent into an
 Anthropic-shaped client.
 
 ## Plugins

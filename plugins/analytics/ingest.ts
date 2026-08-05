@@ -1,5 +1,5 @@
-import type { Connection } from "@atlas/db"
-import { from } from "@atlas/db"
+import type { Connection } from "atlas/db"
+import { from } from "atlas/db"
 import { config } from "../../src/config/index.ts"
 import { id, sha256 } from "../../src/ids/index.ts"
 import { encode } from "../../src/json/index.ts"

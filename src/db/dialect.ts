@@ -1,5 +1,5 @@
-import type { Connection, SqlResult } from "@atlas/db"
-import { raw } from "@atlas/db"
+import type { Connection, SqlResult } from "atlas/db"
+import { raw } from "atlas/db"
 
 // Postgres has ILIKE; SQLite does not. Both agree on LOWER(col) LIKE pattern,
 // and SQLite's LIKE is already ASCII-case-insensitive, so lowering the pattern

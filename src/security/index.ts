@@ -1,12 +1,12 @@
-import type { Connection } from "@atlas/db"
-import { from, raw } from "@atlas/db"
+import type { Connection } from "atlas/db"
+import { from, raw } from "atlas/db"
 import { config } from "../config/index.ts"
 import { id } from "../ids/index.ts"
 import { encode } from "../json/index.ts"
 import { auditEvents, rateLimits } from "../schema/index.ts"
 import { now } from "../time/index.ts"
 
-// @atlas/security's limiter and audit logger expect TIMESTAMPTZ/SERIAL columns.
+// atlas/security's limiter and audit logger expect TIMESTAMPTZ/SERIAL columns.
 // Inkling's schema is deliberately on TEXT ISO timestamps and TEXT uuids so one
 // migration set covers both dialects, so the two are reimplemented here against
 // that convention rather than carrying a second timestamp style.

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
+import { connect, from } from "atlas/db"
 import {
   cleanPath,
   cleanReferrer,

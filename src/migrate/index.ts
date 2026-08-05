@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs"
-import type { Connection } from "@atlas/db"
+import type { Connection } from "atlas/db"
 
-// Inkling runs its own migration runner instead of `@atlas/migrate#up`.
+// Inkling runs its own migration runner instead of `atlas/migrate#up`.
 // Reason: that runner hands a whole up.sql to `db.execute` as one statement.
 // bun:sqlite's `prepare(sql).run()` executes only the *first* statement of a
 // multi-statement string and reports success, so a migration that creates three

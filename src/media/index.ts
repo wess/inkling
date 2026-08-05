@@ -1,6 +1,6 @@
-import type { Connection } from "@atlas/db"
-import { from } from "@atlas/db"
-import type { Route } from "@atlas/server"
+import type { Connection } from "atlas/db"
+import { from } from "atlas/db"
+import type { Route } from "atlas/server"
 import {
   badRequest,
   conflict,
@@ -15,7 +15,7 @@ import {
   put,
   putHeader,
   stream,
-} from "@atlas/server"
+} from "atlas/server"
 import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { config } from "../config/index.ts"
@@ -230,7 +230,7 @@ export const mediaRoutes = (db: Connection, store: StorageDriver, hooks: Hooks):
     post(
       "/media",
       uploads(async c => {
-        // @atlas/server's parseMultipart splits the body into text `fields` and
+        // atlas/server's parseMultipart splits the body into text `fields` and
         // binary `files` rather than one flat record.
         const { fields, files } = (c.body ?? {}) as {
           fields?: Record<string, string>

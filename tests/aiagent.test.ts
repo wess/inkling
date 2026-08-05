@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "@atlas/db"
-import { router } from "@atlas/server"
+import { connect, from } from "atlas/db"
+import { router } from "atlas/server"
 import { agentRoutes } from "../src/ai/agent.ts"
 import type { Proposal } from "../src/ai/tools.ts"
 import { runTool, TOOLS } from "../src/ai/tools.ts"
