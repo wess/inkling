@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get set up — Inkling</title>
+<meta name="description" content="From an empty database to a live site reading your content, in eight steps.">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<div class="leader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="wordmark" href="../">Inkling<b>.</b></a>
+    <div class="nav-links">
+      <a href="./" aria-current="page">Start</a>
+      <a href="../guide/">Guide</a>
+      <a href="../tutorials/">Tutorials</a>
+      <a href="../reference/">Reference</a>
+      <a href="https://github.com/wess/inkling">Source</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap doc">
+
+  <aside class="toc">
+    <h2>On this page</h2>
+    <ol>
+      <li><a href="#need">What you need</a></li>
+      <li><a href="#run">Get it running</a></li>
+      <li><a href="#model">Build a model</a></li>
+      <li><a href="#write">Write something</a></li>
+      <li><a href="#read">Read it from a site</a></li>
+      <li><a href="#live">Stay in sync</a></li>
+      <li><a href="#next">Where next</a></li>
+    </ol>
+  </aside>
+
+  <main class="prose">
+
+    <p class="eyebrow">Reel 01 · Setup</p>
+    <h1 class="page-title">Get set up</h1>
+    <p class="lede">
+      From an empty database to a real site reading live content. Twenty minutes,
+      and nothing to deploy twice — Inkling is <em>one process on one port</em>.
+    </p>
+
+    <h2 id="need">What you need</h2>
+
+    <p>
+      Bun, and a Postgres you can point at. Bun is the runtime, the package
+      manager, and the bundler — there is no <code>node</code> or <code>npm</code>
+      step anywhere in this project.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Thing</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://bun.sh">Bun</a> 1.3+</td><td>Runs the server and bundles the admin. No build step for the API.</td></tr>
+        <tr><td>Postgres</td><td>The store, in development as well as production, so a dialect difference cannot wait until deploy day to appear.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <b>Note</b>
+      <p>
+        The test suite runs on in-memory SQLite, so <code>bun test</code> needs no
+        database of its own. That is the only supported use of SQLite here — run
+        Postgres for anything you intend to keep.
+      </p>
+    </div>
+
+    <h2 id="run">Get it running</h2>
+
+    <ol class="steps">
+
+      <li class="step">
+        <h3>Install and configure</h3>
+        <p><code>.env.example</code> documents every variable in place, and is the only place they are documented. Copy it and read it once.</p>
+        <div class="screen"><pre>git clone https://github.com/wess/inkling
+<span class="w">cd</span> inkling
+bun install
+cp .env.example .env</pre></div>
+      </li>
+
+      <li class="step">
+        <h3>Point it at a database, and give it a secret</h3>
+        <p>
+          <code>SECRET</code> signs sessions and seals stored credentials. In
+          production Inkling refuses to boot if it is still the default or shorter
+          than 32 characters — so set a real one now and save yourself the
+          surprise later.
+        </p>
+        <div class="screen"><pre><span class="c"># .env</span>
+<span class="k">DATABASE_URL</span>=<span class="s">postgres://postgres:postgres@127.0.0.1:5432/inkling</span>
+<span class="k">PUBLIC_URL</span>=<span class="s">http://localhost:4300</span>
+<span class="k">SECRET</span>=<span class="s">$(openssl rand -hex 32)</span></pre></div>
+      </li>
+
+      <li class="step">
+        <h3>Start it</h3>
+        <p>
+          Migrations run on boot, so there is no separate step. The admin, the
+          API, your media, and the socket all answer on one port.
+        </p>
+        <div class="screen"><pre>bun run dev
+
+<span class="c">migrated: 00000001_users, 00000002_content, …</span>
+<span class="c">plugins: 5 enabled of 7 installed</span>
+<span class="g">inkling on http://localhost:4300 (postgres)</span></pre></div>
+      </li>
+
+      <li class="step">
+        <h3>Claim the owner account</h3>
+        <p>
+          Open <a href="http://localhost:4300">localhost:4300</a>. The first visit
+          asks you to create the owner; after that the same screen becomes the
+          normal sign-in, and the setup route closes permanently. There is no
+          public signup.
+        </p>
+      </li>
+
+    </ol>
+
+    <div class="note warn">
+      <b>Port 4300, not 4000</b>
+      <p>
+        Docker Desktop binds <code>*:4000</code> on IPv6, which wins
+        <code>localhost</code> resolution and will silently answer requests meant
+        for Inkling. A 403 with an XML body is the tell.
+      </p>
+    </div>
+
+    <h2 id="model">Build a model</h2>
+
+    <p>
+      A <b>content type</b> is a shape you define — what a post, a product, or a
+      landing page is made of. Everything else follows from it: the editor
+      screens, what the delivery API returns, and what gets validated on save.
+    </p>
+
+    <ol class="steps">
+      <li class="step">
+        <h3>Add the type</h3>
+        <p>
+          In the admin, go to <b>Types → New type</b>. Call it <code>Post</code>,
+          leave the kind as <b>collection</b> (many entries, as opposed to
+          <b>single</b> — a homepage, your site hours).
+        </p>
+      </li>
+      <li class="step">
+        <h3>Give it fields</h3>
+        <p>
+          Add a <code>body</code> rich text field, a <code>summary</code> text
+          field, and a <code>cover</code> media field. There are 18 field types,
+          including a <code>list</code> repeater that nests and a
+          <code>reference</code> that points at entries of another type.
+        </p>
+        <p>
+          Field keys are camelCase — <code>heroImage</code>, not
+          <code>hero_image</code>. They live inside a JSON document and never
+          become database columns.
+        </p>
+      </li>
+    </ol>
+
+    <h2 id="write">Write something</h2>
+
+    <p>
+      Go to <b>Content → Post → New</b>, write a paragraph, drop an image into
+      <code>cover</code>, and publish it. A few things just happened that are
+      worth knowing about:
+    </p>
+
+    <ul>
+      <li>The pre-edit state was snapshotted into <b>revisions</b>, so restoring later restores what it replaced.</li>
+      <li>The entry was validated against the type's fields — a partial save never blanks a field the editor didn't render.</li>
+      <li>The slug was checked for uniqueness within this type and locale, ignoring anything in the trash.</li>
+    </ul>
+
+    <h2 id="read">Read it from a site</h2>
+
+    <p>
+      Your website reads content with an API key over the delivery API. Keys are
+      stored only as a hash, so the plaintext is shown exactly once — copy it
+      when you mint it.
+    </p>
+
+    <ol class="steps">
+      <li class="step">
+        <h3>Mint a key</h3>
+        <p>
+          <b>API keys → New key</b>. Leave the scopes empty to allow every type,
+          or name the ones this site should see. A key can also carry an
+          expiration.
+        </p>
+      </li>
+      <li class="step">
+        <h3>Ask for the content</h3>
+        <p>Media and reference fields come back expanded, so rendering a page takes one request rather than one per image.</p>
+        <div class="screen"><pre>curl http://localhost:4300/content/post \
+  -H <span class="s">"x-api-key: ink_…"</span>
+
+{
+  <span class="k">"data"</span>: [{
+    <span class="k">"slug"</span>: <span class="s">"hello"</span>,
+    <span class="k">"title"</span>: <span class="s">"Hello"</span>,
+    <span class="k">"publishedAt"</span>: <span class="s">"2026-08-05T09:12:04Z"</span>,
+    <span class="k">"data"</span>: {
+      <span class="k">"summary"</span>: <span class="s">"A first post."</span>,
+      <span class="k">"cover"</span>: { <span class="k">"url"</span>: <span class="s">"…/cover.jpg"</span>, <span class="k">"alt"</span>: <span class="s">"…"</span>, <span class="k">"width"</span>: <span class="m">1600</span> }
+    }
+  }],
+  <span class="k">"meta"</span>: { <span class="k">"type"</span>: <span class="s">"post"</span>, <span class="k">"total"</span>: <span class="m">1</span>, <span class="k">"page"</span>: <span class="m">1</span>, <span class="k">"limit"</span>: <span class="m">20</span> }
+}</pre></div>
+      </li>
+    </ol>
+
+    <p>
+      A delivery key sees published content and nothing else — never a draft,
+      never a user's email, never a deleted row. That holds through reference
+      expansion too: a linked entry is re-checked for publication and against the
+      key's own scopes before it is included.
+    </p>
+
+    <p>
+      Useful from here: <code>?include=terms</code> attaches taxonomy terms,
+      <code>?term=news</code> filters by one, and <code>GET /content</code> lists
+      the types a key may read along with their field shapes, so a consumer can
+      discover the model.
+    </p>
+
+    <h2 id="live">Stay in sync</h2>
+
+    <p>
+      Rather than polling on a timer, hold a socket. Exchange your key for a
+      short-lived ticket, connect, and subscribe to the types you render.
+    </p>
+
+    <div class="screen"><pre><span class="k">const</span> { ticket } = <span class="k">await</span> fetch(<span class="s">"http://localhost:4300/realtime/delivery/ticket"</span>, {
+  method: <span class="s">"POST"</span>,
+  headers: { <span class="s">"x-api-key"</span>: process.env.<span class="w">INKLING_KEY</span> },
+}).then(r => r.json())
+
+<span class="k">const</span> socket = <span class="k">new</span> <span class="w">WebSocket</span>(<span class="s">`ws://localhost:4300/realtime?ticket=${ticket}`</span>)
+
+socket.onopen = () => socket.send(JSON.stringify({ action: <span class="s">"subscribe"</span>, topic: <span class="s">"content:post"</span> }))
+socket.onmessage = event => {
+  <span class="k">const</span> { event: name, data } = JSON.parse(event.data)
+  <span class="k">if</span> (name === <span class="s">"entry.published"</span>) revalidate(<span class="s">`/posts/${data.slug}`</span>)
+}</pre></div>
+
+    <p>
+      Frames carry the id, slug, and type — never the content itself. Re-read the
+      entry through <code>/content</code> when one arrives, so the boundary is
+      enforced on the way out.
+    </p>
+
+    <h2 id="next">Where next</h2>
+
+    <div class="doors">
+      <a class="door" href="../guide/">
+        <span class="go">Guide →</span>
+        <h3>How it works</h3>
+        <p>The model, delivery, live updates, previews, the assistant, plugins, and running more than one site.</p>
+      </a>
+      <a class="door" href="../tutorials/">
+        <span class="go">Tutorials →</span>
+        <h3>Build something</h3>
+        <p>A blog end to end, a plugin of your own, and three sites at once.</p>
+      </a>
+    </div>
+
+    <div class="onward">
+      <a class="cta ghost" href="../">← Home</a>
+      <a class="cta" href="../guide/">The guide →</a>
+    </div>
+
+  </main>
+</div>
+
+<footer class="wrap foot">
+  <span>Inkling</span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="../guide/">Guide</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="../reference/">Reference</a>
+    <a href="https://github.com/wess/inkling">Source</a>
+  </nav>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

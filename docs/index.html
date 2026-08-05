@@ -5,407 +5,184 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Inkling — the cutting room for your content</title>
 <meta name="description" content="Write, stage, and cut content live. Inkling holds every word, image, and structure your sites read from, and pushes the change the moment you make it.">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light">
 <meta property="og:title" content="Inkling — the cutting room for your content">
 <meta property="og:description" content="Write, stage, and cut content live.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
 <style>
-/* ————————————————————————————————————————————————
-   Cutting Room.
-   Two materials: plate (the deep violet-black of a press bed) and light
-   (what appears only when something goes live). Registration marks are the
-   structural device — they are how a press aligns plates, and here they mark
-   every frame that matters. Frame numbers are real: the capability grid is a
-   contact sheet, and a contact sheet is a sequence.
-   ———————————————————————————————————————————————— */
-
-:root {
-  --ink:      #08070F;
-  --plate:    #100E20;
-  --wash:     #211A44;
-  --edge:     #2E2856;
-  --cyan:     #56E4EA;
-  --magenta:  #FF5CA8;
-  --light:    #EDEAF5;
-  --muted:    #8F8AB0;
-
-  --display: "Bodoni Moda", "Didot", "Playfair Display", serif;
-  --sans: "IBM Plex Sans", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
-
-  --gutter: clamp(1.25rem, 5vw, 5rem);
-  --frame: 1100px;
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-
-html { scroll-behavior: smooth; }
-
-body {
-  margin: 0;
-  background: var(--ink);
-  color: var(--light);
-  font-family: var(--sans);
-  font-weight: 300;
-  font-size: clamp(1rem, 0.95rem + 0.2vw, 1.075rem);
-  line-height: 1.65;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-
-h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; line-height: 0.95; }
-
-a { color: inherit; }
-
-:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 3px;
-  border-radius: 2px;
-}
-
-.wrap { width: min(100% - (var(--gutter) * 2), var(--frame)); margin-inline: auto; }
-
-/* Registration marks — the corner brackets a press aligns to. Used instead of
-   rules or cards, because alignment is the honest metaphor for this product. */
-.reg { position: relative; }
-.reg::before, .reg::after {
-  content: "";
-  position: absolute;
-  width: 14px; height: 14px;
-  border: 1px solid var(--edge);
-  pointer-events: none;
-}
-.reg::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
-.reg::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
-
-.eyebrow {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0;
-}
-
-/* ———————————————————————— title sequence ———————————————————————— */
+/* Hero only. The shared system lives in site.css; what follows is the title
+   sequence, which no other page runs. */
 
 .sequence {
   position: relative;
-  min-height: 100svh;
-  display: grid;
-  align-content: center;
-  padding-block: clamp(6rem, 16vh, 11rem) clamp(3rem, 8vh, 6rem);
+  padding-block: clamp(3.5rem, 11vh, 7rem) clamp(3rem, 8vh, 5rem);
   isolation: isolate;
+  overflow: hidden;
 }
 
-/* Letterboxing. Thin, fixed, and always present — the frame you are watching
-   this through. */
-.bar {
-  position: fixed;
-  left: 0; right: 0;
-  height: clamp(14px, 2.2vh, 26px);
-  background: var(--ink);
-  z-index: 40;
-}
-.bar-top { top: 0; border-bottom: 1px solid rgba(46, 40, 86, 0.55); }
-.bar-bottom { bottom: 0; border-top: 1px solid rgba(46, 40, 86, 0.55); }
-
-/* The ink wash: two slow, offset plates bleeding through each other. */
-.wash-a, .wash-b {
-  position: absolute;
-  inset: -30% -20% auto -20%;
-  height: 90vh;
-  z-index: -1;
-  filter: blur(90px);
-  opacity: 0.85;
-}
+/* Two slow plates bleeding through each other — the ink still wet. */
+.wash-a, .wash-b { position: absolute; z-index: -1; filter: blur(80px); pointer-events: none; }
 .wash-a {
-  background: radial-gradient(45% 60% at 30% 40%, var(--wash) 0%, transparent 70%);
-  animation: drift-a 26s ease-in-out infinite alternate;
+  inset: -25% 45% 30% -15%;
+  background: radial-gradient(closest-side, rgba(0, 180, 204, 0.4), transparent);
+  animation: drift-a 24s ease-in-out infinite alternate;
 }
 .wash-b {
-  background: radial-gradient(40% 55% at 72% 30%, rgba(86, 228, 234, 0.16) 0%, transparent 70%);
-  animation: drift-b 34s ease-in-out infinite alternate;
+  inset: -30% -15% 35% 45%;
+  background: radial-gradient(closest-side, rgba(245, 50, 127, 0.3), transparent);
+  animation: drift-b 30s ease-in-out infinite alternate;
 }
-@keyframes drift-a { to { transform: translate3d(4%, 6%, 0) scale(1.15); } }
-@keyframes drift-b { to { transform: translate3d(-6%, 3%, 0) scale(1.1); } }
+@keyframes drift-a { to { transform: translate3d(5%, 7%, 0) scale(1.18); } }
+@keyframes drift-b { to { transform: translate3d(-7%, 4%, 0) scale(1.12); } }
 
-.mark {
+.slate {
   font-family: var(--mono);
   font-size: 0.7rem;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--muted);
   display: flex;
-  gap: 1.25rem;
+  gap: 1.1rem;
   align-items: center;
-  margin-bottom: clamp(2rem, 6vh, 3.5rem);
+  margin-bottom: clamp(1.5rem, 4vh, 2.5rem);
 }
-.mark::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--edge), transparent);
-}
+.slate::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge), transparent); }
 
 .title {
-  font-size: clamp(4rem, 15.5vw, 13.5rem);
-  /* Bodoni's serifs are wide and its hairlines long. Negative tracking that
-     would flatter a grotesque makes these letterforms collide, so this stays
-     near zero and the size carries the impact instead. */
-  letter-spacing: -0.005em;
-  line-height: 1.02;
-  font-weight: 400;
+  font-size: clamp(4.2rem, 16vw, 14rem);
+  line-height: 0.98;
+  letter-spacing: -0.015em;
+  font-weight: 600;
   margin: 0;
 }
-/* Each letter is its own plate, dropping into registration on load. */
-.title span {
-  display: inline-block;
-  animation: seat 1s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
+/* Each letter is a plate seating into register, and the last one takes the
+   magenta — the strip that finishes the print. */
+.title span { display: inline-block; animation: seat 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.title span:last-child { color: var(--magenta); }
 @keyframes seat {
-  from { opacity: 0; transform: translateY(0.28em); filter: blur(9px); }
+  from { opacity: 0; transform: translateY(0.3em) rotate(-4deg); filter: blur(10px); }
   to   { opacity: 1; transform: none; filter: blur(0); }
 }
 
-.lede {
-  max-width: 34ch;
-  margin: clamp(1.75rem, 5vh, 2.75rem) 0 0;
-  font-size: clamp(1.1rem, 1rem + 0.55vw, 1.45rem);
-  line-height: 1.45;
-  color: var(--light);
-  animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1) 0.75s backwards;
+.hero-lede {
+  max-width: 36ch;
+  margin: clamp(1.5rem, 4vh, 2.25rem) 0 0;
+  font-size: clamp(1.15rem, 1rem + 0.65vw, 1.6rem);
+  line-height: 1.4;
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.7s backwards;
 }
-.lede em { font-family: var(--display); font-style: italic; }
+.hero-lede em { font-family: var(--display); font-style: italic; color: var(--magenta); }
+@keyframes rise { from { opacity: 0; transform: translateY(1rem); } to { opacity: 1; transform: none; } }
 
-@keyframes rise {
-  from { opacity: 0; transform: translateY(1rem); }
-  to   { opacity: 1; transform: none; }
-}
-
-/* ———————————————————————— the signature: the cut ————————————————————————
-   A filmstrip of the states a piece of writing actually passes through. One
-   frame is held; on a beat it advances, and the last one lights. This is the
-   product's whole claim in one object — the moment a change goes live. */
-
+/* The signature: the states a piece of writing actually passes through. It
+   advances on a beat, and the last frame lights — the product's whole claim in
+   one object. */
 .strip {
   display: flex;
-  gap: 2px;
+  gap: 3px;
   margin-top: clamp(2rem, 5vh, 3rem);
-  border: 1px solid var(--edge);
-  padding: 2px;
-  background: rgba(16, 14, 32, 0.6);
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.95s backwards;
   overflow-x: auto;
   scrollbar-width: none;
-  animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1) 1s backwards;
+  padding-bottom: 2px;
 }
-/* pre carries its own UA font stack and size; without this the sample renders
-   at the browser's default monospace size instead of the one set on .screen. */
-.screen pre { font: inherit; margin: 0; }
 .strip::-webkit-scrollbar { display: none; }
 
 .frame {
   flex: 1 0 auto;
-  min-width: 8.5rem;
-  padding: 1.1rem 1rem 0.9rem;
-  background: var(--plate);
+  min-width: 8rem;
+  padding: 1rem 1rem 0.85rem;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: 3px;
   display: grid;
-  gap: 0.55rem;
-  transition: background 0.5s ease, color 0.5s ease;
+  gap: 0.5rem;
+  transition: background 0.45s ease, color 0.45s ease, border-color 0.45s ease, transform 0.45s ease;
 }
-.frame-no {
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
-  color: var(--muted);
-  transition: color 0.5s ease;
-}
-.frame-state {
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.frame-bar { height: 2px; background: var(--edge); transition: background 0.5s ease; }
+.frame-no { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; color: var(--muted); transition: color 0.45s ease; }
+.frame-state { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.frame-bar { height: 3px; border-radius: 2px; background: var(--edge); transition: background 0.45s ease; }
 
-.frame[data-on="true"] { background: var(--wash); }
+.frame[data-on="true"] { border-color: var(--cyan); }
 .frame[data-on="true"] .frame-bar { background: var(--cyan); }
-.frame[data-on="true"] .frame-no { color: var(--light); }
 
-/* The live frame is the only place light is spent. */
+/* Light is spent in exactly one place. */
 .frame[data-live="true"] {
-  background: var(--light);
-  color: var(--ink);
+  background: var(--magenta);
+  border-color: var(--magenta);
+  color: #fff;
+  transform: translateY(-4px);
 }
-.frame[data-live="true"] .frame-no { color: rgba(8, 7, 15, 0.55); }
-.frame[data-live="true"] .frame-bar { background: var(--magenta); }
+.frame[data-live="true"] .frame-no { color: rgba(255, 255, 255, 0.75); }
+.frame[data-live="true"] .frame-bar { background: var(--yellow); }
 
 .beat {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.55rem;
   align-items: baseline;
-  margin-top: 0.85rem;
+  margin-top: 1rem;
   font-family: var(--mono);
   font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.beat b { color: var(--cyan); font-weight: 500; }
-
-/* ———————————————————————— sections ———————————————————————— */
-
-section { padding-block: clamp(5rem, 14vh, 9rem); }
-
-.head { display: grid; gap: 1.1rem; max-width: 44ch; margin-bottom: clamp(2.5rem, 7vh, 4rem); }
-.head h2 { font-size: clamp(2.4rem, 6vw, 4.2rem); letter-spacing: -0.02em; }
-.head p { margin: 0; color: var(--muted); font-size: 1.05rem; }
-
-/* Contact sheet — a real sequence, so the frames are numbered. */
-.sheet {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1px;
-  background: var(--edge);
-  border: 1px solid var(--edge);
-}
-.cell {
-  background: var(--plate);
-  padding: clamp(1.75rem, 4vw, 2.5rem);
-  display: grid;
-  gap: 0.85rem;
-  align-content: start;
-  transition: background 0.35s ease;
-}
-.cell:hover, .cell:focus-within { background: var(--wash); }
-.cell h3 { font-size: 1.6rem; letter-spacing: -0.01em; }
-.cell p { margin: 0; color: var(--muted); font-size: 0.97rem; }
-.cell .no {
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  letter-spacing: 0.2em;
-  color: var(--cyan);
-}
-
-/* Split: the delivery surface, shown rather than described. */
-.split {
-  display: grid;
-  gap: clamp(2rem, 5vw, 4rem);
-  grid-template-columns: 1fr;
-  align-items: center;
-}
-@media (min-width: 900px) { .split { grid-template-columns: 0.85fr 1.15fr; } }
-
-.screen {
-  background: var(--plate);
-  border: 1px solid var(--edge);
-  padding: 1.5rem clamp(1.25rem, 3vw, 2rem);
-  font-family: var(--mono);
-  font-size: clamp(0.74rem, 0.68rem + 0.28vw, 0.86rem);
-  line-height: 1.85;
-  overflow-x: auto;
-  color: var(--muted);
-}
-.screen .k { color: var(--cyan); }
-.screen .s { color: var(--light); }
-.screen .m { color: var(--magenta); }
-.screen .c { color: #5C5680; }
+.beat b { color: var(--magenta); font-weight: 500; }
 
 /* Credits — role on the left, what it does on the right, like a title card. */
-.credits { display: grid; gap: 0; border-top: 1px solid var(--edge); }
-.credit {
-  display: grid;
-  gap: 0.35rem 2.5rem;
-  grid-template-columns: 1fr;
-  padding-block: 1.5rem;
-  border-bottom: 1px solid var(--edge);
-}
-@media (min-width: 720px) { .credit { grid-template-columns: 16rem 1fr; } }
-.credit dt {
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--cyan);
-  padding-top: 0.35rem;
-}
-.credit dd { margin: 0; color: var(--light); font-size: 1.05rem; max-width: 52ch; }
+.credits { display: grid; border-top: 1px solid var(--edge); }
+.credit { display: grid; gap: 0.3rem 2.5rem; grid-template-columns: 1fr; padding-block: 1.4rem; border-bottom: 1px solid var(--edge); }
+@media (min-width: 760px) { .credit { grid-template-columns: 15rem 1fr; } }
+.credit dt { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan); padding-top: 0.3rem; }
+.credit:nth-child(even) dt { color: var(--magenta); }
+.credit dd { margin: 0; max-width: 54ch; }
 .credit dd span { color: var(--muted); }
 
-/* ———————————————————————— closing ———————————————————————— */
+.split { display: grid; gap: clamp(1.75rem, 4vw, 3.5rem); grid-template-columns: 1fr; align-items: center; }
+@media (min-width: 940px) { .split { grid-template-columns: 0.9fr 1.1fr; } }
 
-.close { text-align: center; padding-block: clamp(6rem, 18vh, 11rem); }
-.close h2 { font-size: clamp(2.6rem, 8vw, 6rem); letter-spacing: -0.03em; }
-.close p { color: var(--muted); margin: 1.25rem auto 2.75rem; max-width: 40ch; }
-
-.start {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.9rem;
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  letter-spacing: 0.12em;
-  background: var(--light);
-  color: var(--ink);
-  padding: 1rem 1.6rem;
-  text-decoration: none;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-.start:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(86, 228, 234, 0.18); }
-
-.foot {
-  border-top: 1px solid var(--edge);
-  padding-block: 2.5rem 4rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2rem;
-  justify-content: space-between;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.foot a { text-decoration: none; }
-.foot a:hover { color: var(--cyan); }
-
-/* Scroll reveal. */
-.enter { opacity: 0; transform: translateY(1.5rem); transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
-.enter.seen { opacity: 1; transform: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  .enter { opacity: 1; transform: none; }
-  .wash-a, .wash-b { animation: none; }
-}
+.close { text-align: center; padding-block: clamp(4.5rem, 14vh, 8rem); }
+.close h2 { font-size: clamp(2.8rem, 9vw, 6.5rem); }
+.close p { color: var(--muted); margin: 1.1rem auto 2.25rem; max-width: 42ch; }
 </style>
 </head>
 <body>
 
-<div class="bar bar-top" aria-hidden="true"></div>
-<div class="bar bar-bottom" aria-hidden="true"></div>
+<div class="leader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="wordmark" href="./">Inkling<b>.</b></a>
+    <div class="nav-links">
+      <a href="start/">Start</a>
+      <a href="guide/">Guide</a>
+      <a href="tutorials/">Tutorials</a>
+      <a href="reference/">Reference</a>
+      <a href="https://github.com/wess/inkling">Source</a>
+    </div>
+  </div>
+</nav>
 
 <header class="sequence">
   <div class="wash-a" aria-hidden="true"></div>
   <div class="wash-b" aria-hidden="true"></div>
 
   <div class="wrap">
-    <p class="mark">Reel 01 &nbsp;·&nbsp; The cutting room</p>
+    <p class="slate">Reel 01 &nbsp;·&nbsp; The cutting room</p>
 
     <!-- The word is in the markup so it renders without script; the animation
          only re-wraps what is already there. -->
     <h1 class="title" id="title">Inkling</h1>
 
-    <p class="lede">
+    <p class="hero-lede">
       Every word, image, and shape your sites are made of, held in one place —
       and <em>cut to air</em> the moment you say so.
     </p>
 
-    <!-- The signature. States a piece of writing actually moves through. -->
     <div class="strip" role="img" aria-label="A piece of writing moving from draft through review and scheduling to live">
       <div class="frame" data-frame><span class="frame-no">FR 01</span><span class="frame-state">Draft</span><span class="frame-bar"></span></div>
       <div class="frame" data-frame><span class="frame-no">FR 02</span><span class="frame-state">Review</span><span class="frame-bar"></span></div>
@@ -414,6 +191,11 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
     </div>
 
     <p class="beat"><span>On air in</span> <b id="beat">—</b></p>
+
+    <div class="actions">
+      <a class="cta" href="start/">Start writing <span aria-hidden="true">→</span></a>
+      <a class="cta ghost" href="guide/">Read the guide</a>
+    </div>
   </div>
 </header>
 
@@ -432,32 +214,32 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
 
     <div class="sheet enter">
       <article class="cell">
-        <span class="no">FR 01</span>
+        <span class="tag">Models</span>
         <h3>Your own shapes</h3>
         <p>Build the models your work actually has — repeating sections, image galleries, links between records. No field type you have to work around.</p>
       </article>
       <article class="cell">
-        <span class="no">FR 02</span>
+        <span class="tag">History</span>
         <h3>A real edit history</h3>
         <p>Every save keeps what it replaced. Read an old version before you restore it, and put anything back without losing the thing you're replacing.</p>
       </article>
       <article class="cell">
-        <span class="no">FR 03</span>
+        <span class="tag">Sharing</span>
         <h3>Show work early</h3>
         <p>Send an unpublished piece to anyone with a link that opens for an hour and expires on its own. No account, no access to anything else.</p>
       </article>
       <article class="cell">
-        <span class="no">FR 04</span>
+        <span class="tag">Together</span>
         <h3>Move together</h3>
         <p>See who else is in a record while you're in it. Lists update as your colleagues work, so nobody edits a version that changed ten minutes ago.</p>
       </article>
       <article class="cell">
-        <span class="no">FR 05</span>
+        <span class="tag">Timing</span>
         <h3>Publish on a schedule</h3>
         <p>Set the hour and step away. Anything that no longer fits its model comes back to review instead of going out broken.</p>
       </article>
       <article class="cell">
-        <span class="no">FR 06</span>
+        <span class="tag">Access</span>
         <h3>Roles that hold</h3>
         <p>Writers keep to their own drafts, editors publish, admins shape the model. Change someone's role and it takes effect on their next click.</p>
       </article>
@@ -476,8 +258,6 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
         </p>
       </div>
 
-      <!-- No registration marks here: this element scrolls horizontally, and
-           overflow would clip the corner brackets. -->
       <div class="screen enter" aria-label="An example of the content a site receives">
 <pre><span class="c">→ the site asks for one product</span>
 
@@ -523,6 +303,10 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
         <dd>Bring your own assistant and it works on <em>this</em> content. <span>Draft into a field, tighten a paragraph, write the summary, suggest titles — it can see your models, so it answers about your site instead of in general.</span></dd>
       </div>
       <div class="credit">
+        <dt>A hand with the page</dt>
+        <dd>Ask for a page to be reshaped or drafted and it reads your models, your writing, and your images before it answers. <span>It proposes; you see exactly what would change and decide. Applying it is an ordinary save, so it lands in your history like any other edit.</span></dd>
+      </div>
+      <div class="credit">
         <dt>Answers for visitors</dt>
         <dd>Turn on the public assistant and readers can ask questions of the page they're on. <span>It answers from what you've published and says so plainly when the answer isn't there.</span></dd>
       </div>
@@ -531,10 +315,45 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
         <dd>Select a season's worth of posts and publish, archive, or retire them together. <span>Each one is checked on its own, and you're told exactly which didn't pass.</span></dd>
       </div>
       <div class="credit">
+        <dt>A plan for social</dt>
+        <dd>Keep the campaign, the channels, and every post on one calendar, and see what actually happened after they went out. <span>It plans and records; it never posts on your behalf.</span></dd>
+      </div>
+      <div class="credit">
         <dt>Extendable</dt>
         <dd>Add your own sections, screens, and content shapes as self-contained pieces. <span>Switch one on and it's there — nothing restarts, nothing rebuilds.</span></dd>
       </div>
     </dl>
+  </section>
+
+  <section class="wrap">
+    <div class="head enter">
+      <p class="eyebrow">Where to go</p>
+      <h2>Pick up the reel.</h2>
+      <p>Twenty minutes gets you from an empty database to a site reading live content.</p>
+    </div>
+
+    <div class="doors enter">
+      <a class="door" href="start/">
+        <span class="go">Start →</span>
+        <h3>Get set up</h3>
+        <p>Install it, claim the owner account, build your first model, and read it back from a real site.</p>
+      </a>
+      <a class="door" href="guide/">
+        <span class="go">Guide →</span>
+        <h3>How it works</h3>
+        <p>The content model, the delivery API, live updates, previews, the assistant, plugins, and running more than one site.</p>
+      </a>
+      <a class="door" href="tutorials/">
+        <span class="go">Tutorials →</span>
+        <h3>Build something</h3>
+        <p>A blog end to end, a plugin of your own, three sites at once, and connecting an assistant.</p>
+      </a>
+      <a class="door" href="reference/">
+        <span class="go">Reference →</span>
+        <h3>Look it up</h3>
+        <p>Every delivery route, every field type, every setting, and the commands that run it.</p>
+      </a>
+    </div>
   </section>
 
   <section class="wrap close">
@@ -542,11 +361,9 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
     <p class="enter">Run it, open the admin, and start writing. The first person through the door becomes the owner.</p>
     <!-- The reveal lives on the wrapper: putting .enter on the anchor would let
          its `transform: none` win over the hover lift. -->
-    <div class="enter">
-      <a class="start" href="https://github.com/wess/inkling">
-        Get Inkling
-        <span aria-hidden="true">→</span>
-      </a>
+    <div class="enter actions" style="justify-content:center">
+      <a class="cta" href="start/">Get started <span aria-hidden="true">→</span></a>
+      <a class="cta ghost" href="https://github.com/wess/inkling">Source</a>
     </div>
   </section>
 
@@ -555,17 +372,17 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
 <footer class="wrap foot">
   <span>Inkling</span>
   <nav>
+    <a href="start/">Start</a>
+    <a href="guide/">Guide</a>
+    <a href="tutorials/">Tutorials</a>
+    <a href="reference/">Reference</a>
     <a href="https://github.com/wess/inkling">Source</a>
-    &nbsp;·&nbsp;
-    <!-- Absolute: Pages serves a bare .md as plain text rather than rendering it. -->
-    <a href="https://github.com/wess/inkling/blob/main/docs/ARCHITECTURE.md">Architecture</a>
-    &nbsp;·&nbsp;
     <a href="llms.txt">llms.txt</a>
   </nav>
 </footer>
 
 <script>
-// Each letter becomes its own plate so they can seat into registration one at a
+// Each letter becomes its own plate so they can seat into register one at a
 // time. The word is already in the markup — this only wraps it, so the heading
 // still reads correctly to anything that never runs this.
 (function () {
@@ -574,7 +391,7 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
   el.setAttribute("aria-label", word);
   el.innerHTML = word
     .split("")
-    .map((ch, i) => `<span aria-hidden="true" style="animation-delay:${0.15 + i * 0.06}s">${ch}</span>`)
+    .map((ch, i) => `<span aria-hidden="true" style="animation-delay:${0.12 + i * 0.055}s">${ch}</span>`)
     .join("");
 })();
 
@@ -583,9 +400,8 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
 (function () {
   const frames = Array.from(document.querySelectorAll("[data-frame]"));
   const beat = document.getElementById("beat");
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-  if (reduced.matches) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     frames.forEach(f => f.setAttribute("data-on", "true"));
     frames[frames.length - 1].setAttribute("data-live", "true");
     beat.textContent = "now";
@@ -600,9 +416,7 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
       frame.setAttribute("data-on", String(i <= index));
       frame.removeAttribute("data-live");
     });
-    if (frames[index].hasAttribute("data-final")) {
-      frames[index].setAttribute("data-live", "true");
-    }
+    if (frames[index].hasAttribute("data-final")) frames[index].setAttribute("data-live", "true");
     beat.textContent = labels[index];
     index = (index + 1) % frames.length;
   };
@@ -618,17 +432,14 @@ section { padding-block: clamp(5rem, 14vh, 9rem); }
     items.forEach(i => i.classList.add("seen"));
     return;
   }
-  const io = new IntersectionObserver(
-    entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("seen");
-          io.unobserve(entry.target);
-        }
-      });
-    },
-    { rootMargin: "0px 0px -12% 0px" }
-  );
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("seen");
+        io.unobserve(entry.target);
+      }
+    });
+  }, { rootMargin: "0px 0px -10% 0px" });
   items.forEach(i => io.observe(i));
 })();
 </script>
