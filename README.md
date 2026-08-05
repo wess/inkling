@@ -68,10 +68,14 @@ database of its own.
   Optional, off until you connect one, and available to the public site as a
   page-aware plugin. Connect it with an API key, or by authorizing an account
   over OAuth
-- **An agent for page work** — ask for a page to be reshaped, rewritten, or
-  drafted and it reads your content types, entries, and media before answering.
-  It proposes; you review a diff and apply, and applying is an ordinary save, so
-  every change leaves a revision you can restore
+- **Inky**, an agent for site work — describe what you want in ordinary words and
+  it reads your content types, entries, media, site details, and menus before
+  answering. Built for the person who did not build the site: it works out
+  whether you mean the words on a page, the shape of that page, your navigation,
+  or your site details. It proposes; you review a diff and apply, and applying is
+  an ordinary save, so every change leaves a revision you can restore. It cannot
+  touch colours, fonts, or layout — those live in your site's own code, and it
+  says so rather than pretending
 - **Webhooks** on content events, HMAC-signed
 - **Activity history** for sign-ins, edits, publishing, and media changes
 - **Plugins** that add content types, routes, settings, admin panels, and their

@@ -283,6 +283,22 @@ export type AgentProposal =
       patch: Record<string, unknown>
       before: Record<string, unknown>
     }
+  | {
+      kind: "settings.update"
+      id: string
+      summary: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    }
+  | {
+      kind: "menu.update"
+      id: string
+      summary: string
+      menuName: string
+      menuLabel: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    }
 
 export type AgentEvent =
   | { type: "start"; provider: string; model: string }

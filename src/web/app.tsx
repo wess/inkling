@@ -5495,6 +5495,36 @@ const changesIn = (proposal: AgentProposal): Change[] => {
     ]
   }
 
+  if (proposal.kind === "settings.update") {
+    return Object.entries(proposal.patch).map(([key, after]) => ({
+      key,
+      before: proposal.before[key] ?? null,
+      after,
+    }))
+  }
+
+  // A menu is a tree, and a JSON dump of one is unreadable at review time. The
+  // labels in order are what an editor is actually approving.
+  if (proposal.kind === "menu.update") {
+    const labels = (raw: unknown): string => {
+      const walk = (nodes: unknown): string[] =>
+        Array.isArray(nodes)
+          ? nodes.flatMap(node => {
+              const item = node as { label?: unknown; children?: unknown }
+              const children = walk(item.children)
+              const own = String(item.label ?? "?")
+              return children.length > 0 ? [`${own} (${children.join(", ")})`] : [own]
+            })
+          : []
+      return walk(raw).join(" · ") || "nothing"
+    }
+    const out: Change[] = [{ key: "items", before: labels(proposal.before.items), after: labels(proposal.patch.items) }]
+    if (proposal.patch.label !== undefined) {
+      out.unshift({ key: "menu name", before: proposal.before.label, after: proposal.patch.label })
+    }
+    return out
+  }
+
   const data = (proposal.patch.data ?? {}) as Record<string, unknown>
   const out: Change[] = []
   if (proposal.patch.title !== undefined) {
@@ -5507,12 +5537,20 @@ const changesIn = (proposal: AgentProposal): Change[] => {
   return out
 }
 
-const targetOf = (proposal: AgentProposal): string =>
-  proposal.kind === "entry.update"
-    ? proposal.entryTitle
-    : proposal.kind === "entry.create"
-      ? `New ${proposal.typeName}`
-      : `${proposal.typeName} model`
+const targetOf = (proposal: AgentProposal): string => {
+  switch (proposal.kind) {
+    case "entry.update":
+      return proposal.entryTitle
+    case "entry.create":
+      return `New ${proposal.typeName}`
+    case "settings.update":
+      return "Site details"
+    case "menu.update":
+      return `${proposal.menuLabel} menu`
+    default:
+      return `${proposal.typeName} model`
+  }
+}
 
 const ProposalCard = ({
   proposal,
@@ -5658,6 +5696,13 @@ const AgentPanel = ({
       if (proposal.kind === "entry.update") await api.updateEntry(proposal.entryId, proposal.patch as Partial<Entry>)
       else if (proposal.kind === "entry.create")
         await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+      else if (proposal.kind === "settings.update") await api.saveSettings(proposal.patch)
+      else if (proposal.kind === "menu.update")
+        await api.saveMenu(
+          proposal.menuName,
+          (proposal.patch.label as string) ?? proposal.menuLabel,
+          (proposal.patch.items ?? []) as MenuItem[],
+        )
       else await api.updateType(proposal.typeName, proposal.patch as Partial<ContentType>)
 
       setDecided(current => ({ ...current, [proposal.id]: "applied" }))
@@ -5672,15 +5717,15 @@ const AgentPanel = ({
   if (!status.configured)
     return (
       <Note kind="info">
-        No AI provider is connected yet. Connect one under <strong>Providers</strong> and the agent turns on.
+        No AI provider is connected yet. Connect one under <strong>Providers</strong> and Inky turns on.
       </Note>
     )
 
   if (!status.supported)
     return (
       <Note kind="warn">
-        The agent needs a provider that supports tool use, and {status.provider} is connected. The writing assistant in
-        the entry editor still works.
+        Inky needs a provider that supports tool use, and {status.provider} is connected. The writing assistant in the
+        entry editor still works.
       </Note>
     )
 
@@ -5694,16 +5739,18 @@ const AgentPanel = ({
         {turns.length === 0 ? (
           <div className="agentintro">
             <Sparkles size={22} />
-            <h3>Ask for a change</h3>
+            <h3>Hi, I'm Inky</h3>
             <p className="dim2">
-              The agent reads your content types, entries, and media, then proposes changes for you to review. Nothing
-              is saved until you apply it.
+              Tell me what you want changed in your own words — a page, the wording, what a page is made of, your
+              navigation, or your site details. I'll read your site, work out what that means, and show you the change
+              before anything is saved.
             </p>
             <div className="agentseeds">
               {[
-                "Which pages are missing a meta description?",
-                "Rewrite the homepage hero to lead with what we actually do.",
-                "Add an FAQ section to the page content type.",
+                "Add a section for customer quotes to the about page",
+                "Make the homepage opening shorter and warmer",
+                "Take the old promo out of the main menu",
+                "Which pages are missing a description?",
               ].map(seed => (
                 <button type="button" key={seed} className="btn sm" onClick={() => setDraft(seed)}>
                   {seed}
@@ -5714,7 +5761,7 @@ const AgentPanel = ({
         ) : (
           turns.map((turn, index) => (
             <div className={cx("turn", turn.role)} key={turn.id}>
-              <div className="turnwho">{turn.role === "you" ? "You" : "Agent"}</div>
+              <div className="turnwho">{turn.role === "you" ? "You" : "Inky"}</div>
               {turn.tools.length > 0 ? (
                 <div className="turntools">
                   {turn.tools.map(tool => (
@@ -5769,7 +5816,7 @@ const AgentPanel = ({
         <textarea
           value={draft}
           rows={2}
-          placeholder="Ask the agent to change a page, draft one, or reshape a content type…"
+          placeholder="Ask Inky for a change — a page, its wording, your menu, your site details…"
           disabled={running}
           onChange={event => setDraft(event.target.value)}
           onKeyDown={event => {
@@ -5781,7 +5828,7 @@ const AgentPanel = ({
         </button>
       </div>
       <p className="dim2" style={{ fontSize: 12 }}>
-        {status.model} · ⌘↵ to send. The agent can read everything in this admin;{" "}
+        {status.model} · ⌘↵ to send. Inky can read everything in this admin;{" "}
         <button type="button" className="linkish" onClick={() => go({ name: "activity" })}>
           every run is recorded in Activity
         </button>
@@ -5834,7 +5881,7 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
         <div className="cardbody">
           <h3 style={{ marginTop: 0 }}>Connected</h3>
           {items.length === 0 ? (
-            <Empty title="Nothing connected" hint="The assistant and the agent stay off until a provider is here." />
+            <Empty title="Nothing connected" hint="The writing assistant and Inky stay off until a provider is here." />
           ) : (
             <table>
               <thead>
@@ -6091,14 +6138,14 @@ const AiScreen = ({
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
           <h1>AI</h1>
-          <p className="dim2">An assistant that knows this site's content, and the provider it runs on.</p>
+          <p className="dim2">Inky, who knows this site's content, and the provider they run on.</p>
         </div>
       </div>
 
       {mayManage ? (
         <div className="tabs">
           <button type="button" className={cx("tab", tab === "agent" && "on")} onClick={() => setTab("agent")}>
-            Agent
+            Inky
           </button>
           <button type="button" className={cx("tab", tab === "providers" && "on")} onClick={() => setTab("providers")}>
             Providers

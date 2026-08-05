@@ -374,18 +374,38 @@ request. Content is fenced in `<content>` / `<selection>` tags and the model is
 told to treat it as material, never as instructions: an entry whose body says
 "ignore your instructions" is a string an editor typed.
 
-**The agent** (`POST /ai/agent`, `src/ai/agent.ts`) is the assistant given the run
-of the content model rather than one field: it lists content types, reads entries
-and media, works out which page you meant, and comes back with changes. It is a
-tool loop over `src/ai/tools.ts`, streamed over SSE so the tool trace is visible
-as it happens, and it holds no server-side state — the transcript rides back and
-forth with the browser, which is refused rather than truncated when it outgrows
-its cap.
+**The agent is named Inky** (`POST /ai/agent`, `src/ai/agent.ts`) and is the
+assistant given the run of the site rather than one field: it lists content
+types, reads entries, media, settings, and menus, works out which page you meant,
+and comes back with changes. It is a tool loop over `src/ai/tools.ts`, streamed
+over SSE so the tool trace is visible as it happens, and it holds no server-side
+state — the transcript rides back and forth with the browser, which is refused
+rather than truncated when it outgrows its cap.
+
+The name and the voice are load-bearing rather than decoration. The person asking
+is usually not the person who built the site: they describe an outcome — "we need
+somewhere for customer quotes", "take the old promo off the menu" — and the
+translation into a field on a content type is Inky's job, not theirs. So the
+system prompt does most of the work here. It states the two kinds of change that
+exist (what a page *says* is an entry; what a page is *made of* is its content
+type), tells Inky to prefer acting over interrogating, and tells it to speak in
+"section" and "page" rather than "field" and "entry" while still calling tools
+with the exact keys.
+
+It also states the boundary out loud, because the obvious request is one Inkling
+cannot serve: **Inkling stores content and does not render the site**, so
+colours, fonts, spacing, and layout live in the consuming site's own code. Inky is
+told not to refuse flatly and not to pretend, but to find the content-shaped
+version of the request — "make the hero bigger" is somebody else's job, "make the
+hero say less" is usually what was meant — and to name the rest as belonging to
+whoever builds the site.
 
 **Every tool in that surface is a read.** The agent cannot write, and no flag
-makes it able to: `propose_entry_update`, `propose_entry_create`, and
-`propose_type_update` record an intention and hand it to the admin, which renders
-a diff and applies it by sending the change through `PUT /api/entries/:id` — the
+makes it able to: `propose_entry_update`, `propose_entry_create`,
+`propose_type_update`, `propose_settings_update`, and `propose_menu_update`
+record an intention and hand it to the admin, which renders a diff and applies it
+by sending the change through the ordinary admin route — `PUT /api/entries/:id`
+for an entry, and the type, settings, and menu routes for the rest — the
 same route a human edit takes. That keeps one write path in the codebase, so
 revisions, field validation, slug uniqueness, relation checks, hooks, and the
 audit trail all keep working without a second implementation to keep honest, and

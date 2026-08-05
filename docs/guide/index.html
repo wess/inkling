@@ -281,13 +281,45 @@ GET /content/post/hello</pre></div>
       request.
     </p>
 
-    <h3>The agent</h3>
+    <h3>Inky</h3>
 
     <p>
-      The agent is the assistant given the run of the model rather than one field.
-      It lists your types, reads entries and media, works out which page you meant,
-      and comes back with changes.
+      Inky is the assistant given the run of the site rather than one field. It
+      reads your types, entries, media, site details, and menus, works out which
+      page you meant, and comes back with changes.
     </p>
+
+    <p>
+      It is built for the person who did <em>not</em> build the site. You describe
+      what you want in ordinary words — "we need somewhere to put customer
+      quotes", "take the old promo off the menu", "the homepage opening is too
+      long" — and Inky works out whether that is a change to what a page says, to
+      what a page is made of, to your navigation, or to your site details, and
+      proposes it. It talks in pages and sections rather than entries and fields.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>You say</th><th>Inky changes</th></tr></thead>
+      <tbody>
+        <tr><td>"Reword the opening"</td><td>The values on that one page.</td></tr>
+        <tr><td>"Add a section for quotes"</td><td>The shape of that page — which affects every page of its kind, and it will say so.</td></tr>
+        <tr><td>"We need a page for returns"</td><td>A new draft, written to match your other pages.</td></tr>
+        <tr><td>"Drop the promo from the menu"</td><td>Your navigation.</td></tr>
+        <tr><td>"Rename the site"</td><td>Your site title, tagline, description, logo, or social image.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>What Inky cannot do</b>
+      <p>
+        Inkling stores content; it does not render your site. Colours, fonts,
+        spacing, and layout live in your site's own code, which Inky cannot see or
+        edit. Ask for something visual and it will find the content-shaped version
+        of the request — "make the hero say less" rather than "make the hero
+        bigger" — and tell you plainly which part belongs to whoever builds the
+        site.
+      </p>
+    </div>
 
     <div class="note">
       <b>Every tool it has is a read</b>

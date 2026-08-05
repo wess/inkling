@@ -8,7 +8,9 @@ import type { Field } from "../fields/index.ts"
 import { decodeArray, decodeObject } from "../json/index.ts"
 import type { MediaRow } from "../media/index.ts"
 import { publicUrl } from "../media/index.ts"
-import { contentTypes, entries, media } from "../schema/index.ts"
+import type { MenuItem } from "../menus/index.ts"
+import { contentTypes, entries, media, menus } from "../schema/index.ts"
+import { isSiteSetting, siteSettings } from "../settings/index.ts"
 
 // What the agent is allowed to know and allowed to ask for.
 //
@@ -57,6 +59,22 @@ export type Proposal =
       readonly patch: Record<string, unknown>
       readonly before: Record<string, unknown>
     }
+  | {
+      readonly kind: "settings.update"
+      readonly id: string
+      readonly summary: string
+      readonly patch: Record<string, unknown>
+      readonly before: Record<string, unknown>
+    }
+  | {
+      readonly kind: "menu.update"
+      readonly id: string
+      readonly summary: string
+      readonly menuName: string
+      readonly menuLabel: string
+      readonly patch: Record<string, unknown>
+      readonly before: Record<string, unknown>
+    }
 
 export type ToolSpec = {
   readonly name: string
@@ -93,6 +111,10 @@ const readableData = (fields: readonly Field[], data: Record<string, unknown>): 
   }
   return out
 }
+
+// Only the columns these tools read. `menus` does not export its row type, and
+// widening to the whole table here would invite reading more than is needed.
+type MenuRow = { name: string; label: string; items: string }
 
 type FieldShape = {
   key: string
@@ -221,6 +243,58 @@ export const TOOLS: readonly ToolSpec[] = [
         },
       },
       required: ["type", "summary", "fields"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_site_settings",
+    description:
+      "Read the site-wide details: title, tagline, description, public URL, locale, timezone, and the media chosen as the logo, favicon, and default social image. Read this before proposing a change to any of them.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "list_menus",
+    description:
+      "List the site's navigation menus and the items in each, including nesting. Use it to find which menu someone means before changing it.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "propose_settings_update",
+    description:
+      "Propose a change to the site-wide details — renaming the site, rewriting its description, or choosing a different logo. Send only the keys you are changing. Media keys (logoId, faviconId, socialImageId) take an id from list_media, or null to clear.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "One line, for the editor." },
+        settings: {
+          type: "object",
+          description:
+            "Only these keys: title, tagline, description, url, locale, timezone, logoId, faviconId, socialImageId.",
+          additionalProperties: true,
+        },
+      },
+      required: ["summary", "settings"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_menu_update",
+    description:
+      "Propose a change to one navigation menu — adding a link, removing one, renaming, reordering, or nesting. Send the complete item list you want, not a partial one: it replaces what is there. Read the menu first with list_menus. An item that points at a page should carry that page's entryId rather than a hand-written url.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The menu's name, from list_menus." },
+        summary: { type: "string", description: "One line, for the editor." },
+        label: { type: "string", description: "Optional new label for the menu itself." },
+        items: {
+          type: "array",
+          description:
+            "The complete ordered item list. Each item is { label, url? , entryId?, target?, children? } and children nest the same shape.",
+          items: { type: "object", additionalProperties: true },
+        },
+      },
+      required: ["name", "summary", "items"],
       additionalProperties: false,
     },
   },
@@ -414,6 +488,75 @@ export const runTool = async (
         typeName: type.name,
         patch: { fields: input.fields },
         before: { fields: decodeArray<Field>(type.fields) },
+      })
+
+      return { output: { queued: true, note: "Shown to the editor for review. Do not queue it again." } }
+    }
+
+    case "get_site_settings":
+      return { output: await siteSettings(db) }
+
+    case "list_menus": {
+      const found = await db.all<MenuRow>(from(menus).select("name", "label", "items"))
+      return {
+        output: found.map(row => ({
+          name: row.name,
+          label: row.label,
+          items: decodeArray<MenuItem>(row.items),
+        })),
+      }
+    }
+
+    case "propose_settings_update": {
+      const patch = record(input, "settings")
+      const keys = Object.keys(patch)
+      if (keys.length === 0) return fail("Nothing to change — send the settings you want to set.")
+
+      // Rejected here rather than at apply time so the model can correct itself
+      // while it still has the turn, instead of the editor meeting the error.
+      const unknown = keys.filter(key => !isSiteSetting(key))
+      if (unknown.length > 0) {
+        return fail(
+          `Not a site setting: ${unknown.join(", ")}. Allowed: title, tagline, description, url, locale, timezone, logoId, faviconId, socialImageId.`,
+        )
+      }
+
+      const current = await siteSettings(db)
+      const before: Record<string, unknown> = {}
+      for (const key of keys) before[key] = current[key] ?? null
+
+      context.proposals.push({
+        kind: "settings.update",
+        id: proposalId(),
+        summary: text(input, "summary") || "Update the site details",
+        patch,
+        before,
+      })
+
+      return { output: { queued: true, note: "Shown to the editor for review. Do not queue it again." } }
+    }
+
+    case "propose_menu_update": {
+      const menuName = text(input, "name")
+      const row = await db.one<MenuRow>(
+        from(menus)
+          .select("name", "label", "items")
+          .where(q => q("name").equals(menuName)),
+      )
+      if (!row) return fail(`No menu named "${menuName}". Call list_menus.`)
+      if (!Array.isArray(input.items)) return fail("`items` must be the complete ordered array of menu items.")
+
+      const patch: Record<string, unknown> = { items: input.items }
+      if (text(input, "label")) patch.label = text(input, "label")
+
+      context.proposals.push({
+        kind: "menu.update",
+        id: proposalId(),
+        summary: text(input, "summary") || `Update the ${row.label} menu`,
+        menuName: row.name,
+        menuLabel: row.label,
+        patch,
+        before: { label: row.label, items: decodeArray<MenuItem>(row.items) },
       })
 
       return { output: { queued: true, note: "Shown to the editor for review. Do not queue it again." } }

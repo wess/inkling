@@ -97,17 +97,22 @@ never in `settings`, and are never returned by the API.
 
 - `POST /ai/assist` — editorial assistant, SSE. Intents: `draft`, `rewrite`,
   `shorten`, `expand`, `summarize`, `titles`, `seo`, `translate`, `ask`.
-- `POST /ai/agent` — the agent (`src/ai/agent.ts`), a tool loop over
-  `src/ai/tools.ts`, streamed over SSE. Holds no server-side state: the
+- `POST /ai/agent` — the agent, named **Inky** (`src/ai/agent.ts`), a tool loop
+  over `src/ai/tools.ts`, streamed over SSE. Holds no server-side state: the
   transcript rides back and forth with the browser and is refused, not
   truncated, when it outgrows its cap. Needs a provider with tool use — today
-  that means Claude.
+  that means Claude. It reaches entries, content types, media, site settings,
+  and menus. Its system prompt is most of the feature: it assumes a
+  non-technical asker, translates outcomes into model changes, and states the
+  boundary that Inkling stores content and does not render the site — so
+  colours, fonts, and layout are the consuming site's code, not Inky's.
 - `POST /ext/assistant/ask` — the optional public assistant (a plugin), answering
   from published content only, grounded in the page the visitor is on.
 
 **Every agent tool is a read, and adding a write one is a bug.** The agent cannot
 write and no flag makes it able to: `propose_entry_update`, `propose_entry_create`,
-and `propose_type_update` record an intention that the admin renders as a diff and
+`propose_type_update`, `propose_settings_update`, and `propose_menu_update`
+record an intention that the admin renders as a diff and
 applies through `PUT /api/entries/:id` — the same route a human edit takes, so
 revisions, validation, slug uniqueness, relation checks, hooks, and the audit
 trail keep working and the history names the person who approved it.

@@ -7,7 +7,7 @@ import { runTool, TOOLS } from "../src/ai/tools.ts"
 import { issueSession } from "../src/auth/index.ts"
 import { id } from "../src/ids/index.ts"
 import { up } from "../src/migrate/index.ts"
-import { contentTypes, entries } from "../src/schema/index.ts"
+import { contentTypes, entries, menus } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 import { createUser } from "../src/users/index.ts"
 
@@ -144,6 +144,79 @@ test("a tool given a bad argument reports it rather than ending the run", async 
   expect(empty.isError).toBe(true)
 
   expect(proposals).toHaveLength(0)
+  await db.close()
+})
+
+test("site details and navigation are readable, and changing them is still only a proposal", async () => {
+  const { db } = await setup()
+  const proposals: Proposal[] = []
+
+  await db.execute(
+    from(menus).insert({
+      id: id(),
+      name: "main",
+      label: "Main",
+      items: JSON.stringify([
+        { label: "Home", url: "/" },
+        { label: "Promo", url: "/promo" },
+      ]),
+      created_at: now(),
+      updated_at: now(),
+    }),
+  )
+
+  const listed = (await call(db, proposals, "list_menus", {})).output as { name: string; items: unknown[] }[]
+  expect(listed[0]?.name).toBe("main")
+  expect(listed[0]?.items).toHaveLength(2)
+
+  const settings = (await call(db, proposals, "get_site_settings", {})).output as Record<string, unknown>
+  expect(settings.title).toBeDefined()
+
+  await call(db, proposals, "propose_menu_update", {
+    name: "main",
+    summary: "Drop the finished promo",
+    items: [{ label: "Home", url: "/" }],
+  })
+  await call(db, proposals, "propose_settings_update", {
+    summary: "Rename the site",
+    settings: { title: "Renamed" },
+  })
+
+  expect(proposals.map(p => p.kind)).toEqual(["menu.update", "settings.update"])
+
+  // Neither row moved. Same property as every other proposal.
+  const menu = await db.one<{ items: string }>(from(menus).where(q => q("name").equals("main")))
+  expect(menu?.items).toContain("Promo")
+  const stored = (await call(db, proposals.slice(), "get_site_settings", {})).output as Record<string, unknown>
+  expect(stored.title).not.toBe("Renamed")
+
+  await db.close()
+})
+
+test("a setting the site does not have is refused while the model can still fix it", async () => {
+  const { db } = await setup()
+  const proposals: Proposal[] = []
+
+  // "brandColor" is the shape of thing someone asks Inky for and Inkling does
+  // not hold — it has to come back as a correctable tool error, not a proposal
+  // that fails at apply time in front of the editor.
+  const refused = await call(db, proposals, "propose_settings_update", {
+    summary: "Make the brand blue",
+    settings: { brandColor: "#0000ff" },
+  })
+
+  expect(refused.isError).toBe(true)
+  expect(JSON.stringify(refused.output)).toContain("title")
+  expect(proposals).toHaveLength(0)
+
+  const missing = await call(db, proposals, "propose_menu_update", {
+    name: "ghost",
+    summary: "x",
+    items: [],
+  })
+  expect(missing.isError).toBe(true)
+  expect(proposals).toHaveLength(0)
+
   await db.close()
 })
 
