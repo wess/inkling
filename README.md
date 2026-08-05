@@ -207,8 +207,12 @@ A site that would rather not deploy a second service can mount Inkling in its ow
 process. Install it from GitHub — there is no npm release:
 
 ```bash
-bun add github:wess/inkling          # or github:wess/inkling#v0.2.0 to pin
+bun add github:wess/inkling#v0.3.0   # pin to a release
+bun add github:wess/inkling          # or follow main
 ```
+
+Pin a site you care about. The unpinned form resolves to whatever `main` is at
+install time, which is right for trying it and wrong for a site in production.
 
 Nothing else is needed to make it resolve: Inkling imports Atlas as bare
 `atlas/<pkg>` specifiers that go through Atlas's own `exports` map, so no

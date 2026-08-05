@@ -221,6 +221,59 @@ test("a setting the site does not have is refused while the model can still fix 
   await db.close()
 })
 
+test("a link the write path would reject never becomes a proposal", async () => {
+  const { db } = await setup()
+  const proposals: Proposal[] = []
+
+  await db.execute(
+    from(menus).insert({
+      id: id(),
+      name: "main",
+      label: "Main",
+      items: JSON.stringify([{ label: "Home", url: "/" }]),
+      created_at: now(),
+      updated_at: now(),
+    }),
+  )
+
+  // The menu route allowlists schemes, so this would 400 on apply. Catching it
+  // in the tool means the model corrects itself instead of the editor meeting a
+  // proposal that cannot be applied.
+  const refused = await call(db, proposals, "propose_menu_update", {
+    name: "main",
+    summary: "Add a link",
+    items: [
+      { label: "Home", url: "/" },
+      { label: "Bad", url: "javascript:alert(1)" },
+    ],
+  })
+  expect(refused.isError).toBe(true)
+  expect(proposals).toHaveLength(0)
+
+  // Nested items are checked too, not just the top level.
+  const nested = await call(db, proposals, "propose_menu_update", {
+    name: "main",
+    summary: "Add a submenu",
+    items: [{ label: "More", children: [{ label: "Bad", url: "javascript:alert(1)" }] }],
+  })
+  expect(nested.isError).toBe(true)
+  expect(proposals).toHaveLength(0)
+
+  // And an ordinary path still goes through.
+  const fine = await call(db, proposals, "propose_menu_update", {
+    name: "main",
+    summary: "Add contact",
+    items: [
+      { label: "Home", url: "/" },
+      { label: "Contact", url: "/contact" },
+    ],
+  })
+  expect(fine.isError).toBeUndefined()
+  expect(proposals).toHaveLength(1)
+
+  await db.close()
+})
+
 test("a plugin's content type is not the agent's to reshape", async () => {
   const { db } = await setup()
   const proposals: Proposal[] = []

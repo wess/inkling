@@ -38,7 +38,9 @@ const present = (row: MenuRow) => ({
 
 const MAX_DEPTH = 4
 
-const safeUrl = (value: string): boolean => {
+// Exported so a proposal can be checked against the same rule the write path
+// enforces, rather than only failing at apply time in front of an editor.
+export const safeUrl = (value: string): boolean => {
   if (value.startsWith("/") || value.startsWith("#")) return true
   try {
     const url = new URL(value)

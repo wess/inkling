@@ -9,6 +9,7 @@ import { decodeArray, decodeObject } from "../json/index.ts"
 import type { MediaRow } from "../media/index.ts"
 import { publicUrl } from "../media/index.ts"
 import type { MenuItem } from "../menus/index.ts"
+import { safeUrl } from "../menus/index.ts"
 import { contentTypes, entries, media, menus } from "../schema/index.ts"
 import { isSiteSetting, siteSettings } from "../settings/index.ts"
 
@@ -545,6 +546,30 @@ export const runTool = async (
       )
       if (!row) return fail(`No menu named "${menuName}". Call list_menus.`)
       if (!Array.isArray(input.items)) return fail("`items` must be the complete ordered array of menu items.")
+
+      // Checked here as well as at apply time, so a link the write path would
+      // reject comes back while the model can still fix it — the editor should
+      // never be handed a proposal that cannot be applied.
+      const badLink = (nodes: unknown[]): string | null => {
+        for (const node of nodes) {
+          const item = node as { label?: unknown; url?: unknown; children?: unknown }
+          if (typeof item.url === "string" && item.url.trim() !== "" && !safeUrl(item.url.trim())) {
+            return String(item.label ?? item.url)
+          }
+          if (Array.isArray(item.children)) {
+            const nested = badLink(item.children)
+            if (nested) return nested
+          }
+        }
+        return null
+      }
+
+      const offender = badLink(input.items)
+      if (offender) {
+        return fail(
+          `"${offender}" has a link this site will not accept. Use a path starting with "/", or a full http, https, mailto, or tel URL.`,
+        )
+      }
 
       const patch: Record<string, unknown> = { items: input.items }
       if (text(input, "label")) patch.label = text(input, "label")
