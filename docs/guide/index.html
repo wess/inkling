@@ -259,6 +259,25 @@ GET /content/post/hello</pre></div>
       which surfaces as "reconnect this provider" rather than a 500.
     </p>
 
+    <h3>Which provider</h3>
+
+    <p>Three, and Inky runs on all of them — it needs a model that can call tools, which each of these can do.</p>
+
+    <table class="table">
+      <thead><tr><th>Provider</th><th>What to enter</th></tr></thead>
+      <tbody>
+        <tr><td><b>Claude</b></td><td>A key from console.anthropic.com, or sign in over OAuth. The recommended one, and what the assistant is tuned against.</td></tr>
+        <tr><td><b>OpenAI</b></td><td>A key from platform.openai.com. Type the model you want — the list is a starting point, not a limit.</td></tr>
+        <tr><td><b>Ollama</b></td><td>Local: point at <code>http://127.0.0.1:11434</code> and leave the key blank. Ollama Cloud: <code>https://ollama.com</code> with a key.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Whatever you pick, the model has to support tool calling — that is what
+      lets Inky read your site before it answers. Local models vary here, so if
+      Inky cannot act on anything, that is usually the reason.
+    </p>
+
     <h3>Two ways to connect one</h3>
 
     <p>

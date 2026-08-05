@@ -51,6 +51,9 @@ const FALLBACKS = [{ model: "claude-opus-4-8" }]
 // than at each of the call sites below.
 const OAUTH_BETA = "oauth-2025-04-20"
 
+// Where an Ollama connection points when the operator left the base URL empty.
+export const OLLAMA_LOCAL = "http://127.0.0.1:11434"
+
 const claudeClient = (credential: ResolvedCredential) =>
   credential.authKind === "oauth"
     ? new Anthropic({ authToken: credential.secret })
@@ -87,12 +90,16 @@ export const complete = async (credential: ResolvedCredential, request: Completi
     return { text, provider: credential.provider, model: response.model, refused: false }
   }
 
-  // Branched rather than spread: the config is a discriminated union, because
-  // Ollama has no key and OpenAI requires one.
-  const provider =
-    credential.provider === "openai"
-      ? createProvider({ provider: "openai", key: credential.secret, baseUrl: credential.baseUrl || undefined })
-      : createProvider({ provider: "ollama", baseUrl: credential.baseUrl || undefined })
+  // Both go through the OpenAI-shaped client. Ollama serves a compatible
+  // endpoint at /v1 whether it is running locally or as Ollama Cloud, and
+  // atlas/ai's own Ollama provider sends no Authorization header — so the cloud
+  // is unreachable through it. One client covers both, and the only difference
+  // is where it points.
+  const provider = createProvider({
+    provider: "openai",
+    key: credential.secret || "local",
+    baseUrl: credential.baseUrl || (credential.provider === "ollama" ? OLLAMA_LOCAL : undefined),
+  })
 
   const response = await provider.chat({
     model: credential.model,

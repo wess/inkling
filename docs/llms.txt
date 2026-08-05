@@ -100,12 +100,15 @@ never in `settings`, and are never returned by the API.
 - `POST /ai/agent` — the agent, named **Inky** (`src/ai/agent.ts`), a tool loop
   over `src/ai/tools.ts`, streamed over SSE. Holds no server-side state: the
   transcript rides back and forth with the browser and is refused, not
-  truncated, when it outgrows its cap. Needs a provider with tool use — today
-  that means Claude. It reaches entries, content types, media, site settings,
-  and menus. Its system prompt is most of the feature: it assumes a
-  non-technical asker, translates outcomes into model changes, and states the
-  boundary that Inkling stores content and does not render the site — so
-  colours, fonts, and layout are the consuming site's code, not Inky's.
+  truncated, when it outgrows its cap. Runs on any of the three providers: two
+  wire formats, Claude's own and OpenAI's, with Ollama taking the OpenAI path
+  because it serves a compatible `/v1` endpoint locally and as Ollama Cloud. It
+  reaches entries, content types, media, site settings, and menus. Its system
+  prompt is most of the feature: it assumes a non-technical asker, translates
+  outcomes into model changes, and states the boundary that Inkling stores
+  content and does not render the site — so colours, fonts, and layout are the
+  consuming site's code, not Inky's. The transcript accepts `role: "tool"`
+  (OpenAI carries tool results as their own messages) but never `system`.
 - `POST /ext/assistant/ask` — the optional public assistant (a plugin), answering
   from published content only, grounded in the page the visitor is on.
 

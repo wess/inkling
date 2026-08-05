@@ -20,9 +20,12 @@ export type ProviderSpec = {
   readonly name: ProviderName
   readonly label: string
   readonly defaultModel: string
-  // Ollama runs locally and authenticates by not being exposed, so a key would
-  // be a field with nothing to put in it.
+  // Two questions, not one. `acceptsKey` decides whether the field is shown at
+  // all; `needsKey` decides whether it may be left blank. Ollama is why they are
+  // separate: run locally it authenticates by not being exposed, and run against
+  // Ollama Cloud it needs a key like anything else.
   readonly needsKey: boolean
+  readonly acceptsKey: boolean
   readonly needsBaseUrl: boolean
   readonly models: readonly string[]
   readonly help: string
@@ -38,6 +41,7 @@ export const PROVIDERS: Record<ProviderName, ProviderSpec> = {
     label: "Claude",
     defaultModel: "claude-opus-5",
     needsKey: true,
+    acceptsKey: true,
     needsBaseUrl: false,
     models: ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
     help: "Recommended. Create a key at console.anthropic.com.",
@@ -52,19 +56,22 @@ export const PROVIDERS: Record<ProviderName, ProviderSpec> = {
     label: "OpenAI",
     defaultModel: "gpt-4o",
     needsKey: true,
+    acceptsKey: true,
     needsBaseUrl: false,
     models: ["gpt-4o", "gpt-4o-mini"],
-    help: "Create a key at platform.openai.com.",
+    help: "Create a key at platform.openai.com. Inky works here as well as on Claude — type the model you want; the list is only a starting point, and it has to be one that supports tool calling.",
     oauth: null,
   },
   ollama: {
     name: "ollama",
-    label: "Ollama (local)",
+    label: "Ollama",
     defaultModel: "llama3.1",
+    // Blank for a local instance, filled in for Ollama Cloud.
     needsKey: false,
+    acceptsKey: true,
     needsBaseUrl: true,
     models: ["llama3.1", "mistral", "qwen2.5"],
-    help: "Point at a running Ollama instance, e.g. http://127.0.0.1:11434.",
+    help: "Local: http://127.0.0.1:11434, key blank. Ollama Cloud: https://ollama.com with a key from ollama.com. Either way, Inky needs a model that supports tool calling — type the one you want.",
     oauth: null,
   },
 }
@@ -80,6 +87,7 @@ export const providerCatalog = (oauthReady: (name: ProviderName) => boolean) =>
     label: spec.label,
     defaultModel: spec.defaultModel,
     needsKey: spec.needsKey,
+    acceptsKey: spec.acceptsKey,
     needsBaseUrl: spec.needsBaseUrl,
     models: spec.models,
     help: spec.help,

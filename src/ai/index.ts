@@ -149,8 +149,12 @@ export const resolveCredential = async (db: Connection): Promise<ResolvedCredent
   const oauth = row.auth_kind === "oauth"
   // A rotated SECRET leaves ciphertext that no longer opens. Treating that as
   // "not configured" surfaces in the UI as a provider to reconnect.
-  const stored = spec.needsKey || oauth ? await open(row) : ""
-  if ((spec.needsKey || oauth) && stored === null) return null
+  // Keyed on `acceptsKey` rather than `needsKey`: an Ollama Cloud connection
+  // stores a key even though a local one does not, and both are the same
+  // provider. A local instance seals an empty string, which opens to "".
+  const sealed = spec.acceptsKey || oauth
+  const stored = sealed ? await open(row) : ""
+  if (sealed && stored === null) return null
 
   const secret = oauth && expiringSoon(row.expires_at) ? await refreshed(db, row, row.provider) : stored
   if (secret === null) return null
@@ -249,8 +253,16 @@ export const aiRoutes = (db: Connection): Route[] => {
         const model = parseModel(providerName, input.model)
         const baseUrl = parseBaseUrl(providerName, input.baseUrl)
 
-        const secret = spec.needsKey ? requireText(input, "key", `${spec.label} API key`) : ""
-        if (spec.needsKey && secret.length < 8) throw badRequest("That key looks too short", { code: "BAD_KEY" })
+        // Required for most providers, optional for Ollama — blank means a local
+        // instance, filled in means Ollama Cloud. A key that is present is
+        // length-checked either way, so a truncated paste is caught here rather
+        // than as a 401 on first use.
+        const secret = spec.needsKey
+          ? requireText(input, "key", `${spec.label} API key`)
+          : spec.acceptsKey
+            ? (optionalText(input, "key") ?? "")
+            : ""
+        if (secret !== "" && secret.length < 8) throw badRequest("That key looks too short", { code: "BAD_KEY" })
 
         const sealed = await seal(secret)
         const timestamp = now()
@@ -394,8 +406,9 @@ export const aiRoutes = (db: Connection): Route[] => {
 
         const spec = PROVIDERS[row.provider]
         const oauth = row.auth_kind === "oauth"
-        const stored = spec.needsKey || oauth ? await open(row) : ""
-        if ((spec.needsKey || oauth) && stored === null) {
+        const sealedSecret = spec.acceptsKey || oauth
+        const stored = sealedSecret ? await open(row) : ""
+        if (sealedSecret && stored === null) {
           throw conflict(
             oauth
               ? "This connection can no longer be decrypted — reconnect the provider"

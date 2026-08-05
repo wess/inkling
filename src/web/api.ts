@@ -236,6 +236,7 @@ export type AiProvider = {
   label: string
   defaultModel: string
   needsKey: boolean
+  acceptsKey: boolean
   needsBaseUrl: boolean
   models: string[]
   help: string

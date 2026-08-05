@@ -414,10 +414,33 @@ can ask about it. `tests/aiagent.test.ts` asserts the tool list contains nothing
 but reads and proposals, because a write tool added later would otherwise fail
 silently — the first sign would be a published page changing by itself.
 
-The agent needs a provider that supports tool use, which today means Claude;
-connected to anything else it says so and the editorial assistant carries on
-working. Content the agent reads is fenced and declared to be material, the same
-way the assistant fences it.
+Inky runs on any of the three providers, because all three can call tools. What
+differs is the wire format, and there are only two: Claude's own, through the
+official SDK, and OpenAI's, through `atlas/ai`. **Ollama takes the OpenAI path**
+— it serves an OpenAI-compatible endpoint at `/v1` both locally and as Ollama
+Cloud, so the difference between the two is a base URL. Going through `atlas/ai`'s
+*native* Ollama provider would not work: it drops tools when streaming and sends
+no `Authorization` header, which puts the cloud out of reach entirely.
+
+The two loops are deliberately not merged. They agree on the tool list, the
+proposals, and the frames the browser receives, and disagree about message shape,
+streaming events, and where the system prompt goes — one loop branching at each
+of those points read worse than two that each tell one story.
+
+Two consequences worth stating. The transcript the browser holds is
+provider-shaped, so `role: "tool"` is accepted alongside `user` and `assistant`
+— OpenAI carries tool results as their own messages where Claude nests them in a
+user turn. `system` stays refused on both, because the instructions are ours to
+set and a transcript that could carry one would be a way to replace them from the
+browser; on the OpenAI path the system prompt is therefore prepended per request
+rather than kept in the transcript.
+
+Ollama is also why `needsKey` and `acceptsKey` are two questions rather than one.
+A local instance authenticates by not being exposed; Ollama Cloud needs a key
+like anything else. One flag could express only one of them.
+
+Content the agent reads is fenced and declared to be material, the same way the
+assistant fences it.
 
 **The public assistant** is the `assistant` plugin, not core — it is the one AI
 surface that spends the operator's money on behalf of anonymous visitors, so it

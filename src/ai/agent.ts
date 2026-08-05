@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
+import type { Message, ToolCall, ToolDef } from "atlas/ai"
+import { createProvider, toolMessage } from "atlas/ai"
 import type { Connection } from "atlas/db"
 import type { Route } from "atlas/server"
 import { badRequest, conflict, json, parseJson, pipeline, post, putHeader, stream, tooManyRequests } from "atlas/server"
@@ -8,7 +10,9 @@ import { body, optionalText, requireText } from "../http/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
 import { siteSettings } from "../settings/index.ts"
 import type { ResolvedCredential } from "./complete.ts"
+import { OLLAMA_LOCAL } from "./complete.ts"
 import { resolveCredential } from "./index.ts"
+import type { ProviderName } from "./providers.ts"
 import type { Proposal } from "./tools.ts"
 import { runTool, TOOLS } from "./tools.ts"
 
@@ -35,11 +39,36 @@ const MAX_STEPS = 12
 const MAX_TRANSCRIPT_BYTES = 400_000
 const MAX_PROMPT = 8_000
 
-// Tool use is what makes this an agent rather than a text box, and the loop
-// below speaks the Anthropic tool protocol. Rather than half-implement it for
-// providers whose abstraction we cannot exercise, the agent says plainly which
-// provider it needs — the editorial assistant still works on all of them.
-const supports = (credential: ResolvedCredential): boolean => credential.provider === "anthropic"
+// All three providers can call tools, so all three can run Inky. What differs is
+// the wire format, and there are only two of those: Claude's own, and OpenAI's.
+//
+// Ollama serves an OpenAI-compatible endpoint at /v1 both locally and on Ollama
+// Cloud, so it goes down the same path as OpenAI rather than through atlas/ai's
+// native Ollama provider — which drops tools when streaming and sends no
+// Authorization header, so it could not reach the cloud at all.
+//
+// The two loops below are deliberately not merged. They agree on the tool list,
+// the proposals, and the frames the browser receives, and disagree about
+// everything else — message shape, streaming events, where the system prompt
+// goes. A single loop with branches at each of those points was harder to read
+// than two that each tell one story.
+//
+// Listed rather than hardcoded to `true`, so adding a fourth provider stays a
+// decision about whether it can call tools rather than a silent inheritance.
+const AGENT_PROVIDERS = new Set<ProviderName>(["anthropic", "openai", "ollama"])
+
+const supports = (credential: ResolvedCredential): boolean => AGENT_PROVIDERS.has(credential.provider)
+
+// atlas/ai appends `/v1/chat/completions`, which is exactly what Ollama serves
+// for compatibility — so pointing the same client at a local instance or at
+// Ollama Cloud is only a base URL.
+const compatibleConfig = (credential: ResolvedCredential) => ({
+  provider: "openai" as const,
+  // Local Ollama ignores the header; sending a placeholder keeps one code path
+  // rather than a branch that builds the client two ways.
+  key: credential.secret || "local",
+  baseUrl: credential.baseUrl || (credential.provider === "ollama" ? OLLAMA_LOCAL : undefined),
+})
 
 const FALLBACK_BETA = "server-side-fallback-2026-06-01"
 const OAUTH_BETA = "oauth-2025-04-20"
@@ -116,7 +145,13 @@ const systemFor = async (db: Connection, editor: string): Promise<string> => {
 // content: a transcript that has grown past the cap is refused rather than
 // silently truncated, since a truncated one drops the tool results the model is
 // mid-way through reasoning about.
-const readTranscript = (raw: unknown): Anthropic.Beta.BetaMessageParam[] => {
+// "tool" is allowed because OpenAI's transcript carries tool results as their own
+// messages, where Claude's ride inside a user turn. "system" is refused on both:
+// the instructions are ours to set, and a transcript that could carry one would
+// be a way to replace them from the browser.
+const ROLES = new Set(["user", "assistant", "tool"])
+
+const readTranscript = (raw: unknown): unknown[] => {
   if (raw === undefined || raw === null) return []
   if (!Array.isArray(raw))
     throw badRequest("`history` must be the transcript this route returned", { code: "BAD_HISTORY" })
@@ -125,11 +160,152 @@ const readTranscript = (raw: unknown): Anthropic.Beta.BetaMessageParam[] => {
   }
   for (const message of raw) {
     const role = (message as { role?: unknown }).role
-    if (role !== "user" && role !== "assistant") {
+    if (typeof role !== "string" || !ROLES.has(role)) {
       throw badRequest("`history` must be the transcript this route returned", { code: "BAD_HISTORY" })
     }
   }
-  return raw as Anthropic.Beta.BetaMessageParam[]
+  return raw
+}
+
+// What a loop reports back. `emit` is the SSE frame writer; both runners speak
+// the same five events, so the browser cannot tell which provider answered.
+type Emit = (event: string, data: unknown) => void
+
+type Run = {
+  readonly db: Connection
+  readonly credential: ResolvedCredential
+  readonly system: string
+  readonly conversation: unknown[]
+  readonly proposals: Proposal[]
+  readonly emit: Emit
+}
+
+// Runs one tool call and streams whatever it queued. Shared because this is the
+// part that must not drift between providers — a proposal has to reach the
+// browser identically however the model asked for it.
+const dispatch = async (
+  run: Run,
+  name: string,
+  input: Record<string, unknown>,
+): Promise<{ output: unknown; isError?: boolean }> => {
+  run.emit("tool", { name, input })
+  const before = run.proposals.length
+  const result = await runTool({ db: run.db, proposals: run.proposals }, name, input)
+  for (const queued of run.proposals.slice(before)) run.emit("proposal", queued)
+  return result
+}
+
+const outOfSteps = (run: Run, step: number) => {
+  if (step === MAX_STEPS - 1) {
+    run.emit("error", { message: "The agent ran out of steps. Ask again with a narrower request." })
+  }
+}
+
+const runClaude = async (run: Run): Promise<unknown[]> => {
+  const client = clientFor(run.credential)
+  const messages = run.conversation as Anthropic.Beta.BetaMessageParam[]
+
+  for (let step = 0; step < MAX_STEPS; step += 1) {
+    const turn = client.beta.messages.stream({
+      model: run.credential.model,
+      max_tokens: 32_000,
+      betas: betasFor(run.credential),
+      fallbacks: FALLBACKS,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+      system: run.system,
+      tools: TOOLS as unknown as Anthropic.Beta.BetaToolUnion[],
+      messages,
+    })
+
+    for await (const event of turn) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        run.emit("text", { text: event.delta.text })
+      }
+    }
+
+    const final = await turn.finalMessage()
+
+    // A refusal arrives as a successful response with no content, so it has to
+    // be checked before the blocks are read.
+    if (final.stop_reason === "refusal") {
+      run.emit("error", { message: "The model declined this request." })
+      break
+    }
+
+    messages.push({ role: "assistant", content: final.content })
+
+    const calls = final.content.filter((block): block is Anthropic.Beta.BetaToolUseBlock => block.type === "tool_use")
+    if (calls.length === 0) break
+
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
+    for (const call of calls) {
+      const result = await dispatch(run, call.name, (call.input ?? {}) as Record<string, unknown>)
+      results.push({
+        type: "tool_result",
+        tool_use_id: call.id,
+        content: JSON.stringify(result.output),
+        is_error: result.isError,
+      })
+    }
+
+    // Every result goes back in one user message — splitting them teaches the
+    // model to stop calling tools in parallel.
+    messages.push({ role: "user", content: results })
+    outOfSteps(run, step)
+  }
+
+  return messages
+}
+
+// The same loop against OpenAI's shape, which Ollama also speaks. Three
+// differences carry all of it: the system prompt is a message rather than a
+// parameter, tool results are their own messages rather than blocks inside a
+// user turn, and tool calls arrive as accumulated stream chunks rather than on
+// the final message.
+const runCompatible = async (run: Run): Promise<unknown[]> => {
+  const provider = createProvider(compatibleConfig(run.credential))
+
+  const tools: ToolDef[] = TOOLS.map(spec => ({
+    name: spec.name,
+    description: spec.description,
+    parameters: spec.input_schema,
+  }))
+
+  const messages = run.conversation as Message[]
+
+  for (let step = 0; step < MAX_STEPS; step += 1) {
+    let text = ""
+    const calls: ToolCall[] = []
+
+    // The system prompt is prepended per request rather than kept in the
+    // transcript: it is ours to set, and a transcript the browser hands back
+    // must never be able to carry one.
+    for await (const chunk of provider.chatStream({
+      model: run.credential.model,
+      maxTokens: 16_000,
+      tools,
+      messages: [{ role: "system", content: run.system }, ...messages],
+    })) {
+      if (chunk.type === "text" && chunk.content) {
+        text += chunk.content
+        run.emit("text", { text: chunk.content })
+      }
+      if (chunk.type === "tool_call" && chunk.toolCall) calls.push(chunk.toolCall)
+    }
+
+    messages.push({ role: "assistant", content: text, toolCalls: calls.length > 0 ? calls : undefined })
+    if (calls.length === 0) break
+
+    for (const call of calls) {
+      const result = await dispatch(run, call.name, call.arguments ?? {})
+      messages.push(toolMessage(call.id, JSON.stringify(result.output)))
+    }
+
+    outOfSteps(run, step)
+  }
+
+  return messages
 }
 
 export const agentRoutes = (db: Connection): Route[] => {
@@ -178,13 +354,11 @@ export const agentRoutes = (db: Connection): Route[] => {
         else if (typeName) opening.push(`The editor is currently working in the "${typeName}" content type.`)
         opening.push(prompt)
 
-        const messages: Anthropic.Beta.BetaMessageParam[] = [
-          ...history,
-          { role: "user", content: opening.join("\n\n") },
-        ]
+        // Both shapes happen to agree on a plain-text user turn, which is the
+        // only message this route builds itself.
+        const conversation: unknown[] = [...history, { role: "user", content: opening.join("\n\n") }]
 
         const system = await systemFor(db, identity.name || identity.email)
-        const client = clientFor(credential)
         const proposals: Proposal[] = []
 
         audit.log({
@@ -202,73 +376,18 @@ export const agentRoutes = (db: Connection): Route[] => {
             controller.enqueue(frame("start", { provider: credential.provider, model: credential.model }))
 
             try {
-              for (let step = 0; step < MAX_STEPS; step += 1) {
-                const turn = client.beta.messages.stream({
-                  model: credential.model,
-                  max_tokens: 32_000,
-                  betas: betasFor(credential),
-                  fallbacks: FALLBACKS,
-                  thinking: { type: "adaptive" },
-                  output_config: { effort: "high" },
-                  system,
-                  tools: TOOLS as unknown as Anthropic.Beta.BetaToolUnion[],
-                  messages,
-                })
-
-                for await (const event of turn) {
-                  if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-                    controller.enqueue(frame("text", { text: event.delta.text }))
-                  }
-                }
-
-                const final = await turn.finalMessage()
-
-                // A refusal arrives as a successful response with no content, so
-                // it has to be checked before the blocks are read.
-                if (final.stop_reason === "refusal") {
-                  controller.enqueue(frame("error", { message: "The model declined this request." }))
-                  break
-                }
-
-                messages.push({ role: "assistant", content: final.content })
-
-                const calls = final.content.filter(
-                  (block): block is Anthropic.Beta.BetaToolUseBlock => block.type === "tool_use",
-                )
-                if (calls.length === 0) break
-
-                const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
-                for (const call of calls) {
-                  controller.enqueue(frame("tool", { name: call.name, input: call.input }))
-                  const before = proposals.length
-                  const result = await runTool(
-                    { db, proposals },
-                    call.name,
-                    (call.input ?? {}) as Record<string, unknown>,
-                  )
-                  for (const queued of proposals.slice(before)) {
-                    controller.enqueue(frame("proposal", queued))
-                  }
-                  results.push({
-                    type: "tool_result",
-                    tool_use_id: call.id,
-                    content: JSON.stringify(result.output),
-                    is_error: result.isError,
-                  })
-                }
-
-                // Every result goes back in one user message — splitting them
-                // teaches the model to stop calling tools in parallel.
-                messages.push({ role: "user", content: results })
-
-                if (step === MAX_STEPS - 1) {
-                  controller.enqueue(
-                    frame("error", { message: "The agent ran out of steps. Ask again with a narrower request." }),
-                  )
-                }
+              const run = {
+                db,
+                credential,
+                system,
+                conversation,
+                proposals,
+                emit: (event: string, data: unknown) => controller.enqueue(frame(event, data)),
               }
 
-              controller.enqueue(frame("done", { ok: true, history: messages, proposals }))
+              const history = credential.provider === "anthropic" ? await runClaude(run) : await runCompatible(run)
+
+              controller.enqueue(frame("done", { ok: true, history, proposals }))
             } catch (error) {
               controller.enqueue(frame("error", { message: (error as Error).message }))
             } finally {
