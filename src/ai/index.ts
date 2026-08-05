@@ -437,11 +437,22 @@ export const aiRoutes = (db: Connection): Route[] => {
             prompt: "Reply with the single word OK.",
             maxTokens: 16,
           })
+          // Three outcomes, and they used to collapse into one. `refused` is set
+          // only by Claude's safety classifiers, so on every other provider a
+          // failed test could only ever mean an empty answer — which the admin
+          // then reported as "the provider refused". It had not; it had replied
+          // with nothing, and the usual reason is the model name.
+          const answered = result.text.trim() !== ""
           return json(c, 200, {
-            ok: !result.refused && result.text.trim() !== "",
+            ok: !result.refused && answered,
             provider: result.provider,
             model: result.model,
             refused: result.refused,
+            error: result.refused
+              ? "The model declined this request."
+              : answered
+                ? undefined
+                : `${spec.label} accepted the request but returned no text. The usual cause is the model: check that "${row.model}" is one your account can actually use, and that it is a chat model rather than an embedding or vision-only one.`,
           })
         } catch (error) {
           // The provider's message is the useful part (bad key, no quota, host

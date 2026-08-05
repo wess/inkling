@@ -71,6 +71,44 @@ const setup = async () => {
   return { db, call, admin: adminSession.token, author: authorSession.token }
 }
 
+test("a provider that answers with nothing says so, rather than 'refused'", async () => {
+  // Reported from the field on Ollama Cloud. `refused` is set only by Claude's
+  // safety classifiers, so on any other provider a failed test could only mean
+  // an empty reply — which the admin then reported as the provider refusing.
+  // It had not refused; it had answered with nothing, and the cause is usually
+  // the model name.
+  const empty = Bun.serve({
+    port: 0,
+    fetch: () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: null } }], model: "some-model" }), {
+        headers: { "content-type": "application/json" },
+      }),
+  })
+
+  const { call, admin } = await setup()
+  const created = await call("/ai/credentials", admin, {
+    method: "POST",
+    body: JSON.stringify({
+      provider: "openai",
+      key: "sk-notarealkey-wxyz",
+      model: "not-a-chat-model",
+      baseUrl: `http://localhost:${empty.port}`,
+    }),
+  })
+  const { id } = (await created.json()) as { id: string }
+
+  const tested = await call(`/ai/credentials/${id}/test`, admin, { method: "POST" })
+  const result = (await tested.json()) as { ok: boolean; refused: boolean; error?: string }
+
+  expect(result.ok).toBe(false)
+  // Not a refusal, and the message names the thing worth checking.
+  expect(result.refused).toBe(false)
+  expect(result.error).toContain("returned no text")
+  expect(result.error).toContain("not-a-chat-model")
+
+  empty.stop()
+})
+
 test("a base URL pasted from a provider's own docs does not double its /v1", async () => {
   // Reported from the field: entering https://ollama.com/v1 produced a request
   // for /v1/v1/chat/completions, because the client appends the /v1 itself. The

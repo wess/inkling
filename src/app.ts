@@ -263,6 +263,11 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       const response = await handler(request, server)
       if (!unmatched(response)) return response
       const url = new URL(request.url)
+      // /api and /ext are APIs, and a path neither claimed is a missing route.
+      // Handing those to the admin returns its HTML with a 200, so a wrong URL
+      // reads to the caller as a successful response it cannot parse — which is
+      // exactly how a broken plugin panel looked like a working one.
+      if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ext/")) return response
       return underAdmin(url.pathname) ? admin(url) : null
     },
     upgrade: (request, server) => realtime.upgrade(request, server),

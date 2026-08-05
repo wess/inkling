@@ -5495,6 +5495,24 @@ const changesIn = (proposal: AgentProposal): Change[] => {
     ]
   }
 
+  if (proposal.kind === "type.create") {
+    const fields = Array.isArray(proposal.payload.fields) ? proposal.payload.fields : []
+    return [
+      { key: "name", before: null, after: proposal.payload.name },
+      { key: "label", before: null, after: proposal.payload.label },
+      { key: "kind", before: null, after: proposal.payload.kind },
+      {
+        key: "sections",
+        before: null,
+        after: fields.map((f: unknown) => String((f as { key?: unknown }).key ?? "?")).join(", ") || "none",
+      },
+    ]
+  }
+
+  if (proposal.kind === "entry.status") {
+    return [{ key: "status", before: proposal.from, after: proposal.to }]
+  }
+
   if (proposal.kind === "settings.update") {
     return Object.entries(proposal.patch).map(([key, after]) => ({
       key,
@@ -5543,6 +5561,10 @@ const targetOf = (proposal: AgentProposal): string => {
       return proposal.entryTitle
     case "entry.create":
       return `New ${proposal.typeName}`
+    case "type.create":
+      return `New ${proposal.typeName} model`
+    case "entry.status":
+      return proposal.entryTitle
     case "settings.update":
       return "Site details"
     case "menu.update":
@@ -5612,14 +5634,117 @@ const marker = (): string => Math.random().toString(36).slice(2, 10)
 
 type Turn = { id: string; role: "you" | "agent"; text: string; tools: { id: string; name: string }[] }
 
+// What the person is looking at when they ask. Sent with every turn so "this
+// page" and "change this" resolve to something instead of Inky having to ask.
+export type InkyContext = { screen: string; type?: string; entryId?: string }
+
+// Inky, reachable from wherever you already are. The AI screen still exists and
+// is the same panel — this is the version you can open without leaving the page
+// you are asking about, which is the whole reason it knows what "this" means.
+const describe = (route: Route, types: ContentType[]): InkyContext => {
+  const labelOf = (name: string) => types.find(t => t.name === name)?.label ?? name
+  switch (route.name) {
+    case "editor":
+      return route.id
+        ? { screen: `editing a ${labelOf(route.type)}`, type: route.type, entryId: route.id }
+        : { screen: `writing a new ${labelOf(route.type)}`, type: route.type }
+    case "collection":
+      return {
+        screen: `looking at the list of ${types.find(t => t.name === route.type)?.pluralLabel ?? route.type}`,
+        type: route.type,
+      }
+    case "types":
+      return route.type
+        ? { screen: `changing the shape of ${labelOf(route.type)} pages`, type: route.type }
+        : { screen: "looking at the shapes their pages can take" }
+    case "menus":
+      return { screen: "editing the site's navigation menus" }
+    case "settings":
+      return { screen: "editing the site-wide details" }
+    case "media":
+      return { screen: "in the media library" }
+    case "taxonomy":
+      return { screen: "organising categories" }
+    case "trash":
+      return { screen: "looking through deleted content" }
+    default:
+      return { screen: `on the ${route.name} screen` }
+  }
+}
+
+const InkyDock = ({
+  role,
+  route,
+  types,
+  toast,
+  go,
+}: {
+  role: string
+  route: Route
+  types: ContentType[]
+  toast: (message: string, bad?: boolean) => void
+  go: (route: Route) => void
+}) => {
+  const [open, setOpen] = useState(false)
+  const context = describe(route, types)
+
+  // Escape closes it, because a panel that covers the corner of the screen
+  // should not need the mouse to dismiss.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open])
+
+  // The AI screen is this same panel full-size; two of them at once would run
+  // two conversations behind one button.
+  if (route.name === "ai") return null
+
+  return (
+    <>
+      {open ? (
+        <div className="dock">
+          <div className="dockhead">
+            <Sparkles size={15} />
+            <strong>Inky</strong>
+            <span className="dockwhere">{context.screen}</span>
+            <button type="button" className="btn ghost sm rowend" aria-label="Close" onClick={() => setOpen(false)}>
+              <X size={14} />
+            </button>
+          </div>
+          <AgentPanel canApply={hasRole(role, "author")} toast={toast} go={go} context={context} compact />
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        className={cx("dockbubble", open && "on")}
+        aria-label={open ? "Close Inky" : "Ask Inky"}
+        title={open ? "Close Inky" : "Ask Inky"}
+        aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+      >
+        {open ? <X size={20} /> : <Sparkles size={20} />}
+      </button>
+    </>
+  )
+}
+
 const AgentPanel = ({
   canApply,
   toast,
   go,
+  context,
+  compact,
 }: {
   canApply: boolean
   toast: (message: string, bad?: boolean) => void
   go: (route: Route) => void
+  context?: InkyContext
+  compact?: boolean
 }) => {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof api.agentStatus>> | null>(null)
   const [turns, setTurns] = useState<Turn[]>([])
@@ -5661,7 +5786,7 @@ const AgentPanel = ({
       setTurns(current => current.map((turn, index) => (index === current.length - 1 ? change(turn) : turn)))
 
     try {
-      await runAgent({ message, history }, event => {
+      await runAgent({ message, history, ...context }, event => {
         switch (event.type) {
           case "text":
             onto(turn => ({ ...turn, text: turn.text + event.text }))
@@ -5696,6 +5821,13 @@ const AgentPanel = ({
       if (proposal.kind === "entry.update") await api.updateEntry(proposal.entryId, proposal.patch as Partial<Entry>)
       else if (proposal.kind === "entry.create")
         await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+      else if (proposal.kind === "type.create") await api.createType(proposal.payload as Partial<ContentType>)
+      else if (proposal.kind === "entry.status")
+        // Publishing has its own route because it revalidates the entry against
+        // its content type; the editorial statuses share one.
+        await (proposal.to === "published"
+          ? api.publishEntry(proposal.entryId)
+          : api.setEntryStatus(proposal.entryId, proposal.to as "draft" | "review" | "archived"))
       else if (proposal.kind === "settings.update") await api.saveSettings(proposal.patch)
       else if (proposal.kind === "menu.update")
         await api.saveMenu(
@@ -5734,7 +5866,7 @@ const AgentPanel = ({
   const open = proposals.filter(proposal => !decided[proposal.id])
 
   return (
-    <div className="agent">
+    <div className={cx("agent", compact && "agentcompact")}>
       <div className="agentlog">
         {turns.length === 0 ? (
           <div className="agentintro">
@@ -5918,7 +6050,9 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
                             try {
                               const result = await api.testAiCredential(item.id)
                               toast(
-                                result.ok ? `${result.model} answered` : (result.error ?? "The provider refused"),
+                                result.ok
+                                  ? `${result.model} answered`
+                                  : (result.error ?? "The provider did not answer"),
                                 !result.ok,
                               )
                               await load()
@@ -6216,7 +6350,11 @@ const App = () => {
     const on =
       route.name === target.name &&
       (target.name !== "collection" || (route as { type: string }).type === target.type) &&
-      (target.name !== "plugin" || (route as { plugin: string }).plugin === (target as { plugin: string }).plugin)
+      // Both halves: a plugin with four panels lit all four at once, because
+      // only the plugin name was compared.
+      (target.name !== "plugin" ||
+        ((route as { plugin: string }).plugin === (target as { plugin: string }).plugin &&
+          (route as { panel: string }).panel === (target as { panel: string }).panel))
     return (
       <button type="button" key={label} className={cx("navitem", on && "on")} onClick={() => go(target)}>
         <Icon size={15} />
@@ -6411,6 +6549,10 @@ const App = () => {
       </main>
 
       {changingPassword ? <ChangePassword onClose={() => setChangingPassword(false)} toast={toast} /> : null}
+
+      {hasRole(me.role, "author") ? (
+        <InkyDock role={me.role} route={route} types={types} toast={toast} go={go} />
+      ) : null}
 
       {message ? <div className={cx("toast", message.bad && "bad")}>{message.text}</div> : null}
     </div>

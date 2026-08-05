@@ -21,7 +21,11 @@ const fail = (status: number, message: string, code?: string, details?: unknown)
 type Options = { method?: string; body?: unknown; form?: FormData; query?: Record<string, string | number | undefined> }
 
 export const request = async <T>(path: string, options: Options = {}): Promise<T> => {
-  const url = new URL(`/api${path}`, location.origin)
+  // Everything the admin owns lives under /api. A plugin's own routes do not:
+  // they are mounted at /ext on the root, so a panel endpoint is passed through
+  // as written. Prefixing it produced /api/ext/… — which matches nothing, falls
+  // through to the SPA, and comes back as HTML with a 200.
+  const url = new URL(path.startsWith("/ext/") ? path : `/api${path}`, location.origin)
   for (const [key, value] of Object.entries(options.query ?? {})) {
     if (value !== undefined && value !== "") url.searchParams.set(key, String(value))
   }
@@ -283,6 +287,16 @@ export type AgentProposal =
       patch: Record<string, unknown>
       before: Record<string, unknown>
     }
+  | { kind: "type.create"; id: string; summary: string; typeName: string; payload: Record<string, unknown> }
+  | {
+      kind: "entry.status"
+      id: string
+      summary: string
+      entryId: string
+      entryTitle: string
+      from: string
+      to: string
+    }
   | {
       kind: "settings.update"
       id: string
@@ -311,7 +325,7 @@ export type AgentEvent =
 // Server-sent events, hand-parsed because the browser's EventSource cannot set
 // an Authorization header and this API has no cookie to fall back on.
 export const runAgent = async (
-  input: { message: string; history?: unknown[]; entryId?: string; type?: string },
+  input: { message: string; history?: unknown[]; entryId?: string; type?: string; screen?: string },
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> => {

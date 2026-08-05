@@ -61,6 +61,22 @@ export type Proposal =
       readonly before: Record<string, unknown>
     }
   | {
+      readonly kind: "type.create"
+      readonly id: string
+      readonly summary: string
+      readonly typeName: string
+      readonly payload: Record<string, unknown>
+    }
+  | {
+      readonly kind: "entry.status"
+      readonly id: string
+      readonly summary: string
+      readonly entryId: string
+      readonly entryTitle: string
+      readonly from: string
+      readonly to: string
+    }
+  | {
       readonly kind: "settings.update"
       readonly id: string
       readonly summary: string
@@ -244,6 +260,53 @@ export const TOOLS: readonly ToolSpec[] = [
         },
       },
       required: ["type", "summary", "fields"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_type_create",
+    description:
+      "Propose a brand new content type — the shape a new kind of page takes. Use this when what someone asked for has nowhere to live yet: a site with no `page` type that needs pages, a section of the site that is a different shape from everything else. Give it the fields that kind of page actually needs. If a suitable type already exists, add to that one with propose_type_update instead of making a near-duplicate.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: 'Lowercase letters and digits only, no spaces or dashes, e.g. "page" or "casestudy".',
+        },
+        label: { type: "string", description: 'Singular, as a person would say it, e.g. "Page".' },
+        pluralLabel: { type: "string", description: 'Plural, e.g. "Pages". Defaults to the label plus "s".' },
+        kind: {
+          type: "string",
+          description:
+            '"collection" for many entries (the usual), or "single" for exactly one — a homepage, an about page.',
+        },
+        summary: { type: "string", description: "One line, for the editor." },
+        fields: {
+          type: "array",
+          description: "The ordered field list, each with key, type, and label.",
+          items: { type: "object", additionalProperties: true },
+        },
+      },
+      required: ["name", "label", "summary", "fields"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "propose_entry_status",
+    description:
+      "Propose moving an entry between draft, review, published, and archived — this is how something you drafted goes live, or how a finished page is retired. Publishing revalidates the entry against its content type, so a draft missing a required field is refused rather than published broken.",
+    input_schema: {
+      type: "object",
+      properties: {
+        entryId: { type: "string" },
+        status: {
+          type: "string",
+          description: "One of: draft, review, published, archived.",
+        },
+        summary: { type: "string", description: "One line, for the editor." },
+      },
+      required: ["entryId", "status", "summary"],
       additionalProperties: false,
     },
   },
@@ -489,6 +552,62 @@ export const runTool = async (
         typeName: type.name,
         patch: { fields: input.fields },
         before: { fields: decodeArray<Field>(type.fields) },
+      })
+
+      return { output: { queued: true, note: "Shown to the editor for review. Do not queue it again." } }
+    }
+
+    case "propose_type_create": {
+      const name = text(input, "name").toLowerCase()
+      if (!/^[a-z][a-z0-9]*$/.test(name)) {
+        return fail(
+          "`name` must be lowercase letters and digits starting with a letter — no spaces, dashes, or capitals.",
+        )
+      }
+      if (await loadType(name)) {
+        return fail(`A content type named "${name}" already exists. Use propose_type_update to change it.`)
+      }
+      if (!text(input, "label")) return fail("A new content type needs a label.")
+      if (!Array.isArray(input.fields) || input.fields.length === 0) {
+        return fail("`fields` must be the ordered array of field definitions, and a type with no fields holds nothing.")
+      }
+
+      const payload: Record<string, unknown> = {
+        name,
+        label: text(input, "label"),
+        fields: input.fields,
+        kind: text(input, "kind") === "single" ? "single" : "collection",
+      }
+      if (text(input, "pluralLabel")) payload.pluralLabel = text(input, "pluralLabel")
+
+      context.proposals.push({
+        kind: "type.create",
+        id: proposalId(),
+        summary: text(input, "summary") || `Add a ${text(input, "label")} content type`,
+        typeName: name,
+        payload,
+      })
+
+      return { output: { queued: true, note: "Shown to the editor for review. Do not queue it again." } }
+    }
+
+    case "propose_entry_status": {
+      const entry = await loadEntry(text(input, "entryId"))
+      if (!entry) return fail("No entry with that id — it may have been deleted.")
+
+      const status = text(input, "status").toLowerCase()
+      const allowed = ["draft", "review", "published", "archived"]
+      if (!allowed.includes(status)) return fail(`\`status\` must be one of: ${allowed.join(", ")}.`)
+      if (status === entry.status) return fail(`That entry is already ${status}.`)
+
+      context.proposals.push({
+        kind: "entry.status",
+        id: proposalId(),
+        summary: text(input, "summary") || `Move to ${status}`,
+        entryId: entry.id,
+        entryTitle: entry.title,
+        from: entry.status,
+        to: status,
       })
 
       return { output: { queued: true, note: "Shown to the editor for review. Do not queue it again." } }

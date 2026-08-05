@@ -442,6 +442,82 @@ test("markers from a previous turn are cleared before the next one rolls its own
   expect(marked(messages)).toBe(1)
 })
 
+test("Inky can stub out a whole new kind of page, then put it live", async () => {
+  // "Add a page about monkeys" when the site has no page type at all: the type
+  // has to be creatable, not just fillable. Then the draft has to be able to go
+  // live, or every new page stops one step short of the thing that was asked for.
+  const { db, entryId } = await setup()
+  const proposals: Proposal[] = []
+
+  const created = await call(db, proposals, "propose_type_create", {
+    name: "guide",
+    label: "Guide",
+    summary: "Somewhere for explainers to live",
+    fields: [
+      { key: "intro", type: "text", label: "Intro" },
+      { key: "body", type: "richtext", label: "Body" },
+    ],
+  })
+  expect(created.isError).toBeUndefined()
+
+  const proposal = proposals[0]
+  if (proposal?.kind !== "type.create") throw new Error("unreachable")
+  expect(proposal.typeName).toBe("guide")
+  expect(proposal.payload.kind).toBe("collection")
+
+  // Still inert: nothing exists until an editor applies it.
+  expect(await call(db, [], "list_content_types", {}).then(r => (r.output as unknown[]).length)).toBe(1)
+
+  await call(db, proposals, "propose_entry_status", {
+    entryId,
+    status: "archived",
+    summary: "Retire the old about page",
+  })
+  const status = proposals[1]
+  if (status?.kind !== "entry.status") throw new Error("unreachable")
+  expect(status.from).toBe("published")
+  expect(status.to).toBe("archived")
+
+  const stored = await db.one<{ status: string }>(from(entries).where(q => q("id").equals(entryId)))
+  expect(stored?.status).toBe("published")
+
+  await db.close()
+})
+
+test("a new content type cannot collide with one that exists, or be named nonsense", async () => {
+  const { db } = await setup()
+  const proposals: Proposal[] = []
+
+  const clash = await call(db, proposals, "propose_type_create", {
+    name: "page",
+    label: "Page",
+    summary: "x",
+    fields: [{ key: "body", type: "richtext", label: "Body" }],
+  })
+  expect(clash.isError).toBe(true)
+  expect(JSON.stringify(clash.output)).toContain("propose_type_update")
+
+  // Handles are lowercase and unpunctuated, because they become part of a URL
+  // and a database lookup rather than being shown to anyone.
+  const bad = await call(db, proposals, "propose_type_create", {
+    name: "Case Study",
+    label: "Case study",
+    summary: "x",
+    fields: [{ key: "body", type: "richtext", label: "Body" }],
+  })
+  expect(bad.isError).toBe(true)
+
+  const noStatus = await call(db, proposals, "propose_entry_status", {
+    entryId: "nope",
+    status: "published",
+    summary: "x",
+  })
+  expect(noStatus.isError).toBe(true)
+
+  expect(proposals).toHaveLength(0)
+  await db.close()
+})
+
 test("Ollama Cloud has a fixed endpoint, so there is no URL to get wrong", () => {
   // The reported failure: atlas/ai appends `/v1/chat/completions` to whatever
   // base URL it is given, and every provider's own docs call `https://host/v1`

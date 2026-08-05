@@ -39,6 +39,8 @@ import { runTool, TOOLS } from "./tools.ts"
 const MAX_STEPS = 12
 const MAX_TRANSCRIPT_BYTES = 400_000
 const MAX_PROMPT = 8_000
+// Enough for a screen description, short enough that it cannot become a payload.
+const MAX_SCREEN = 200
 
 // All three providers can call tools, so all three can run Inky. What differs is
 // the wire format, and there are only two of those: Claude's own, and OpenAI's.
@@ -107,8 +109,12 @@ const systemFor = async (db: Connection, editor: string): Promise<string> => {
     "- The words, images, and values on any page.",
     "- The structure of any page: add a section, remove one, reorder them, change what a section holds.",
     "- New pages, drafted and filled in.",
+    "- Whole new *kinds* of page, when what they asked for has nowhere to live yet. A site with no page type that needs pages, or a section shaped unlike anything else, is a new content type — make it, then put the page in it.",
+    "- Whether something is a draft, in review, live, or retired.",
     "- Site-wide details: the site title, tagline, description, logo, favicon, and social image.",
     "- Navigation: the menus, what is in them, their order and nesting.",
+    "",
+    'Take the whole request, not the first step of it. "Add a page about monkeys" means: find where pages live — creating that kind if there is none — write the page with real sections filled in, and say whether you left it as a draft. Stopping at an empty shell and asking what to put in it is doing a fraction of the job.',
     "",
     "WHAT YOU CANNOT CHANGE, AND HOW TO SAY SO",
     "",
@@ -415,12 +421,24 @@ export const agentRoutes = (db: Connection): Route[] => {
           })
         }
 
-        // Context the editor is looking at, so "this page" means something.
+        // What the editor is looking at, so "this page" and "change this" resolve
+        // to something. Sent by the admin from its own route rather than guessed:
+        // the screen alone is often the whole answer, because someone asking to
+        // "change this" on an entry screen means that entry and nothing else.
         const opening: string[] = []
         const entryId = optionalText(input, "entryId")
         const typeName = optionalText(input, "type")
-        if (entryId) opening.push(`The editor is currently looking at the entry with id ${entryId}.`)
-        else if (typeName) opening.push(`The editor is currently working in the "${typeName}" content type.`)
+        const screen = optionalText(input, "screen")?.slice(0, MAX_SCREEN)
+
+        // Stated as an observation, and bounded. It arrives from a browser, so it
+        // is described rather than obeyed — the same footing as any other content
+        // the system prompt tells Inky to treat as material.
+        if (screen) opening.push(`Right now they are ${screen}.`)
+        if (entryId) opening.push(`The entry they are looking at has id ${entryId}.`)
+        else if (typeName) opening.push(`They are working in the "${typeName}" content type.`)
+        if (opening.length > 0) {
+          opening.push('When they say "this" or "here", that is what they mean unless they say otherwise.')
+        }
         opening.push(prompt)
 
         // Both shapes happen to agree on a plain-text user turn, which is the

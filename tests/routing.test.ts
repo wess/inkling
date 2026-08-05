@@ -74,3 +74,33 @@ test("root paths stay reachable alongside the /api tree", async () => {
   // And `/media` itself is free for the admin screen of that name.
   expect((await handle(new Request("http://localhost/media"))).status).toBe(404)
 })
+
+test("an unmatched API path is a missing route, not the admin", async () => {
+  // A plugin panel declares an endpoint like /ext/social/performance. The admin
+  // was fetching it as /api/ext/… — which matched nothing, fell through to the
+  // SPA, and came back as HTML with a 200. A caller then saw a successful
+  // response it could not parse, so a broken panel looked like a working one.
+  //
+  // src/app.ts now returns the router's own 404 for /api and /ext rather than
+  // the admin, which is what makes that mistake visible instead of silent.
+  const handle = router(
+    ...prefixed("/api", [ok("types")]),
+    get(
+      "/ext/*",
+      pipe(c => json(c, 200, { hit: "plugin" })),
+    ),
+  )
+
+  const real = await handle(new Request("http://localhost/api/types"))
+  expect(real.status).toBe(200)
+
+  // Still a plain-text 404 from the router, which is the signal src/app.ts keys
+  // on — the difference is only what it does with it for these two prefixes.
+  const missing = await handle(new Request("http://localhost/api/ext/social/performance"))
+  expect(missing.status).toBe(404)
+  expect(missing.headers.get("content-type") ?? "").toStartWith("text/plain")
+
+  // And the path the panel should have used answers for real.
+  const plugin = await handle(new Request("http://localhost/ext/social/performance"))
+  expect(plugin.status).toBe(200)
+})
