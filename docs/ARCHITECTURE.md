@@ -57,25 +57,122 @@ and vary on the credentials that shape them.
 
 ## Composition root
 
-`src/server.ts`, in order:
+Assembly and port ownership are two files, because they have two different
+lifetimes. `src/app.ts` builds Inkling and returns it; `src/server.ts` is the
+twenty lines that give it a port. A host process that already owns `:443` takes
+the first and skips the second.
 
-1. Run migrations (`src/migrate`)
-2. Bootstrap the first owner from `BOOTSTRAP_*` when supplied. Otherwise the
+`createInkling(options)` in `src/app.ts`, in order:
+
+1. Refuse to start if `NODE_ENV=production` and `SECRET` is still the default or
+   under 32 characters — the one check that runs before anything touches disk
+2. Run migrations (`src/migrate`)
+3. Bootstrap the first owner from `BOOTSTRAP_*` when supplied. Otherwise the
    one-time `/auth/setup` flow lets the first admin visit claim an empty site;
    it closes permanently as soon as an owner exists
-3. Build the storage driver and the hook bus; bridge core hooks → webhooks and
+4. Build the storage driver and the hook bus; bridge core hooks → webhooks and
    → the realtime socket
-4. Load plugins in dependency order, auto-enabling `PLUGIN_AUTOENABLE` on a
+5. Load plugins in dependency order, auto-enabling `PLUGIN_AUTOENABLE` on a
    fresh install
-5. Assemble routes from feature factories
-6. Start background sweeps (`setInterval`): scheduled publishing every 60s,
+6. Assemble routes from feature factories
+7. Start background sweeps (`setInterval`): scheduled publishing every 60s,
    rate-limit cleanup hourly
-7. `Bun.serve` wrapped in `withSecurityHeaders`, with a `fetch` that attempts the
-   WebSocket upgrade first — once it returns a `Response` the handshake is gone
+8. Bundle the admin and return `{ fetch, upgrade, websocket, siteKey, db, config, stop }`
+
+`src/server.ts` then wraps that in `Bun.serve` and `withSecurityHeaders`, with a
+`fetch` that attempts the WebSocket upgrade first — once anything returns a
+`Response` the handshake is gone.
 
 Each feature is `src/<feature>/index.ts` exporting a route factory. Signatures
 vary by dependency: `authRoutes(db)`, `entryRoutes(db, hooks)`,
 `mediaRoutes(db, store, hooks)`, `pluginRoutes(db, hooks, registry, dir)`.
+
+Migrations and plugins ship *with* the package, so `createInkling` resolves both
+against the module's own directory rather than the working directory. Standalone
+they are the same place; embedded they are not, and a cwd-relative default would
+send Inkling looking for the host application's `./plugins`.
+
+### Embedding
+
+`package.json` exports `.` → `src/app.ts` and `./server` → `src/server.ts`, so a
+site can mount its own CMS instead of deploying one beside itself:
+
+```ts
+import { createInkling } from "inkling"
+
+const inkling = await createInkling({ adminBase: "/admin", siteKeyName: "site" })
+
+Bun.serve({
+  fetch: async (request, server) => {
+    // Before anything returns a Response, or the handshake is gone.
+    if (request.headers.get("upgrade") === "websocket") {
+      if (inkling.upgrade(request, server)) return undefined as unknown as Response
+    }
+    // Pass `server` — it is where the real socket peer comes from.
+    return (await inkling.fetch(request, server)) ?? myOwnRouter(request)
+  },
+  websocket: inkling.websocket,
+})
+```
+
+Two option shapes carry the weight. **`adminBase`** decides what happens to a
+path no Inkling route claimed: at `"/"` — the standalone spelling — every
+unmatched path becomes the admin, which is why `src/server.ts` needs no fallback
+of its own. Anything else confines the admin to that prefix and `fetch` returns
+**`null`** off it, so the host keeps routing. That `null` is the whole embedding
+contract: Inkling never swallows a path it does not own.
+
+**`siteKeyName`** mints a delivery key for a consumer sharing the process, since
+an in-process site has no browser in which to visit the admin and copy one. It is
+*derived* from `SECRET` and the name rather than randomly generated, so the same
+name yields the same key on every boot — the row is replaced when it is missing,
+stale after a `SECRET` rotation, or revoked. Rotating `SECRET` rotates this key
+along with sessions and stored AI credentials.
+
+Pass `server` through to `fetch`. `withSecurityHeaders` is applied inside
+`createInkling` rather than by the port owner, precisely so an embedding host
+cannot forget it: the wrapper is also what stashes the socket peer on the request
+for `src/security#clientIp` to read. Without a peer, `clientIp` returns an empty
+string, every rate-limit bucket keys on it, and the per-IP login limit silently
+becomes one global bucket shared by every account on the instance. Headers are
+only filled in when absent, so a host's own — and a route's, like media's
+`cross-origin` — still win.
+
+### One instance per process
+
+`config` and `db` are module-level singletons — `src/db/index.ts` opens the
+connection at import time from `DATABASE_URL`. Calling `createInkling` twice in
+one process therefore yields two route sets over **the same database and the same
+configuration**, which is not a second site. The options that exist are the ones
+that can vary without a second config: where the admin answers, and where
+migrations and plugins are read from.
+
+So a second site is a second process. See "Running more than one site" below for
+what that means in practice.
+
+## Running more than one site
+
+Inkling is single-tenant, and the schema says so in three places rather than one:
+
+| | |
+|---|---|
+| `settings` | `scope` is `'site'` for core keys, the plugin name for plugin-owned ones. There is one `'site'` scope per database |
+| `menus` | `name` is globally `UNIQUE` — one menu namespace per database |
+| `PUBLIC_URL` | One origin per process. Local-driver media is stored root-relative and resolved against it at read time |
+
+A delivery key's `scopes` partitions **content types** and nothing else. That is
+genuinely useful — one instance can serve several sites that share an editorial
+team and a content model, each key seeing only its own types — but settings,
+menus, media URLs, and the user list stay common to all of them.
+
+**The supported shape for separate sites is a database per site.** Three sites is
+three `DATABASE_URL`s: three processes standalone, or three hosts each calling
+`createInkling`. They can share a Postgres server and a bucket; what they must
+not share is a schema.
+
+Run one instance for several sites only when they are genuinely one property —
+the same team, one set of site settings, one menu namespace — and use scoped keys
+to keep each site reading its own types.
 
 ## Dialect portability
 
@@ -248,6 +345,26 @@ dump, a backup, and a read-only SQL leak — not an attacker who already has the
 process environment, since the key comes from it. Rotating `SECRET` invalidates
 stored credentials, which surfaces as "reconnect this provider" rather than a 500.
 
+There are two ways to connect one. An **API key** is pasted into the admin and
+works immediately. **OAuth** (`src/ai/oauth.ts`) is authorization-code with PKCE:
+`POST /api/ai/oauth/:provider/start` returns a consent URL, and the provider
+redirects to `/ai/oauth/callback` — a public route, because the browser arrives
+by top-level navigation carrying no bearer token. What stands in for a session is
+the `state` parameter, which is *sealed rather than stored*: it holds the PKCE
+verifier and the admin who began the flow, expires in ten minutes, and cannot be
+minted without `SECRET`. The role is re-read on the way through, so an account
+demoted mid-flow cannot finish it. The access token lands in the same
+`ciphertext`/`iv` columns a key uses — so every reader keeps working without a
+branch — and the refresh token gets its own sealed pair; a token within a minute
+of expiry is refreshed on the read path rather than by a timer.
+
+OAuth is the second-class path on purpose. A client is registered *with the
+provider* against a specific redirect URI, so it cannot be entered in the admin —
+`AI_OAUTH_<PROVIDER>_CLIENT_ID` and friends are the only environment variables
+the AI feature has, and the admin offers the button only for providers that have
+one. A key works the moment it is pasted; that asymmetry is real and the UI shows
+it rather than hiding it behind a button that dead-ends.
+
 **The editorial assistant** (`POST /ai/assist`) is not a chat window bolted onto
 the admin. Each intent — draft, rewrite, shorten, expand, summarize, titles, seo,
 translate, ask — corresponds to something an editor was already doing by hand, and
@@ -256,6 +373,31 @@ It streams over SSE because a rewrite of a long field otherwise looks like a hun
 request. Content is fenced in `<content>` / `<selection>` tags and the model is
 told to treat it as material, never as instructions: an entry whose body says
 "ignore your instructions" is a string an editor typed.
+
+**The agent** (`POST /ai/agent`, `src/ai/agent.ts`) is the assistant given the run
+of the content model rather than one field: it lists content types, reads entries
+and media, works out which page you meant, and comes back with changes. It is a
+tool loop over `src/ai/tools.ts`, streamed over SSE so the tool trace is visible
+as it happens, and it holds no server-side state — the transcript rides back and
+forth with the browser, which is refused rather than truncated when it outgrows
+its cap.
+
+**Every tool in that surface is a read.** The agent cannot write, and no flag
+makes it able to: `propose_entry_update`, `propose_entry_create`, and
+`propose_type_update` record an intention and hand it to the admin, which renders
+a diff and applies it by sending the change through `PUT /api/entries/:id` — the
+same route a human edit takes. That keeps one write path in the codebase, so
+revisions, field validation, slug uniqueness, relation checks, hooks, and the
+audit trail all keep working without a second implementation to keep honest, and
+the history names the person who approved the change rather than a machine nobody
+can ask about it. `tests/aiagent.test.ts` asserts the tool list contains nothing
+but reads and proposals, because a write tool added later would otherwise fail
+silently — the first sign would be a published page changing by itself.
+
+The agent needs a provider that supports tool use, which today means Claude;
+connected to anything else it says so and the editorial assistant carries on
+working. Content the agent reads is fenced and declared to be material, the same
+way the assistant fences it.
 
 **The public assistant** is the `assistant` plugin, not core — it is the one AI
 surface that spends the operator's money on behalf of anonymous visitors, so it
@@ -329,7 +471,37 @@ a number means. `ranges` adds a day-window switch that re-requests with `?days=`
 Bundled: `seo` (delivery filter), `redirects` (plugin-owned type + public
 route), `forms` (own table via plugin migrations), `commerce` (types +
 taxonomy + settings + route), `analytics` (own table + public write route +
-`stats` panel), `assistant` (public AI answers grounded in published content).
+`stats` panel), `assistant` (public AI answers grounded in published content),
+`social` (four types, an `entry.beforeSave` filter, and two `stats` panels).
+
+### Social
+
+`social` is social media management on top of the pieces that already exist.
+Clients, channels, campaigns, and posts are ordinary content types, so the
+composer, revisions, search, and trash come for free; the plugin's own code is
+almost entirely *readings* of those entries — `plugins/social/queue.ts` (what is
+not yet posted, soonest first), `week.ts` (a calendar drawn as one `stats` table
+per day, because a plugin cannot ship React into a bundle built before it
+existed), and `report.ts` (cadence against what was sold, then what the posts
+did).
+
+The one thing an entry cannot hold is a time series that keeps arriving after
+the document stops changing, so results live in `social_results` — one row per
+day, network, post, and channel, replaced rather than appended when the same day
+is reported twice. `POST /ext/social/results` takes them with a delivery key,
+the same shape of trust as a form submission.
+
+Workflow lives in a `stage` field rather than the entry's own `status`: an entry
+is published when the plan is visible, which is a different question from
+whether the post has gone out. An `entry.beforeSave` filter tidies hashtags,
+fills in default networks, and stamps the approval — a filter rather than a
+hook, so a failure there leaves the editor's own values instead of failing the
+save. It runs after validation, so everything it writes has to already be legal
+for its field.
+
+Nothing is posted to any network. That would mean an OAuth app per network, a
+token per client, and a refresh loop that fails at 3am; a plugin that quietly
+stopped posting would be worse than no plugin.
 
 ### Analytics
 

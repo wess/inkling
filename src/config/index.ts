@@ -6,6 +6,14 @@ const list = (raw: string): readonly string[] =>
     .map(part => part.trim())
     .filter(Boolean)
 
+const oauthClient = (prefix: string) => ({
+  clientId: env(`AI_OAUTH_${prefix}_CLIENT_ID`, { default: "" }),
+  clientSecret: env(`AI_OAUTH_${prefix}_CLIENT_SECRET`, { default: "" }),
+  authorizeUrl: env(`AI_OAUTH_${prefix}_AUTHORIZE_URL`, { default: "" }),
+  tokenUrl: env(`AI_OAUTH_${prefix}_TOKEN_URL`, { default: "" }),
+  scopes: env(`AI_OAUTH_${prefix}_SCOPES`, { parse: list, default: "" }),
+})
+
 export const config = defineConfig({
   environment: env("NODE_ENV", { default: "development" }),
   port: env("PORT", { parse: Number, default: "4300" }),
@@ -46,5 +54,17 @@ export const config = defineConfig({
     email: env("BOOTSTRAP_EMAIL", { default: "" }),
     password: env("BOOTSTRAP_PASSWORD", { default: "" }),
     name: env("BOOTSTRAP_NAME", { default: "Owner" }),
+  },
+
+  // Connecting a provider by OAuth needs a client the operator registered with
+  // that provider, so unlike an API key it cannot be entered in the admin —
+  // there is nothing self-hosted software can ship that stands in for a
+  // registered redirect URI. Absent a client id, the admin simply doesn't offer
+  // the button. Endpoint overrides exist so a provider we ship no defaults for
+  // can still be wired up without a release.
+  aiOauth: {
+    anthropic: oauthClient("ANTHROPIC"),
+    openai: oauthClient("OPENAI"),
+    ollama: oauthClient("OLLAMA"),
   },
 })

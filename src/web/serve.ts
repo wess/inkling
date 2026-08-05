@@ -23,7 +23,13 @@ const looksLikeFile = (path: string): boolean => (path.split("/").pop() ?? "").i
 
 export type AdminHandler = (url: URL) => Promise<Response>
 
-export const buildAdmin = async (): Promise<AdminHandler> => {
+// `base` is where the admin answers: "/" standalone, or a prefix like "/admin"
+// when a host owns the root. It has to reach three places — the emitted asset
+// URLs, the asset lookup, and the SPA's own routing — so it is injected into the
+// document rather than baked into the bundle, and the same build serves either.
+export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
+  const prefix = base === "/" ? "" : base.replace(/\/+$/, "")
+
   if (!existsSync(DIST)) mkdirSync(DIST, { recursive: true })
 
   const result = await Bun.build({
@@ -50,7 +56,10 @@ export const buildAdmin = async (): Promise<AdminHandler> => {
   // served from the root, so the paths are made absolute.
   const indexHtml = (await Bun.file(join(DIST, "index.html")).text())
     .replace(/ crossorigin(?=[\s>])/g, "")
-    .replace(/(src|href)="\.\/(chunk-)/g, '$1="/$2')
+    .replace(/(src|href)="\.\/(chunk-)/g, `$1="${prefix}/$2`)
+    // The SPA reads its own routes off location.pathname, so it has to be told
+    // what part of the path is the mount point rather than a route.
+    .replace("</head>", `<script>window.__INKLING_BASE__=${JSON.stringify(prefix)}</script></head>`)
 
   const document = () =>
     new Response(indexHtml, {
@@ -70,8 +79,12 @@ export const buildAdmin = async (): Promise<AdminHandler> => {
     return (await file.exists()) ? new Response(file) : null
   }
 
+  const withoutPrefix = (pathname: string): string =>
+    prefix && pathname.startsWith(prefix) ? pathname.slice(prefix.length) || "/" : pathname
+
   return async url => {
-    if (!looksLikeFile(url.pathname)) return document()
-    return (await asset(url.pathname)) ?? new Response("Not found", { status: 404 })
+    const path = withoutPrefix(url.pathname)
+    if (!looksLikeFile(path)) return document()
+    return (await asset(path)) ?? new Response("Not found", { status: 404 })
   }
 }

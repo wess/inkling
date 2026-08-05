@@ -15,6 +15,10 @@ export type ResolvedCredential = {
   readonly model: string
   readonly secret: string
   readonly baseUrl: string | null
+  // An OAuth access token and an API key are both "the secret", but they ride
+  // different headers — `x-api-key` versus `Authorization: Bearer` — so the
+  // distinction has to survive as far as the client that builds the request.
+  readonly authKind: "key" | "oauth"
 }
 
 export type CompletionRequest = {
@@ -41,7 +45,19 @@ export type Completion = {
 const FALLBACK_BETA = "server-side-fallback-2026-06-01"
 const FALLBACKS = [{ model: "claude-opus-4-8" }]
 
-const claudeClient = (credential: ResolvedCredential) => new Anthropic({ apiKey: credential.secret })
+// An OAuth access token is not an API key: it goes on `Authorization: Bearer`,
+// and the endpoint only honours it when the request also opts in to the OAuth
+// beta. Both are properties of the credential, so both are decided here rather
+// than at each of the call sites below.
+const OAUTH_BETA = "oauth-2025-04-20"
+
+const claudeClient = (credential: ResolvedCredential) =>
+  credential.authKind === "oauth"
+    ? new Anthropic({ authToken: credential.secret })
+    : new Anthropic({ apiKey: credential.secret })
+
+const betasFor = (credential: ResolvedCredential): string[] =>
+  credential.authKind === "oauth" ? [FALLBACK_BETA, OAUTH_BETA] : [FALLBACK_BETA]
 
 export const complete = async (credential: ResolvedCredential, request: CompletionRequest): Promise<Completion> => {
   const maxTokens = request.maxTokens ?? 16_000
@@ -50,7 +66,7 @@ export const complete = async (credential: ResolvedCredential, request: Completi
     const response = await claudeClient(credential).beta.messages.create({
       model: credential.model,
       max_tokens: maxTokens,
-      betas: [FALLBACK_BETA],
+      betas: betasFor(credential),
       fallbacks: FALLBACKS,
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
@@ -102,7 +118,7 @@ export async function* completeStream(
     const stream = claudeClient(credential).beta.messages.stream({
       model: credential.model,
       max_tokens: maxTokens,
-      betas: [FALLBACK_BETA],
+      betas: betasFor(credential),
       fallbacks: FALLBACKS,
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },

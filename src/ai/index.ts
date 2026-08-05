@@ -1,15 +1,38 @@
 import type { Connection } from "@atlas/db"
 import { from } from "@atlas/db"
 import type { Route } from "@atlas/server"
-import { badRequest, conflict, del, get, json, notFound, parseJson, pipeline, post, put } from "@atlas/server"
+import {
+  badRequest,
+  conflict,
+  del,
+  get,
+  json,
+  notFound,
+  parseJson,
+  pipe,
+  pipeline,
+  post,
+  put,
+  redirect,
+} from "@atlas/server"
 import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { id } from "../ids/index.ts"
-import { aiCredentials } from "../schema/index.ts"
+import { aiCredentials, users } from "../schema/index.ts"
 import { now } from "../time/index.ts"
 import type { ResolvedCredential } from "./complete.ts"
 import { complete } from "./complete.ts"
+import type { OAuthTokens } from "./oauth.ts"
+import {
+  authorizeUrl,
+  clientFor,
+  exchange,
+  oauthReady,
+  readState,
+  redirectUri,
+  refresh as refreshOauth,
+} from "./oauth.ts"
 import type { ProviderName } from "./providers.ts"
 import { isProvider, PROVIDERS, providerCatalog } from "./providers.ts"
 import { open, seal } from "./secrets.ts"
@@ -29,10 +52,17 @@ export type AiCredentialRow = {
   updated_at: string
   last_used_at: string | null
   revoked_at: string | null
+  auth_kind: string
+  refresh_ciphertext: string | null
+  refresh_iv: string | null
+  expires_at: string | null
+  scope: string | null
+  account: string | null
 }
 
 // `ciphertext` and `iv` are structurally absent here rather than deleted from a
 // spread, so a future field can't be added to the row type and leak by default.
+// The same rule covers `refresh_ciphertext` / `refresh_iv`.
 const present = (row: AiCredentialRow) => ({
   id: row.id,
   provider: row.provider,
@@ -44,6 +74,10 @@ const present = (row: AiCredentialRow) => ({
   createdAt: row.created_at,
   lastUsedAt: row.last_used_at,
   revokedAt: row.revoked_at,
+  authKind: row.auth_kind === "oauth" ? ("oauth" as const) : ("key" as const),
+  account: row.account,
+  expiresAt: row.expires_at,
+  scope: row.scope,
 })
 
 // A query, not a call against a connection — the builder is standalone and the
@@ -54,6 +88,55 @@ const activeCredentials = () =>
     .orderBy("is_default", "DESC")
     .orderBy("created_at", "ASC")
 
+// The columns a token grant writes, sealed. Shared by the initial exchange and
+// every refresh so the two can never drift into storing different shapes.
+const tokenColumns = async (tokens: OAuthTokens): Promise<Record<string, unknown>> => {
+  const access = await seal(tokens.accessToken)
+  const refreshSealed = tokens.refreshToken ? await seal(tokens.refreshToken) : null
+  return {
+    ciphertext: access.ciphertext,
+    iv: access.iv,
+    hint: access.hint,
+    refresh_ciphertext: refreshSealed?.ciphertext ?? null,
+    refresh_iv: refreshSealed?.iv ?? null,
+    expires_at: tokens.expiresAt,
+    scope: tokens.scope,
+    updated_at: now(),
+  }
+}
+
+// An access token is refreshed a minute early rather than on expiry, because
+// the request it is about to authorize takes non-zero time to arrive.
+const REFRESH_MARGIN_MS = 60_000
+
+const expiringSoon = (expiresAt: string | null): boolean =>
+  expiresAt !== null && Date.parse(expiresAt) - Date.now() < REFRESH_MARGIN_MS
+
+// Swaps an expiring OAuth token for a fresh one and writes it back. Returns the
+// access token to use, or null when the connection can no longer be revived —
+// a revoked grant and a rotated SECRET both land here, and both should read as
+// "reconnect this provider" rather than as a failed completion.
+const refreshed = async (db: Connection, row: AiCredentialRow, provider: ProviderName): Promise<string | null> => {
+  const client = clientFor(provider)
+  if (!client) return null
+  if (!row.refresh_ciphertext || !row.refresh_iv) return null
+
+  const refreshToken = await open({ ciphertext: row.refresh_ciphertext, iv: row.refresh_iv })
+  if (!refreshToken) return null
+
+  try {
+    const tokens = await refreshOauth(client, refreshToken)
+    await db.execute(
+      from(aiCredentials)
+        .update(await tokenColumns(tokens))
+        .where(q => q("id").equals(row.id)),
+    )
+    return tokens.accessToken
+  } catch {
+    return null
+  }
+}
+
 // The credential the assistant should use: the explicit default if one is set,
 // otherwise the oldest surviving connection. Returns null when nothing is
 // configured, which every caller treats as "the assistant is off" rather than as
@@ -63,10 +146,14 @@ export const resolveCredential = async (db: Connection): Promise<ResolvedCredent
   if (!row || !isProvider(row.provider)) return null
 
   const spec = PROVIDERS[row.provider]
-  const secret = spec.needsKey ? await open(row) : ""
+  const oauth = row.auth_kind === "oauth"
   // A rotated SECRET leaves ciphertext that no longer opens. Treating that as
   // "not configured" surfaces in the UI as a provider to reconnect.
-  if (spec.needsKey && secret === null) return null
+  const stored = spec.needsKey || oauth ? await open(row) : ""
+  if ((spec.needsKey || oauth) && stored === null) return null
+
+  const secret = oauth && expiringSoon(row.expires_at) ? await refreshed(db, row, row.provider) : stored
+  if (secret === null) return null
 
   void db
     .execute(
@@ -82,6 +169,7 @@ export const resolveCredential = async (db: Connection): Promise<ResolvedCredent
     model: row.model,
     secret: secret ?? "",
     baseUrl: row.base_url,
+    authKind: oauth ? "oauth" : "key",
   }
 }
 
@@ -130,7 +218,15 @@ export const aiRoutes = (db: Connection): Route[] => {
   return [
     get(
       "/ai/providers",
-      read(async c => json(c, 200, { data: providerCatalog() })),
+      read(async c =>
+        json(c, 200, {
+          data: providerCatalog(oauthReady),
+          // Shown next to the OAuth section so an operator registering a client
+          // can copy the redirect URI rather than reconstruct it and get it
+          // subtly wrong, which is the single most common way this flow fails.
+          redirectUri: redirectUri(),
+        }),
+      ),
     ),
 
     get(
@@ -173,6 +269,12 @@ export const aiRoutes = (db: Connection): Route[] => {
           updated_at: timestamp,
           last_used_at: null,
           revoked_at: null,
+          auth_kind: "key",
+          refresh_ciphertext: null,
+          refresh_iv: null,
+          expires_at: null,
+          scope: null,
+          account: null,
         }
 
         // Newest connection becomes the default — an operator adding a provider
@@ -202,6 +304,11 @@ export const aiRoutes = (db: Connection): Route[] => {
 
         // Replacing the key is an update; reading it back never is.
         if (input.key !== undefined) {
+          if (row.auth_kind === "oauth") {
+            throw badRequest("This connection is authorized by OAuth — reconnect it instead of pasting a key", {
+              code: "OAUTH_CONNECTION",
+            })
+          }
           const secret = requireText(input, "key", "API key")
           const sealed = await seal(secret)
           changes.ciphertext = sealed.ciphertext
@@ -254,6 +361,28 @@ export const aiRoutes = (db: Connection): Route[] => {
       }),
     ),
 
+    // Hands back a URL rather than a redirect: the caller is the admin's fetch
+    // client, which cannot follow a cross-origin redirect into a consent screen.
+    // The SPA navigates the tab to it.
+    post(
+      "/ai/oauth/:provider/start",
+      act(async c => {
+        const providerName = c.params.provider ?? ""
+        if (!isProvider(providerName)) throw badRequest("Unknown provider", { code: "BAD_PROVIDER" })
+
+        const client = clientFor(providerName)
+        if (!client) {
+          throw conflict(
+            `No OAuth client is configured for ${PROVIDERS[providerName].label}. Register one with the provider and set AI_OAUTH_${providerName.toUpperCase()}_CLIENT_ID.`,
+            { code: "NO_OAUTH_CLIENT" },
+          )
+        }
+
+        const started = await authorizeUrl(client, auth(c).id)
+        return json(c, 200, { url: started.url, expiresAt: started.expiresAt })
+      }),
+    ),
+
     // Round-trips one cheap request so an operator finds out the key is wrong
     // here, rather than the first time an author asks for a draft.
     post(
@@ -264,9 +393,23 @@ export const aiRoutes = (db: Connection): Route[] => {
         if (!isProvider(row.provider)) throw badRequest("Unknown provider", { code: "BAD_PROVIDER" })
 
         const spec = PROVIDERS[row.provider]
-        const secret = spec.needsKey ? await open(row) : ""
-        if (spec.needsKey && secret === null) {
-          throw conflict("This connection can no longer be decrypted — re-enter its key", { code: "SEALED" })
+        const oauth = row.auth_kind === "oauth"
+        const stored = spec.needsKey || oauth ? await open(row) : ""
+        if ((spec.needsKey || oauth) && stored === null) {
+          throw conflict(
+            oauth
+              ? "This connection can no longer be decrypted — reconnect the provider"
+              : "This connection can no longer be decrypted — re-enter its key",
+            { code: "SEALED" },
+          )
+        }
+
+        // Testing an expiring grant should exercise a token the provider will
+        // still accept, so the refresh happens here too rather than only on the
+        // path the assistant takes.
+        const secret = oauth && expiringSoon(row.expires_at) ? await refreshed(db, row, row.provider) : stored
+        if (secret === null) {
+          throw conflict("This connection could not be refreshed — reconnect the provider", { code: "EXPIRED" })
         }
 
         const credential: ResolvedCredential = {
@@ -275,6 +418,7 @@ export const aiRoutes = (db: Connection): Route[] => {
           model: row.model,
           secret: secret ?? "",
           baseUrl: row.base_url,
+          authKind: oauth ? "oauth" : "key",
         }
 
         try {
@@ -294,6 +438,98 @@ export const aiRoutes = (db: Connection): Route[] => {
           // unreachable) and contains no secret, so it is passed through.
           return json(c, 200, { ok: false, provider: row.provider, model: row.model, error: (error as Error).message })
         }
+      }),
+    ),
+  ]
+}
+
+// Public, because the browser arrives here by top-level navigation from the
+// provider and carries no bearer token. What stands in for a session is the
+// sealed `state`: it names the admin who started the flow, expires in ten
+// minutes, and cannot be minted without SECRET. The role is re-read on the way
+// through, so an account demoted mid-flow does not get to finish it.
+export const aiPublicRoutes = (db: Connection, adminBase: string): Route[] => {
+  const admin = adminBase === "/" ? "" : adminBase.replace(/\/$/, "")
+
+  // Everything lands back on the AI screen with a readable outcome rather than
+  // on a bare JSON error, because the person reading it is in a browser tab
+  // they were redirected into and has no other way back.
+  const back = (c: Parameters<typeof redirect>[0], outcome: string, detail?: string) =>
+    redirect(
+      c,
+      `${admin}/ai?connected=${encodeURIComponent(outcome)}${detail ? `&reason=${encodeURIComponent(detail.slice(0, 300))}` : ""}`,
+    )
+
+  return [
+    get(
+      "/ai/oauth/callback",
+      pipe(async c => {
+        const denied = typeof c.query.error === "string" ? c.query.error : ""
+        if (denied) return back(c, "error", c.query.error_description ?? denied)
+
+        const pending = await readState(typeof c.query.state === "string" ? c.query.state : "")
+        if (!pending) return back(c, "error", "That sign-in link expired or was not issued by this site")
+
+        const code = typeof c.query.code === "string" ? c.query.code : ""
+        if (!code) return back(c, "error", "The provider returned no authorization code")
+
+        const client = clientFor(pending.provider)
+        if (!client) return back(c, "error", "The OAuth client for that provider is no longer configured")
+
+        const actor = await db.one<{ id: string; role: string; deleted_at: string | null }>(
+          from(users).where(q => q("id").equals(pending.userId)),
+        )
+        if (!actor || actor.deleted_at || !can.manageAi(actor.role)) {
+          return back(c, "error", "That account may no longer manage AI providers")
+        }
+
+        let tokens: OAuthTokens
+        try {
+          tokens = await exchange(client, code, pending.verifier)
+        } catch (error) {
+          return back(c, "error", (error as Error).message)
+        }
+
+        const spec = PROVIDERS[pending.provider]
+        const timestamp = now()
+        const sealedColumns = await tokenColumns(tokens)
+
+        await db.transaction(async tx => {
+          // Reconnecting replaces rather than stacks. Two OAuth rows for the
+          // same provider and account are the same grant twice, and the older
+          // one holds a refresh token the provider may already have rotated.
+          await tx.execute(
+            from(aiCredentials)
+              .where(q => q("provider").equals(pending.provider))
+              .where(q => q("auth_kind").equals("oauth"))
+              .del(),
+          )
+
+          const row = {
+            id: id(),
+            provider: pending.provider,
+            label: tokens.account ? `${spec.label} — ${tokens.account}` : spec.label,
+            model: spec.defaultModel,
+            base_url: null,
+            is_default: 1,
+            created_by: actor.id,
+            created_at: timestamp,
+            last_used_at: null,
+            revoked_at: null,
+            auth_kind: "oauth",
+            account: tokens.account,
+            ...sealedColumns,
+          }
+
+          await tx.execute(from(aiCredentials).insert(row))
+          await tx.execute(
+            from(aiCredentials)
+              .update({ is_default: 0 })
+              .where(q => q("id").notEquals(row.id as string)),
+          )
+        })
+
+        return back(c, "ok")
       }),
     ),
   ]

@@ -12,7 +12,10 @@ read whole, and it links to the long documents rather than repeating them.
 
 - **One process, one port.** The admin, the API, delivery, media, and the socket
   share an origin and are separated by path. No proxy, no second server, no dev
-  server. `src/server.ts` is the only entry point.
+  server.
+- **Assembly and port ownership are two files.** `src/app.ts` (`createInkling`)
+  builds Inkling and returns a handler; `src/server.ts` is the twenty lines that
+  give it a port. Add a route in `app.ts`; `server.ts` only owns `Bun.serve`.
 - Everything session-gated is mounted through `prefixed("/api", …)`. Everything
   public keeps a root path, because those paths live in other people's code.
   Whatever the router does not claim is the admin — so `/settings` is a screen
@@ -29,6 +32,11 @@ read whole, and it links to the long documents rather than repeating them.
   expires in an hour; the **realtime socket** tells a key holder that published
   content moved, carrying ids and never payloads.
 - Postgres is the store. SQLite exists only so the test suite runs in memory.
+- **Single-tenant.** Core settings live under one `site` scope, menu names are
+  globally unique, and `PUBLIC_URL` is one origin per process. A delivery key's
+  scopes partition content *types*, not sites. Separate sites means a database
+  each — `config` and the db connection are module-level, so `createInkling`
+  twice in one process is two route sets over the same data.
 - No build step for the API. Verify with `bunx tsc --noEmit` and `bun test` —
   both must be clean.
 
@@ -89,8 +97,31 @@ never in `settings`, and are never returned by the API.
 
 - `POST /ai/assist` — editorial assistant, SSE. Intents: `draft`, `rewrite`,
   `shorten`, `expand`, `summarize`, `titles`, `seo`, `translate`, `ask`.
+- `POST /ai/agent` — the agent (`src/ai/agent.ts`), a tool loop over
+  `src/ai/tools.ts`, streamed over SSE. Holds no server-side state: the
+  transcript rides back and forth with the browser and is refused, not
+  truncated, when it outgrows its cap. Needs a provider with tool use — today
+  that means Claude.
 - `POST /ext/assistant/ask` — the optional public assistant (a plugin), answering
   from published content only, grounded in the page the visitor is on.
+
+**Every agent tool is a read, and adding a write one is a bug.** The agent cannot
+write and no flag makes it able to: `propose_entry_update`, `propose_entry_create`,
+and `propose_type_update` record an intention that the admin renders as a diff and
+applies through `PUT /api/entries/:id` — the same route a human edit takes, so
+revisions, validation, slug uniqueness, relation checks, hooks, and the audit
+trail keep working and the history names the person who approved it.
+`tests/aiagent.test.ts` asserts the tool list contains nothing but reads and
+proposals.
+
+Two ways to connect a provider. An **API key** is pasted into the admin. **OAuth**
+(`src/ai/oauth.ts`) is authorization-code with PKCE: `POST
+/api/ai/oauth/:provider/start` returns a consent URL and the provider redirects to
+`/ai/oauth/callback` — public, because the browser arrives by top-level navigation
+with no bearer token. The `state` parameter stands in for the session: sealed
+rather than stored, ten-minute expiry, and the role is re-read on the way through.
+`AI_OAUTH_<PROVIDER>_CLIENT_ID` and friends are the only environment variables the
+AI feature has; without one the admin offers only the key path.
 
 Content is fenced in `<content>` / `<selection>` tags and the model is instructed
 to treat it as material, never as instructions.
@@ -105,7 +136,9 @@ migrations, and hook listeners. Routes are declared relative and namespaced to
 `emit` hooks observe and can never break the core path. `filter` hooks transform,
 and a throwing filter degrades to a no-op rather than blanking the payload.
 
-Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`.
+Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`,
+`social` (four content types, an `entry.beforeSave` filter, two `stats` panels,
+and its own `social_results` table; it posts to no network by design).
 
 ## Gotchas that cost real bugs
 
@@ -129,6 +162,12 @@ Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`.
 8. **The admin fallback keys on Atlas answering an unmatched path with a
    plain-text 404**, while every `HttpError` renders as JSON. Change that and the
    admin stops loading; `tests/routing.test.ts` asserts it.
+9. **`withSecurityHeaders` is not just headers** — it stashes the socket peer on
+   the request, and `src/security#clientIp` reads only that. Unwrap it, or fail
+   to pass Bun's `server` into `inkling.fetch`, and `clientIp` returns `""` for
+   every request: the per-IP login limit becomes one global bucket that any
+   single client can exhaust for every account. `tests/security.test.ts` asserts
+   it.
 
 ## Files
 

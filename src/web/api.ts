@@ -231,6 +231,125 @@ export type AuditEvent = {
   createdAt: string
 }
 
+export type AiProvider = {
+  name: string
+  label: string
+  defaultModel: string
+  needsKey: boolean
+  needsBaseUrl: boolean
+  models: string[]
+  help: string
+  // Whether this install can start an OAuth flow right now, not whether the
+  // provider has one — an unregistered client means no button.
+  oauth: boolean
+}
+
+export type AiCredential = {
+  id: string
+  provider: string
+  label: string
+  model: string
+  baseUrl: string | null
+  hint: string
+  isDefault: boolean
+  createdAt: string
+  lastUsedAt: string | null
+  revokedAt: string | null
+  authKind: "key" | "oauth"
+  account: string | null
+  expiresAt: string | null
+  scope: string | null
+}
+
+// Mirrors Proposal in src/ai/tools.ts. Nothing here has been saved — each one
+// is applied by sending it back through the ordinary content routes.
+export type AgentProposal =
+  | {
+      kind: "entry.update"
+      id: string
+      summary: string
+      entryId: string
+      entryTitle: string
+      typeName: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    }
+  | { kind: "entry.create"; id: string; summary: string; typeName: string; payload: Record<string, unknown> }
+  | {
+      kind: "type.update"
+      id: string
+      summary: string
+      typeName: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    }
+
+export type AgentEvent =
+  | { type: "start"; provider: string; model: string }
+  | { type: "text"; text: string }
+  | { type: "tool"; name: string; input: unknown }
+  | { type: "proposal"; proposal: AgentProposal }
+  | { type: "done"; history: unknown[]; proposals: AgentProposal[] }
+  | { type: "error"; message: string }
+
+// Server-sent events, hand-parsed because the browser's EventSource cannot set
+// an Authorization header and this API has no cookie to fall back on.
+export const runAgent = async (
+  input: { message: string; history?: unknown[]; entryId?: string; type?: string },
+  onEvent: (event: AgentEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> => {
+  const headers: Record<string, string> = { "content-type": "application/json" }
+  const token = getToken()
+  if (token) headers.authorization = `Bearer ${token}`
+
+  const response = await fetch(new URL("/api/ai/agent", location.origin), {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input),
+    signal,
+  })
+
+  if (!response.ok || !response.body) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string; code?: string }
+    if (response.status === 401) clearToken()
+    throw fail(response.status, payload.error ?? `Request failed (${response.status})`, payload.code)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    // Frames are separated by a blank line; a partial one stays in the buffer.
+    let boundary = buffer.indexOf("\n\n")
+    while (boundary !== -1) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      boundary = buffer.indexOf("\n\n")
+
+      const name = frame.match(/^event: (.+)$/m)?.[1]
+      const data = frame.match(/^data: (.+)$/m)?.[1]
+      if (!name || !data) continue
+      try {
+        const parsed = JSON.parse(data) as Record<string, unknown>
+        onEvent(
+          name === "proposal"
+            ? ({ type: "proposal", proposal: parsed as unknown as AgentProposal } as AgentEvent)
+            : ({ type: name, ...parsed } as AgentEvent),
+        )
+      } catch {
+        // A frame we cannot parse is a frame we cannot act on. Dropping it beats
+        // ending a run that is otherwise fine.
+      }
+    }
+  }
+}
+
 type Wrapped<T> = { data: T }
 type Paged<T> = { data: T[]; meta: { total: number; page: number; limit: number } }
 
@@ -381,6 +500,33 @@ export const api = {
     request<Menu>(`/menus/${name}`, { method: "PUT", body: { label, items } }),
   createMenu: (label: string) => request<Menu>("/menus", { body: { label, items: [] } }),
   deleteMenu: (name: string) => request<{ deleted: boolean }>(`/menus/${name}`, { method: "DELETE" }),
+
+  aiProviders: () => request<{ data: AiProvider[]; redirectUri: string }>("/ai/providers"),
+  aiCredentials: () => request<Wrapped<AiCredential[]>>("/ai/credentials").then(r => r.data),
+  connectAiKey: (input: { provider: string; key?: string; model?: string; baseUrl?: string; label?: string }) =>
+    request<AiCredential>("/ai/credentials", { body: input }),
+  updateAiCredential: (id: string, input: Record<string, unknown>) =>
+    request<AiCredential>(`/ai/credentials/${id}`, { method: "PUT", body: input }),
+  deleteAiCredential: (id: string) => request<{ deleted: boolean }>(`/ai/credentials/${id}`, { method: "DELETE" }),
+  testAiCredential: (id: string) =>
+    request<{ ok: boolean; provider: string; model: string; refused?: boolean; error?: string }>(
+      `/ai/credentials/${id}/test`,
+      { method: "POST" },
+    ),
+  startAiOauth: (provider: string) =>
+    request<{ url: string; expiresAt: string }>(`/ai/oauth/${provider}/start`, { method: "POST" }),
+
+  agentStatus: () =>
+    request<
+      Wrapped<{
+        configured: boolean
+        supported: boolean
+        provider: string | null
+        model: string | null
+        mayUse: boolean
+        mayApply: boolean
+      }>
+    >("/ai/agent/status", { method: "POST" }).then(r => r.data),
 
   webhooks: () => request<{ data: Webhook[]; events: string[] }>("/webhooks"),
   createWebhook: (input: { name: string; url: string; events: string[]; active: boolean }) =>

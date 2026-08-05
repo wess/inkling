@@ -66,7 +66,12 @@ database of its own.
 - **An editorial assistant** — connect your own AI provider and get drafting,
   rewriting, summarizing, titles, and metadata that know your content model.
   Optional, off until you connect one, and available to the public site as a
-  page-aware plugin
+  page-aware plugin. Connect it with an API key, or by authorizing an account
+  over OAuth
+- **An agent for page work** — ask for a page to be reshaped, rewritten, or
+  drafted and it reads your content types, entries, and media before answering.
+  It proposes; you review a diff and apply, and applying is an ordinary save, so
+  every change leaves a revision you can restore
 - **Webhooks** on content events, HMAC-signed
 - **Activity history** for sign-ins, edits, publishing, and media changes
 - **Plugins** that add content types, routes, settings, admin panels, and their
@@ -77,7 +82,7 @@ database of its own.
 
 ## Plugins
 
-Drop a directory into `plugins/` and enable it in the admin. Six ship with it:
+Drop a directory into `plugins/` and enable it in the admin. Seven ship with it:
 
 | Plugin | Demonstrates |
 |---|---|
@@ -87,6 +92,7 @@ Drop a directory into `plugins/` and enable it in the admin. Six ship with it:
 | `commerce` | Content type + taxonomy + settings + a convenience route |
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
 | `assistant` | A public, page-aware assistant answering from published content only |
+| `social` | Social media management — a queue, a calendar, and a performance report built out of four content types and one results table |
 
 ```ts
 import { definePlugin } from "../../src/plugins/define.ts"
@@ -171,6 +177,56 @@ types it is scoped to.
 word, product, and image comes from Inkling while its markup and CSS stay
 hand-written.
 
+## Running more than one site
+
+Inkling is single-tenant, and three things in the schema say so: core settings
+all live under one `site` scope, menu names are globally unique, and `PUBLIC_URL`
+is one origin per process. A delivery key's scopes partition **content types**
+and nothing else.
+
+So the unit of separation is the database:
+
+| You want | Run |
+|---|---|
+| Sites with their own settings, menus, and origin | One instance per site — a `DATABASE_URL` each |
+| Sites that are one property, sharing a team and a content model | One instance, a scoped key per site |
+
+Three separate sites is three `DATABASE_URL`s. They can share a Postgres server
+and a bucket; what they cannot share is a schema. Each instance needs its own
+`SECRET` — rotating one invalidates that instance's sessions and stored AI
+credentials, and there is no reason for that blast radius to cross sites.
+
+### Or mount it inside the site
+
+A site that would rather not deploy a second service can mount Inkling in its own
+process. `createInkling` returns a handler rather than a server:
+
+```ts
+import { createInkling } from "inkling"
+
+const inkling = await createInkling({ adminBase: "/admin", siteKeyName: "site" })
+
+Bun.serve({
+  fetch: async (request, server) => {
+    if (request.headers.get("upgrade") === "websocket") {
+      if (inkling.upgrade(request, server)) return undefined as unknown as Response
+    }
+    // null means no Inkling route claimed the path — keep routing.
+    return (await inkling.fetch(request, server)) ?? myOwnRouter(request)
+  },
+  websocket: inkling.websocket,
+})
+```
+
+`adminBase` confines the admin to a prefix and makes `fetch` return `null`
+everywhere else, so Inkling never swallows a path it does not own. `siteKeyName`
+mints a delivery key for the site sharing the process, derived from `SECRET` so
+it is the same key on every boot — an in-process consumer has no browser in which
+to visit the admin and copy one.
+
+This is still one instance per process: `config` and the database connection are
+module-level, so mounting twice gives you two route sets over the same data.
+
 ## Commands
 
 | | |
@@ -188,6 +244,13 @@ and skip otherwise, so `bun test` stays zero-setup.
 ## Documentation
 
 - **[wess.io/inkling](https://wess.io/inkling/)** — the site
+  - [Get set up](https://wess.io/inkling/start/) — empty database to a live site
+  - [Guide](https://wess.io/inkling/guide/) — the model, delivery, realtime,
+    previews, AI, plugins, and running more than one site
+  - [Tutorials](https://wess.io/inkling/tutorials/) — a blog end to end, writing
+    a plugin, three sites at once, mounting it inside a site
+  - [Reference](https://wess.io/inkling/reference/) — every route, field type,
+    variable, and command
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module layout, data model,
   plugin system, realtime, previews, AI, and the dialect-portability rules
 - [`llms.txt`](https://wess.io/inkling/llms.txt) — the same ground in one pass,

@@ -6,6 +6,7 @@ import {
   Bold,
   Check,
   ChevronLeft,
+  Copy,
   ExternalLink,
   FileText,
   Image as ImageIcon,
@@ -17,6 +18,7 @@ import {
   List,
   ListOrdered,
   ListTree,
+  Lock,
   LogOut,
   Maximize2,
   Menu as MenuIcon,
@@ -28,8 +30,10 @@ import {
   Redo2,
   RotateCcw,
   Search,
+  Send,
   Settings,
   Shapes,
+  Sparkles,
   Trash2,
   Undo2,
   Upload,
@@ -40,6 +44,9 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import type {
+  AgentProposal,
+  AiCredential,
+  AiProvider,
   AuditEvent,
   ContentType,
   Entry,
@@ -55,7 +62,7 @@ import type {
   Term,
   Webhook,
 } from "./api.ts"
-import { api, clearToken, getToken, setToken } from "./api.ts"
+import { api, clearToken, getToken, runAgent, setToken } from "./api.ts"
 
 // Single-file admin SPA, following the same convention as the rest of the
 // stack: hooks only, no component classes, no router dependency. Routing is a
@@ -169,9 +176,18 @@ type Route =
   | { name: "settings" }
   | { name: "keys" }
   | { name: "users" }
+  | { name: "ai" }
+
+// Where the admin is mounted, injected by src/web/serve.ts. Empty when Inkling
+// owns the origin; "/admin" or similar when a site does. Every route the SPA
+// reads or writes is relative to it.
+const BASE: string = (window as Window & { __INKLING_BASE__?: string }).__INKLING_BASE__ ?? ""
+
+const relative = (pathname: string): string =>
+  BASE && pathname.startsWith(BASE) ? pathname.slice(BASE.length) || "/" : pathname
 
 const parse = (path: string): Route => {
-  const [, head, a, b] = path.split("/")
+  const [, head, a, b] = relative(path).split("/")
   if (head === "c" && a)
     return b ? { name: "editor", type: a, id: b === "new" ? null : b } : { name: "collection", type: a }
   if (head === "media") return { name: "media" }
@@ -185,6 +201,7 @@ const parse = (path: string): Route => {
   if (head === "settings") return { name: "settings" }
   if (head === "keys") return { name: "keys" }
   if (head === "users") return { name: "users" }
+  if (head === "ai") return { name: "ai" }
   return { name: "dashboard" }
 }
 
@@ -219,7 +236,7 @@ const useRoute = (): [Route, (route: Route) => void] => {
       if (!confirm("Leave without saving your changes?")) return
       delete document.body.dataset.unsaved
     }
-    const next = href(route)
+    const next = `${BASE}${href(route)}`
     history.pushState({}, "", next)
     setPath(next)
     scrollTo(0, 0)
@@ -5359,6 +5376,745 @@ const ICONS: Record<string, typeof FileText> = {
   settings: Settings,
 }
 
+// Changing your own password, which is the one account action nobody else can
+// do for you: the Users screen deliberately hides "Reset password" on your own
+// row, and an owner has nobody above them to ask. `POST /auth/password` proves
+// the current password rather than trusting the session, so this collects it.
+const ChangePassword = ({ onClose, toast }: { onClose: () => void; toast: (text: string, bad?: boolean) => void }) => {
+  const [current, setCurrent] = useState("")
+  const [next, setNext] = useState("")
+  const [again, setAgain] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  // Mirrors the server's rule (src/auth/index.ts) so the failure is immediate
+  // rather than a round trip. The server still enforces it — this is courtesy.
+  const tooShort = next.length > 0 && next.length < 12
+  const mismatch = again.length > 0 && next !== again
+  const ready = current.length > 0 && next.length >= 12 && next === again && !busy
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      await api.changePassword(current, next)
+      toast("Password changed; your other sessions were signed out")
+      onClose()
+    } catch (error) {
+      toast(errorOf(error), true)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Change your password"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn primary" disabled={!ready} onClick={submit}>
+            {busy ? "Changing" : "Change password"}
+          </button>
+        </>
+      }
+    >
+      <Note kind="info">
+        This signs out everywhere else you are logged in. The session you are using now stays open.
+      </Note>
+      <label className="f" style={{ marginTop: 14 }}>
+        <span className="fl">Current password</span>
+        <input
+          type="password"
+          autoComplete="current-password"
+          value={current}
+          onChange={event => setCurrent(event.target.value)}
+        />
+      </label>
+      <label className="f">
+        <span className="fl">New password</span>
+        <input
+          type="password"
+          autoComplete="new-password"
+          value={next}
+          onChange={event => setNext(event.target.value)}
+        />
+        <span className="fh">At least 12 characters.</span>
+      </label>
+      <label className="f">
+        <span className="fl">Confirm new password</span>
+        <input
+          type="password"
+          autoComplete="new-password"
+          value={again}
+          onChange={event => setAgain(event.target.value)}
+          // Enter should submit a three-field form rather than needing the mouse.
+          onKeyDown={event => {
+            if (event.key === "Enter" && ready) void submit()
+          }}
+        />
+      </label>
+      {tooShort ? <Note kind="warn">New password must be at least 12 characters.</Note> : null}
+      {mismatch ? <Note kind="warn">The two new passwords do not match.</Note> : null}
+    </Modal>
+  )
+}
+
+// ------------------------------------------------------------------------ ai
+
+const brief = (value: unknown, length = 220): string => {
+  if (value === null || value === undefined || value === "") return "—"
+  const rendered = typeof value === "string" ? value : JSON.stringify(value)
+  return rendered.length > length ? `${rendered.slice(0, length)}…` : rendered
+}
+
+type Change = { key: string; before: unknown; after: unknown }
+
+// What the editor is being asked to approve, flattened out of whichever shape
+// the proposal took. A content-model change is described by its field keys
+// rather than its JSON, because "adds `subtitle`, drops `kicker`" is the part
+// that decides whether the change is safe.
+const changesIn = (proposal: AgentProposal): Change[] => {
+  if (proposal.kind === "entry.create") {
+    const data = (proposal.payload.data ?? {}) as Record<string, unknown>
+    return [
+      { key: "title", before: null, after: proposal.payload.title },
+      ...Object.entries(data).map(([key, after]) => ({ key, before: null, after })),
+    ]
+  }
+
+  if (proposal.kind === "type.update") {
+    const keysOf = (raw: unknown): string[] =>
+      Array.isArray(raw) ? raw.map(field => String((field as { key?: unknown }).key ?? "?")) : []
+    const before = keysOf(proposal.before.fields)
+    const after = keysOf(proposal.patch.fields)
+    return [
+      { key: "added", before: null, after: after.filter(key => !before.includes(key)).join(", ") || "nothing" },
+      { key: "removed", before: null, after: before.filter(key => !after.includes(key)).join(", ") || "nothing" },
+      { key: "order", before: before.join(" → "), after: after.join(" → ") },
+    ]
+  }
+
+  const data = (proposal.patch.data ?? {}) as Record<string, unknown>
+  const out: Change[] = []
+  if (proposal.patch.title !== undefined) {
+    out.push({ key: "title", before: proposal.before.title, after: proposal.patch.title })
+  }
+  if (proposal.patch.slug !== undefined) {
+    out.push({ key: "slug", before: proposal.before.slug, after: proposal.patch.slug })
+  }
+  for (const [key, after] of Object.entries(data)) out.push({ key, before: proposal.before[key] ?? null, after })
+  return out
+}
+
+const targetOf = (proposal: AgentProposal): string =>
+  proposal.kind === "entry.update"
+    ? proposal.entryTitle
+    : proposal.kind === "entry.create"
+      ? `New ${proposal.typeName}`
+      : `${proposal.typeName} model`
+
+const ProposalCard = ({
+  proposal,
+  decided,
+  canApply,
+  onApply,
+  onDismiss,
+}: {
+  proposal: AgentProposal
+  decided: "applied" | "dismissed" | undefined
+  canApply: boolean
+  onApply: () => void
+  onDismiss: () => void
+}) => (
+  <div className={cx("proposal", decided)}>
+    <div className="row">
+      <div style={{ minWidth: 0 }}>
+        <div className="proposalhead">{proposal.summary}</div>
+        <div className="dim2" style={{ fontSize: 12 }}>
+          {targetOf(proposal)}
+        </div>
+      </div>
+      <div className="row rowend">
+        {decided === "applied" ? (
+          <span className="pill published">applied</span>
+        ) : decided === "dismissed" ? (
+          <span className="pill archived">dismissed</span>
+        ) : (
+          <>
+            <button type="button" className="btn sm" onClick={onDismiss}>
+              Dismiss
+            </button>
+            <button type="button" className="btn primary sm" disabled={!canApply} onClick={onApply}>
+              <Check size={13} /> Apply
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+
+    <table className="difftable">
+      <tbody>
+        {changesIn(proposal).map(change => (
+          <tr key={change.key}>
+            <td className="mono dim2">{change.key}</td>
+            <td className="dim2 diffbefore">{brief(change.before)}</td>
+            <td>{brief(change.after)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)
+
+// Turns and tool calls both carry an id because both are append-only lists
+// whose entries are not distinguishable by content — the agent can call the
+// same tool twice in one turn, and two questions can be worded identically.
+const marker = (): string => Math.random().toString(36).slice(2, 10)
+
+type Turn = { id: string; role: "you" | "agent"; text: string; tools: { id: string; name: string }[] }
+
+const AgentPanel = ({
+  canApply,
+  toast,
+  go,
+}: {
+  canApply: boolean
+  toast: (message: string, bad?: boolean) => void
+  go: (route: Route) => void
+}) => {
+  const [status, setStatus] = useState<Awaited<ReturnType<typeof api.agentStatus>> | null>(null)
+  const [turns, setTurns] = useState<Turn[]>([])
+  const [history, setHistory] = useState<unknown[]>([])
+  const [proposals, setProposals] = useState<AgentProposal[]>([])
+  const [decided, setDecided] = useState<Record<string, "applied" | "dismissed">>({})
+  const [draft, setDraft] = useState("")
+  const [running, setRunning] = useState(false)
+  const tail = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    api
+      .agentStatus()
+      .then(setStatus)
+      .catch(() => setStatus(null))
+  }, [])
+
+  // Every delta replaces the turns array, so this follows the answer as it is
+  // written rather than only when a turn ends — otherwise a long one scrolls
+  // out of view mid-sentence. Nothing to follow before the first turn.
+  useEffect(() => {
+    if (turns.length > 0) tail.current?.scrollIntoView({ block: "end" })
+  }, [turns])
+
+  const send = async () => {
+    const message = draft.trim()
+    if (!message || running) return
+
+    setDraft("")
+    setTurns(current => [
+      ...current,
+      { id: marker(), role: "you", text: message, tools: [] },
+      { id: marker(), role: "agent", text: "", tools: [] },
+    ])
+    setRunning(true)
+
+    // The last turn is always the agent's, so every event folds into it.
+    const onto = (change: (turn: Turn) => Turn) =>
+      setTurns(current => current.map((turn, index) => (index === current.length - 1 ? change(turn) : turn)))
+
+    try {
+      await runAgent({ message, history }, event => {
+        switch (event.type) {
+          case "text":
+            onto(turn => ({ ...turn, text: turn.text + event.text }))
+            break
+          case "tool":
+            onto(turn => ({ ...turn, tools: [...turn.tools, { id: marker(), name: event.name }] }))
+            break
+          case "proposal":
+            setProposals(current => [...current, event.proposal])
+            break
+          case "done":
+            setHistory(event.history)
+            break
+          case "error":
+            toast(event.message, true)
+            break
+        }
+      })
+    } catch (error) {
+      toast(errorOf(error), true)
+    } finally {
+      setRunning(false)
+      tail.current?.scrollIntoView({ block: "end", behavior: "smooth" })
+    }
+  }
+
+  // Applying sends the change through the ordinary content routes — the same
+  // ones the editor screens use — so it is validated, revisioned, and audited
+  // as this user's edit rather than as something a machine did.
+  const apply = async (proposal: AgentProposal) => {
+    try {
+      if (proposal.kind === "entry.update") await api.updateEntry(proposal.entryId, proposal.patch as Partial<Entry>)
+      else if (proposal.kind === "entry.create")
+        await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+      else await api.updateType(proposal.typeName, proposal.patch as Partial<ContentType>)
+
+      setDecided(current => ({ ...current, [proposal.id]: "applied" }))
+      toast("Change applied")
+    } catch (error) {
+      toast(errorOf(error), true)
+    }
+  }
+
+  if (!status) return <Spinner />
+
+  if (!status.configured)
+    return (
+      <Note kind="info">
+        No AI provider is connected yet. Connect one under <strong>Providers</strong> and the agent turns on.
+      </Note>
+    )
+
+  if (!status.supported)
+    return (
+      <Note kind="warn">
+        The agent needs a provider that supports tool use, and {status.provider} is connected. The writing assistant in
+        the entry editor still works.
+      </Note>
+    )
+
+  if (!status.mayUse) return <Note kind="warn">Your role cannot use the assistant.</Note>
+
+  const open = proposals.filter(proposal => !decided[proposal.id])
+
+  return (
+    <div className="agent">
+      <div className="agentlog">
+        {turns.length === 0 ? (
+          <div className="agentintro">
+            <Sparkles size={22} />
+            <h3>Ask for a change</h3>
+            <p className="dim2">
+              The agent reads your content types, entries, and media, then proposes changes for you to review. Nothing
+              is saved until you apply it.
+            </p>
+            <div className="agentseeds">
+              {[
+                "Which pages are missing a meta description?",
+                "Rewrite the homepage hero to lead with what we actually do.",
+                "Add an FAQ section to the page content type.",
+              ].map(seed => (
+                <button type="button" key={seed} className="btn sm" onClick={() => setDraft(seed)}>
+                  {seed}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          turns.map((turn, index) => (
+            <div className={cx("turn", turn.role)} key={turn.id}>
+              <div className="turnwho">{turn.role === "you" ? "You" : "Agent"}</div>
+              {turn.tools.length > 0 ? (
+                <div className="turntools">
+                  {turn.tools.map(tool => (
+                    <span className="mono" key={tool.id}>
+                      {tool.name.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <div className="turntext">{turn.text || (running && index === turns.length - 1 ? "Working…" : "")}</div>
+            </div>
+          ))
+        )}
+        <div ref={tail} />
+      </div>
+
+      {proposals.length > 0 ? (
+        <div className="proposals">
+          <div className="row" style={{ marginBottom: 10 }}>
+            <h3 style={{ margin: 0 }}>Proposed changes</h3>
+            {open.length > 1 && canApply ? (
+              <button
+                type="button"
+                className="btn sm rowend"
+                onClick={async () => {
+                  for (const proposal of open) await apply(proposal)
+                }}
+              >
+                Apply all
+              </button>
+            ) : null}
+          </div>
+          {!canApply ? <Note kind="warn">Your role cannot save content changes.</Note> : null}
+          {proposals.map(proposal => (
+            <ProposalCard
+              key={proposal.id}
+              proposal={proposal}
+              decided={decided[proposal.id]}
+              canApply={canApply}
+              onApply={() => void apply(proposal)}
+              onDismiss={() => setDecided(current => ({ ...current, [proposal.id]: "dismissed" }))}
+            />
+          ))}
+          <p className="dim2" style={{ fontSize: 12 }}>
+            Applied changes go through the same save an editor makes, so each one leaves a revision you can restore from
+            the entry's history.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="agentbar">
+        <textarea
+          value={draft}
+          rows={2}
+          placeholder="Ask the agent to change a page, draft one, or reshape a content type…"
+          disabled={running}
+          onChange={event => setDraft(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void send()
+          }}
+        />
+        <button type="button" className="btn primary" disabled={running || !draft.trim()} onClick={() => void send()}>
+          <Send size={14} /> {running ? "Working…" : "Send"}
+        </button>
+      </div>
+      <p className="dim2" style={{ fontSize: 12 }}>
+        {status.model} · ⌘↵ to send. The agent can read everything in this admin;{" "}
+        <button type="button" className="linkish" onClick={() => go({ name: "activity" })}>
+          every run is recorded in Activity
+        </button>
+        .
+      </p>
+    </div>
+  )
+}
+
+const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => void }) => {
+  const [providers, setProviders] = useState<AiProvider[]>([])
+  const [redirectUri, setRedirectUri] = useState("")
+  const [items, setItems] = useState<AiCredential[]>([])
+  const [busy, setBusy] = useState(true)
+  const [choice, setChoice] = useState("anthropic")
+  const [key, setKey] = useState("")
+  const [model, setModel] = useState("")
+  const [baseUrl, setBaseUrl] = useState("")
+
+  const load = useCallback(async () => {
+    const [catalog, credentials] = await Promise.all([api.aiProviders(), api.aiCredentials()])
+    setProviders(catalog.data)
+    setRedirectUri(catalog.redirectUri)
+    setItems(credentials)
+    setBusy(false)
+  }, [])
+
+  useEffect(() => {
+    void load().catch(() => setBusy(false))
+  }, [load])
+
+  // The OAuth return leg drops the browser back here with an outcome in the
+  // query string, since a redirect is the only channel it has. Reading it once
+  // and clearing it keeps a refresh from repeating the message.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const outcome = params.get("connected")
+    if (!outcome) return
+    toast(outcome === "ok" ? "Provider connected" : (params.get("reason") ?? "Could not connect"), outcome !== "ok")
+    history.replaceState({}, "", location.pathname)
+  }, [toast])
+
+  const selected = providers.find(provider => provider.name === choice)
+
+  if (busy) return <Spinner />
+
+  return (
+    <>
+      <div className="card">
+        <div className="cardbody">
+          <h3 style={{ marginTop: 0 }}>Connected</h3>
+          {items.length === 0 ? (
+            <Empty title="Nothing connected" hint="The assistant and the agent stay off until a provider is here." />
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Signed in as</th>
+                  <th>Model</th>
+                  <th>Last used</th>
+                  <th style={{ width: 200 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item.id}>
+                    <td style={{ fontWeight: 550 }}>
+                      {item.label}
+                      {item.isDefault ? (
+                        <span className="pill on" style={{ marginLeft: 8 }}>
+                          default
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="dim2">
+                      {item.authKind === "oauth" ? (item.account ?? "authorized account") : `key ${item.hint}`}
+                    </td>
+                    <td className="mono dim2">{item.model}</td>
+                    <td className="dim2">{ago(item.lastUsedAt)}</td>
+                    <td>
+                      <div className="row">
+                        <button
+                          type="button"
+                          className="btn sm"
+                          onClick={async () => {
+                            try {
+                              const result = await api.testAiCredential(item.id)
+                              toast(
+                                result.ok ? `${result.model} answered` : (result.error ?? "The provider refused"),
+                                !result.ok,
+                              )
+                              await load()
+                            } catch (error) {
+                              toast(errorOf(error), true)
+                            }
+                          }}
+                        >
+                          Test
+                        </button>
+                        {item.isDefault ? null : (
+                          <button
+                            type="button"
+                            className="btn sm"
+                            onClick={async () => {
+                              try {
+                                await api.updateAiCredential(item.id, { isDefault: true })
+                                await load()
+                              } catch (error) {
+                                toast(errorOf(error), true)
+                              }
+                            }}
+                          >
+                            Use this
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn danger sm"
+                          onClick={async () => {
+                            if (!confirm(`Disconnect ${item.label}? The assistant stops until another is connected.`))
+                              return
+                            try {
+                              await api.deleteAiCredential(item.id)
+                              await load()
+                            } catch (error) {
+                              toast(errorOf(error), true)
+                            }
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="cardbody">
+          <h3 style={{ marginTop: 0 }}>Connect a provider</h3>
+
+          <label className="f">
+            <span className="fl">Provider</span>
+            <select
+              value={choice}
+              onChange={event => {
+                setChoice(event.target.value)
+                setKey("")
+                setModel("")
+                setBaseUrl("")
+              }}
+            >
+              {providers.map(provider => (
+                <option key={provider.name} value={provider.name}>
+                  {provider.label}
+                </option>
+              ))}
+            </select>
+            <span className="fh">{selected?.help}</span>
+          </label>
+
+          {selected?.oauth ? (
+            <div className="connectrow">
+              <button
+                type="button"
+                className="btn primary"
+                onClick={async () => {
+                  try {
+                    const started = await api.startAiOauth(selected.name)
+                    location.assign(started.url)
+                  } catch (error) {
+                    toast(errorOf(error), true)
+                  }
+                }}
+              >
+                <ExternalLink size={14} /> Continue with {selected.label}
+              </button>
+              <span className="dim2">
+                Authorize an account instead of storing a key. You can come back and revoke it at any time.
+              </span>
+            </div>
+          ) : null}
+
+          {selected?.oauth ? <div className="or">or</div> : null}
+
+          {selected?.needsKey ? (
+            <label className="f">
+              <span className="fl">API key</span>
+              <input
+                type="password"
+                value={key}
+                autoComplete="off"
+                placeholder="sk-…"
+                onChange={event => setKey(event.target.value)}
+              />
+              <span className="fh">
+                Stored encrypted and never shown again. Rotating SECRET invalidates it, the same way it invalidates
+                sessions.
+              </span>
+            </label>
+          ) : null}
+
+          {selected?.needsBaseUrl ? (
+            <label className="f">
+              <span className="fl">Base URL</span>
+              <input
+                value={baseUrl}
+                placeholder="http://127.0.0.1:11434"
+                onChange={event => setBaseUrl(event.target.value)}
+              />
+            </label>
+          ) : null}
+
+          <label className="f">
+            <span className="fl">Model</span>
+            <input
+              value={model}
+              placeholder={selected?.defaultModel}
+              list={`models-${choice}`}
+              onChange={event => setModel(event.target.value)}
+            />
+            <datalist id={`models-${choice}`}>
+              {(selected?.models ?? []).map(name => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <span className="fh">Leave blank for {selected?.defaultModel}. Newer models can be typed in.</span>
+          </label>
+
+          <button
+            type="button"
+            className="btn primary"
+            disabled={(selected?.needsKey ?? false) && key.trim().length < 8}
+            onClick={async () => {
+              try {
+                await api.connectAiKey({
+                  provider: choice,
+                  key: key.trim() || undefined,
+                  model: model.trim() || undefined,
+                  baseUrl: baseUrl.trim() || undefined,
+                })
+                setKey("")
+                toast("Provider connected")
+                await load()
+              } catch (error) {
+                toast(errorOf(error), true)
+              }
+            }}
+          >
+            Connect with a key
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="cardbody">
+          <h3 style={{ marginTop: 0 }}>Using OAuth</h3>
+          <p className="dim2">
+            An OAuth button appears above only for providers this install has a registered client for. Register one with
+            the provider using the redirect URI below, then set{" "}
+            <span className="mono">AI_OAUTH_&lt;PROVIDER&gt;_CLIENT_ID</span> (and a secret, if the provider issues one)
+            in your environment. There is no shared client a self-hosted CMS could ship — a redirect URI has to be
+            registered against your own domain.
+          </p>
+          <div className="connectrow">
+            <code className="mono">{redirectUri}</code>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={async () => {
+                await navigator.clipboard.writeText(redirectUri).catch(() => {})
+                toast("Redirect URI copied")
+              }}
+            >
+              <Copy size={13} /> Copy
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+const AiScreen = ({
+  role,
+  toast,
+  go,
+}: {
+  role: string
+  toast: (message: string, bad?: boolean) => void
+  go: (route: Route) => void
+}) => {
+  const mayManage = hasRole(role, "admin")
+  // An operator arriving from an OAuth redirect should land on the tab that
+  // shows them what happened, not on the agent.
+  const [tab, setTab] = useState<"agent" | "providers">(
+    mayManage && new URLSearchParams(location.search).has("connected") ? "providers" : "agent",
+  )
+
+  return (
+    <>
+      <div className="row" style={{ marginBottom: 18 }}>
+        <div>
+          <h1>AI</h1>
+          <p className="dim2">An assistant that knows this site's content, and the provider it runs on.</p>
+        </div>
+      </div>
+
+      {mayManage ? (
+        <div className="tabs">
+          <button type="button" className={cx("tab", tab === "agent" && "on")} onClick={() => setTab("agent")}>
+            Agent
+          </button>
+          <button type="button" className={cx("tab", tab === "providers" && "on")} onClick={() => setTab("providers")}>
+            Providers
+          </button>
+        </div>
+      ) : null}
+
+      {tab === "providers" && mayManage ? (
+        <AiProviders toast={toast} />
+      ) : (
+        <AgentPanel canApply={hasRole(role, "author")} toast={toast} go={go} />
+      )}
+    </>
+  )
+}
+
 const App = () => {
   const [me, setMe] = useState<Identity | null>(null)
   const [booted, setBooted] = useState(false)
@@ -5366,6 +6122,7 @@ const App = () => {
   const [plugins, setPlugins] = useState<Plugin[]>([])
   const [route, go] = useRoute()
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   const toast = useCallback((text: string, bad = false) => {
     setMessage({ text, bad })
@@ -5502,6 +6259,9 @@ const App = () => {
       case "users":
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin manages users.</Note>
         return <UsersScreen me={me} toast={toast} />
+      case "ai":
+        if (!hasRole(me.role, "author")) return <Note kind="warn">Your role cannot use the assistant.</Note>
+        return <AiScreen role={me.role} toast={toast} go={go} />
       default:
         return <Dashboard go={go} />
     }
@@ -5518,6 +6278,7 @@ const App = () => {
         <div className="navgroup">
           {nav({ name: "dashboard" }, "Dashboard", LayoutGrid)}
           {nav({ name: "media" }, "Media", ImageIcon)}
+          {hasRole(me.role, "author") ? nav({ name: "ai" }, "AI", Sparkles) : null}
           {hasRole(me.role, "author") ? nav({ name: "trash" }, "Trash", Trash2) : null}
         </div>
 
@@ -5571,7 +6332,17 @@ const App = () => {
             <button
               type="button"
               className="btn ghost sm rowend"
+              aria-label="Change password"
+              title="Change password"
+              onClick={() => setChangingPassword(true)}
+            >
+              <Lock size={14} />
+            </button>
+            <button
+              type="button"
+              className="btn ghost sm"
               aria-label="Sign out"
+              title="Sign out"
               onClick={async () => {
                 await api.logout().catch(() => {})
                 clearToken()
@@ -5591,6 +6362,8 @@ const App = () => {
         </header>
         <div className="body">{screen}</div>
       </main>
+
+      {changingPassword ? <ChangePassword onClose={() => setChangingPassword(false)} toast={toast} /> : null}
 
       {message ? <div className={cx("toast", message.bad && "bad")}>{message.text}</div> : null}
     </div>

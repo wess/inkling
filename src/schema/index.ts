@@ -207,6 +207,14 @@ export const aiCredentials = defineSchema("ai_credentials", {
   updated_at: column.text(),
   last_used_at: column.text().nullable(),
   revoked_at: column.text().nullable(),
+  // "key" or "oauth". An OAuth connection keeps its access token in the same
+  // ciphertext/iv pair a key uses, and adds what a key has no need for.
+  auth_kind: column.text().default("key"),
+  refresh_ciphertext: column.text().nullable(),
+  refresh_iv: column.text().nullable(),
+  expires_at: column.text().nullable(),
+  scope: column.text().nullable(),
+  account: column.text().nullable(),
 })
 
 export const schemas = [
