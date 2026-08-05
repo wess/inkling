@@ -6019,14 +6019,14 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
 
           {selected?.oauth ? <div className="or">or</div> : null}
 
-          {selected?.acceptsKey ? (
+          {selected?.needsKey ? (
             <label className="f">
-              <span className="fl">API key{selected.needsKey ? "" : " (optional)"}</span>
+              <span className="fl">API key</span>
               <input
                 type="password"
                 value={key}
                 autoComplete="off"
-                placeholder={selected.needsKey ? "sk-…" : "Blank for a local instance"}
+                placeholder="sk-…"
                 onChange={event => setKey(event.target.value)}
               />
               <span className="fh">

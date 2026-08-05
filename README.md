@@ -75,8 +75,8 @@ database of its own.
   or your site details. It proposes; you review a diff and apply, and applying is
   an ordinary save, so every change leaves a revision you can restore. It cannot
   touch colours, fonts, or layout — those live in your site's own code, and it
-  says so rather than pretending. Runs on Claude, OpenAI, or Ollama — local or
-  Ollama Cloud
+  says so rather than pretending. Runs on Claude, OpenAI, Ollama, or Ollama
+  Cloud
 - **Webhooks** on content events, HMAC-signed
 - **Activity history** for sign-ins, edits, publishing, and media changes
 - **Plugins** that add content types, routes, settings, admin panels, and their

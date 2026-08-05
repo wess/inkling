@@ -10,9 +10,10 @@ import { body, optionalText, requireText } from "../http/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
 import { siteSettings } from "../settings/index.ts"
 import type { ResolvedCredential } from "./complete.ts"
-import { OLLAMA_LOCAL } from "./complete.ts"
+import { readable } from "./complete.ts"
 import { resolveCredential } from "./index.ts"
 import type { ProviderName } from "./providers.ts"
+import { endpointFor } from "./providers.ts"
 import type { Proposal } from "./tools.ts"
 import { runTool, TOOLS } from "./tools.ts"
 
@@ -55,19 +56,19 @@ const MAX_PROMPT = 8_000
 //
 // Listed rather than hardcoded to `true`, so adding a fourth provider stays a
 // decision about whether it can call tools rather than a silent inheritance.
-const AGENT_PROVIDERS = new Set<ProviderName>(["anthropic", "openai", "ollama"])
+const AGENT_PROVIDERS = new Set<ProviderName>(["anthropic", "openai", "ollama", "ollamacloud"])
 
 const supports = (credential: ResolvedCredential): boolean => AGENT_PROVIDERS.has(credential.provider)
 
 // atlas/ai appends `/v1/chat/completions`, which is exactly what Ollama serves
-// for compatibility — so pointing the same client at a local instance or at
-// Ollama Cloud is only a base URL.
+// for compatibility — so pointing the same client at a local instance, at Ollama
+// Cloud, or at OpenAI is only a question of where. `endpointFor` answers it.
 const compatibleConfig = (credential: ResolvedCredential) => ({
   provider: "openai" as const,
   // Local Ollama ignores the header; sending a placeholder keeps one code path
   // rather than a branch that builds the client two ways.
   key: credential.secret || "local",
-  baseUrl: credential.baseUrl || (credential.provider === "ollama" ? OLLAMA_LOCAL : undefined),
+  baseUrl: endpointFor(credential.provider, credential.baseUrl),
 })
 
 const FALLBACK_BETA = "server-side-fallback-2026-06-01"
@@ -343,17 +344,23 @@ const runCompatible = async (run: Run): Promise<unknown[]> => {
     // The system prompt is prepended per request rather than kept in the
     // transcript: it is ours to set, and a transcript the browser hands back
     // must never be able to carry one.
-    for await (const chunk of provider.chatStream({
+    const chunks = provider.chatStream({
       model: run.credential.model,
       maxTokens: 16_000,
       tools,
       messages: [{ role: "system", content: run.system }, ...messages],
-    })) {
-      if (chunk.type === "text" && chunk.content) {
-        text += chunk.content
-        run.emit("text", { text: chunk.content })
+    })
+
+    try {
+      for await (const chunk of chunks) {
+        if (chunk.type === "text" && chunk.content) {
+          text += chunk.content
+          run.emit("text", { text: chunk.content })
+        }
+        if (chunk.type === "tool_call" && chunk.toolCall) calls.push(chunk.toolCall)
       }
-      if (chunk.type === "tool_call" && chunk.toolCall) calls.push(chunk.toolCall)
+    } catch (error) {
+      throw readable(error, run.credential)
     }
 
     messages.push({ role: "assistant", content: text, toolCalls: calls.length > 0 ? calls : undefined })

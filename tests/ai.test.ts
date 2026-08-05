@@ -71,6 +71,32 @@ const setup = async () => {
   return { db, call, admin: adminSession.token, author: authorSession.token }
 }
 
+test("a base URL pasted from a provider's own docs does not double its /v1", async () => {
+  // Reported from the field: entering https://ollama.com/v1 produced a request
+  // for /v1/v1/chat/completions, because the client appends the /v1 itself. The
+  // trailing one is dropped on the way in so the documented value works.
+  const { call, admin } = await setup()
+
+  const created = await call("/ai/credentials", admin, {
+    method: "POST",
+    body: JSON.stringify({ provider: "openai", key: "sk-notarealkey-wxyz", baseUrl: "https://gateway.example.com/v1" }),
+  })
+  expect(created.status).toBe(201)
+  expect(((await created.json()) as { baseUrl: string }).baseUrl).toBe("https://gateway.example.com")
+
+  // A gateway mounted under some other path is left exactly as typed — only the
+  // specific double-prefix case is corrected.
+  const nested = await call("/ai/credentials", admin, {
+    method: "POST",
+    body: JSON.stringify({
+      provider: "openai",
+      key: "sk-notarealkey-wxyz",
+      baseUrl: "https://gateway.example.com/openai",
+    }),
+  })
+  expect(((await nested.json()) as { baseUrl: string }).baseUrl).toBe("https://gateway.example.com/openai")
+})
+
 test("connecting a provider stores the key sealed and never returns it", async () => {
   const { db, call, admin } = await setup()
 

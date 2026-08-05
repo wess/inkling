@@ -3,7 +3,7 @@ import { connect, from } from "atlas/db"
 import { router } from "atlas/server"
 import type { Markable } from "../src/ai/agent.ts"
 import { agentRoutes, clearBreakpoints, roll } from "../src/ai/agent.ts"
-import { PROVIDERS } from "../src/ai/providers.ts"
+import { endpointFor, PROVIDERS } from "../src/ai/providers.ts"
 import type { Proposal } from "../src/ai/tools.ts"
 import { runTool, TOOLS } from "../src/ai/tools.ts"
 import { issueSession } from "../src/auth/index.ts"
@@ -442,18 +442,35 @@ test("markers from a previous turn are cleared before the next one rolls its own
   expect(marked(messages)).toBe(1)
 })
 
-test("a key is required where there is nowhere else to authenticate, and optional for Ollama", () => {
-  // Ollama is the reason `needsKey` and `acceptsKey` are separate questions: a
-  // local instance authenticates by not being exposed, and Ollama Cloud needs a
-  // key like anything else. Collapsing them back into one flag would make one of
-  // those two impossible to connect.
-  for (const spec of [PROVIDERS.anthropic, PROVIDERS.openai]) {
-    expect(spec.needsKey).toBe(true)
-    expect(spec.acceptsKey).toBe(true)
-  }
+test("Ollama Cloud has a fixed endpoint, so there is no URL to get wrong", () => {
+  // The reported failure: atlas/ai appends `/v1/chat/completions` to whatever
+  // base URL it is given, and every provider's own docs call `https://host/v1`
+  // "the base URL" — so pasting the documented value asked for
+  // `/v1/v1/chat/completions` and 404'd with a message about OPENAI_API_KEY.
+  expect(PROVIDERS.ollamacloud.endpoint).toBe("https://ollama.com")
+  expect(PROVIDERS.ollamacloud.needsBaseUrl).toBe(false)
+  expect(PROVIDERS.ollamacloud.needsKey).toBe(true)
 
+  // Resolution order: what the operator typed, else the fixed endpoint, else
+  // the local default for a local Ollama, else the client's own (OpenAI's).
+  expect(endpointFor("ollamacloud", null)).toBe("https://ollama.com")
+  expect(endpointFor("ollama", null)).toBe("http://127.0.0.1:11434")
+  expect(endpointFor("openai", null)).toBeUndefined()
+  expect(endpointFor("ollama", "http://192.168.4.64:11434")).toBe("http://192.168.4.64:11434")
+})
+
+test("local Ollama asks for neither a key nor a URL", () => {
+  // Splitting the cloud out means this entry is only ever the local case, so
+  // both fields disappear rather than being optional-and-ambiguous.
   expect(PROVIDERS.ollama.needsKey).toBe(false)
-  expect(PROVIDERS.ollama.acceptsKey).toBe(true)
-  // Cloud or local, the endpoint has to be named.
-  expect(PROVIDERS.ollama.needsBaseUrl).toBe(true)
+  expect(PROVIDERS.ollama.needsBaseUrl).toBe(false)
+})
+
+test("a key is required wherever there is nowhere else to authenticate", () => {
+  // Everything hosted needs one; only a local instance, which authenticates by
+  // not being exposed, does not.
+  for (const spec of [PROVIDERS.anthropic, PROVIDERS.openai, PROVIDERS.ollamacloud]) {
+    expect(spec.needsKey).toBe(true)
+  }
+  expect(PROVIDERS.ollama.needsKey).toBe(false)
 })

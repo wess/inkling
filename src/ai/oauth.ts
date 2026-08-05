@@ -35,8 +35,22 @@ export type OAuthTokens = {
 // here by top-level navigation from the provider, carrying no bearer token.
 export const redirectUri = (): string => `${config.publicUrl.replace(/\/$/, "")}/ai/oauth/callback`
 
+// A provider only appears in `config.aiOauth` if it has an environment block,
+// and one is only worth adding for a provider an operator could plausibly
+// register a client with. Looking it up defensively means adding a provider —
+// Ollama Cloud, say — does not require five dead variables in `.env.example`
+// just to satisfy an index.
+const NO_OAUTH = {
+  clientId: "",
+  clientSecret: "",
+  authorizeUrl: "",
+  tokenUrl: "",
+  scopes: [] as readonly string[],
+}
+
 export const clientFor = (provider: ProviderName): OAuthClient | null => {
-  const configured = config.aiOauth[provider]
+  const blocks: Partial<Record<ProviderName, typeof NO_OAUTH>> = config.aiOauth
+  const configured = blocks[provider] ?? NO_OAUTH
   const defaults = PROVIDERS[provider].oauth
 
   const authorizeUrl = configured.authorizeUrl || defaults?.authorizeUrl || ""

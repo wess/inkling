@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { createProvider } from "atlas/ai"
 import type { ProviderName } from "./providers.ts"
+import { endpointFor, PROVIDERS } from "./providers.ts"
 
 // The one place a model is actually called. Everything above this file deals in
 // prompts and credentials; everything below is provider SDK detail.
@@ -51,8 +52,18 @@ const FALLBACKS = [{ model: "claude-opus-4-8" }]
 // than at each of the call sites below.
 const OAUTH_BETA = "oauth-2025-04-20"
 
-// Where an Ollama connection points when the operator left the base URL empty.
-export const OLLAMA_LOCAL = "http://127.0.0.1:11434"
+// atlas/ai's OpenAI client ends every failure with "Verify OPENAI_API_KEY is set
+// and valid", which is wrong and misdirecting for an Ollama connection pointed
+// at an entirely different host — the operator goes hunting for a key problem
+// that isn't there. Rewritten at this boundary, naming the provider actually
+// configured and the endpoint actually called.
+export const readable = (error: unknown, credential: ResolvedCredential): Error => {
+  const spec = PROVIDERS[credential.provider]
+  const raw = String((error as Error)?.message ?? error)
+  const message = raw.replace(/\.\s*Verify OPENAI_API_KEY is set and valid\.?/i, "")
+  const where = endpointFor(credential.provider, credential.baseUrl)
+  return new Error(`${spec.label} rejected the request${where ? ` at ${where}` : ""}: ${message}`)
+}
 
 const claudeClient = (credential: ResolvedCredential) =>
   credential.authKind === "oauth"
@@ -98,17 +109,21 @@ export const complete = async (credential: ResolvedCredential, request: Completi
   const provider = createProvider({
     provider: "openai",
     key: credential.secret || "local",
-    baseUrl: credential.baseUrl || (credential.provider === "ollama" ? OLLAMA_LOCAL : undefined),
+    baseUrl: endpointFor(credential.provider, credential.baseUrl),
   })
 
-  const response = await provider.chat({
-    model: credential.model,
-    maxTokens,
-    messages: [
-      { role: "system", content: request.system },
-      { role: "user", content: request.prompt },
-    ],
-  })
+  const response = await provider
+    .chat({
+      model: credential.model,
+      maxTokens,
+      messages: [
+        { role: "system", content: request.system },
+        { role: "user", content: request.prompt },
+      ],
+    })
+    .catch(error => {
+      throw readable(error, credential)
+    })
 
   return { text: response.content, provider: credential.provider, model: credential.model, refused: false }
 }
