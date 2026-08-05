@@ -12,6 +12,7 @@
     "dev": "bun --hot src/server.ts",
     "start": "bun src/start.ts",
     "seed": "bun scripts/seed.ts",
+    "sites": "bun scripts/sites.ts",
     "test": "bun test tests/",
     "typecheck": "bunx tsc --noEmit",
     "lint": "biome lint src/ plugins/ scripts/ tests/",
