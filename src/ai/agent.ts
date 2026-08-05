@@ -201,11 +201,70 @@ const outOfSteps = (run: Run, step: number) => {
   }
 }
 
+// Prompt caching, and the two things that make it fiddly here.
+//
+// A breakpoint searches back at most twenty content blocks for a prior entry.
+// One agent step can add more than that on its own — a parallel round of tool
+// calls is an assistant message of tool_use blocks plus a user message of
+// tool_result blocks — so a marker fixed to the system prompt stops being found
+// partway through a long run. A second breakpoint therefore rides the newest
+// turn, and the one before it stays marked so there is always an anchor inside
+// the window while the newest is still being written.
+//
+// The API allows four markers per request. Two rolling plus the system block is
+// three, and the oldest rolling one is cleared as a third arrives.
+export type Markable = { cache_control?: { type: "ephemeral" } | null }
+
+const MAX_ROLLING = 2
+
+const blocksOf = (message: { content: unknown }): Markable[] =>
+  Array.isArray(message.content) ? (message.content.filter(b => b && typeof b === "object") as Markable[]) : []
+
+// A transcript arrives from the browser carrying the markers the previous turn
+// left on it. Without this they accumulate across turns and the request is
+// eventually rejected for exceeding the ceiling — a failure that only shows up
+// on a conversation someone kept going.
+export const clearBreakpoints = (messages: readonly { content: unknown }[]): void => {
+  for (const message of messages) {
+    for (const block of blocksOf(message)) delete block.cache_control
+  }
+}
+
+// Marks the newest turn and retires the oldest mark once more than MAX_ROLLING
+// are live. Messages whose content is a plain string carry no blocks to mark,
+// which is fine — the system breakpoint already covers everything before them.
+export const roll = (messages: readonly { content: unknown }[], rolling: Markable[]): void => {
+  const tail = blocksOf(messages[messages.length - 1] ?? { content: null }).at(-1)
+  if (!tail || rolling.includes(tail)) return
+
+  tail.cache_control = { type: "ephemeral" }
+  rolling.push(tail)
+
+  while (rolling.length > MAX_ROLLING) {
+    const stale = rolling.shift()
+    if (stale) delete stale.cache_control
+  }
+}
+
 const runClaude = async (run: Run): Promise<unknown[]> => {
   const client = clientFor(run.credential)
   const messages = run.conversation as Anthropic.Beta.BetaMessageParam[]
 
+  // The prefix — the tool definitions, then the system prompt — is identical on
+  // every call, and one question makes up to MAX_STEPS of them. Cached, that
+  // repetition costs a tenth of what it did; the steps land seconds apart, so
+  // the entry is always warm by the second one.
+  const system: Anthropic.Beta.BetaTextBlockParam[] = [
+    { type: "text", text: run.system, cache_control: { type: "ephemeral" } },
+  ]
+
+  // Whatever the last turn left behind, so this one's markers are the only ones.
+  clearBreakpoints(messages)
+  const rolling: Markable[] = []
+
   for (let step = 0; step < MAX_STEPS; step += 1) {
+    roll(messages, rolling)
+
     const turn = client.beta.messages.stream({
       model: run.credential.model,
       max_tokens: 32_000,
@@ -213,7 +272,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
       fallbacks: FALLBACKS,
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
-      system: run.system,
+      system,
       tools: TOOLS as unknown as Anthropic.Beta.BetaToolUnion[],
       messages,
     })
@@ -263,6 +322,9 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
 // parameter, tool results are their own messages rather than blocks inside a
 // user turn, and tool calls arrive as accumulated stream chunks rather than on
 // the final message.
+// No cache markers on this path, deliberately. OpenAI caches long prefixes
+// server-side without being asked, and Ollama has no such notion at all —
+// there is nothing to place and nothing the wire format would carry.
 const runCompatible = async (run: Run): Promise<unknown[]> => {
   const provider = createProvider(compatibleConfig(run.credential))
 

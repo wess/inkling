@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import { connect, from } from "atlas/db"
 import { router } from "atlas/server"
 import { aiRoutes, resolveCredential } from "../src/ai/index.ts"
+import { PROVIDERS } from "../src/ai/providers.ts"
 import { open, seal } from "../src/ai/secrets.ts"
 import { issueSession } from "../src/auth/index.ts"
 import { up } from "../src/migrate/index.ts"
@@ -81,7 +82,10 @@ test("connecting a provider stores the key sealed and never returns it", async (
 
   const body = (await created.json()) as Record<string, unknown>
   expect(body.provider).toBe("anthropic")
-  expect(body.model).toBe("claude-opus-5")
+  // Asserted against the catalog rather than a literal: the point is that
+  // omitting the model falls back to the provider's default, not which model
+  // that happens to be this month.
+  expect(body.model).toBe(PROVIDERS.anthropic.defaultModel)
   expect(body.hint).toBe("••••wxyz")
   expect(body.isDefault).toBe(true)
   // The response shape is built field by field precisely so these cannot appear.

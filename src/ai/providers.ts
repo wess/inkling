@@ -39,12 +39,17 @@ export const PROVIDERS: Record<ProviderName, ProviderSpec> = {
   anthropic: {
     name: "anthropic",
     label: "Claude",
-    defaultModel: "claude-opus-5",
+    // Sonnet rather than Opus, because Inky's work is bounded — read a few
+    // entries, work out which page was meant, propose one change. Sonnet 5
+    // reaches near-Opus quality on exactly that shape of tool-calling work at a
+    // lower price per token. Opus earns its premium on the long-horizon jobs;
+    // an operator who wants it types it in, and the field takes any model.
+    defaultModel: "claude-sonnet-5",
     needsKey: true,
     acceptsKey: true,
     needsBaseUrl: false,
-    models: ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
-    help: "Recommended. Create a key at console.anthropic.com.",
+    models: ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5"],
+    help: "Recommended. Create a key at console.anthropic.com. Sonnet 5 is the default and is the right tier for most of Inky's work; Opus 5 is worth the price on the hardest restructuring.",
     oauth: {
       authorizeUrl: "https://claude.ai/oauth/authorize",
       tokenUrl: "https://console.anthropic.com/v1/oauth/token",

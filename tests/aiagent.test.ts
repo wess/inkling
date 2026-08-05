@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test"
 import { connect, from } from "atlas/db"
 import { router } from "atlas/server"
-import { agentRoutes } from "../src/ai/agent.ts"
+import type { Markable } from "../src/ai/agent.ts"
+import { agentRoutes, clearBreakpoints, roll } from "../src/ai/agent.ts"
 import { PROVIDERS } from "../src/ai/providers.ts"
 import type { Proposal } from "../src/ai/tools.ts"
 import { runTool, TOOLS } from "../src/ai/tools.ts"
@@ -363,6 +364,82 @@ test("a transcript from somewhere other than this route is refused", async () =>
   expect(await withToolResult.text()).toContain("AI_NOT_CONFIGURED")
 
   await db.close()
+})
+
+// Prompt caching is invisible when it silently stops working — the answers stay
+// correct and the bill goes up — so the bookkeeping is asserted directly rather
+// than left to be noticed on an invoice.
+
+const marked = (messages: { content: unknown }[]): number =>
+  messages
+    .flatMap(m => (Array.isArray(m.content) ? m.content : []))
+    .filter(b => b && typeof b === "object" && (b as Markable).cache_control).length
+
+const turn = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+
+test("the rolling breakpoint follows the newest turn and retires the oldest", () => {
+  const messages: { content: unknown }[] = []
+  const rolling: Markable[] = []
+
+  messages.push(turn("one"))
+  roll(messages, rolling)
+  expect(marked(messages)).toBe(1)
+
+  messages.push(turn("two"))
+  roll(messages, rolling)
+  expect(marked(messages)).toBe(2)
+
+  // A third marks the newest and drops the first, so the count never climbs.
+  // Two rolling plus the system block is three of the four the API allows.
+  messages.push(turn("three"))
+  roll(messages, rolling)
+  expect(marked(messages)).toBe(2)
+
+  const live = messages.filter(m => marked([m]) === 1)
+  expect(live).toEqual([messages[1], messages[2]])
+})
+
+test("rolling twice on the same turn does not spend a second breakpoint", () => {
+  // The loop calls roll() once per step, but a step that ends without adding a
+  // message would otherwise re-mark the same block and evict a live anchor.
+  const messages: { content: unknown }[] = [turn("only")]
+  const rolling: Markable[] = []
+
+  roll(messages, rolling)
+  roll(messages, rolling)
+  roll(messages, rolling)
+
+  expect(marked(messages)).toBe(1)
+  expect(rolling).toHaveLength(1)
+})
+
+test("a turn with no markable blocks is skipped rather than breaking the roll", () => {
+  // The opening user message is a plain string; there is no block to mark, and
+  // the system breakpoint already covers everything ahead of it.
+  const messages: { content: unknown }[] = [{ content: "plain string" }]
+  const rolling: Markable[] = []
+
+  roll(messages, rolling)
+  expect(rolling).toHaveLength(0)
+  expect(marked(messages)).toBe(0)
+})
+
+test("markers from a previous turn are cleared before the next one rolls its own", () => {
+  // The transcript round-trips through the browser carrying whatever the last
+  // turn left on it. Left alone they accumulate across turns until the request
+  // is rejected — a failure that only appears on a long-running conversation.
+  const messages: { content: unknown }[] = [turn("a"), turn("b"), turn("c")]
+  for (const message of messages) {
+    for (const block of message.content as Markable[]) block.cache_control = { type: "ephemeral" }
+  }
+  expect(marked(messages)).toBe(3)
+
+  clearBreakpoints(messages)
+  expect(marked(messages)).toBe(0)
+
+  const rolling: Markable[] = []
+  roll(messages, rolling)
+  expect(marked(messages)).toBe(1)
 })
 
 test("a key is required where there is nowhere else to authenticate, and optional for Ollama", () => {

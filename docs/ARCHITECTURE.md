@@ -439,6 +439,31 @@ Ollama is also why `needsKey` and `acceptsKey` are two questions rather than one
 A local instance authenticates by not being exposed; Ollama Cloud needs a key
 like anything else. One flag could express only one of them.
 
+**The prefix is cached, and the bookkeeping is the interesting part.** Inky's
+tool definitions and system prompt are identical on every call, and one question
+makes up to twelve of them — so uncached, the same few thousand tokens are bought
+back a dozen times per question. Render order is tools → system → messages, so a
+single breakpoint on the system block covers the whole stable prefix.
+
+One breakpoint is not enough. A breakpoint searches back at most twenty content
+blocks for a prior entry, and a single step can add more than that on its own —
+a parallel round of tool calls is an assistant message of `tool_use` blocks plus
+a user message of `tool_result` blocks. A marker fixed to the system prompt
+therefore stops being found partway through a long run. Two more ride the newest
+turns, oldest retired as a third arrives, which keeps an anchor inside the window
+while the newest is still being written and stays under the four the API allows.
+
+The transcript round-trips through the browser, so it comes back carrying the
+last turn's markers; they are cleared before the next run rolls its own. Left in
+place they accumulate across turns until a request is rejected — a failure that
+would only appear on a conversation someone kept going.
+`tests/aicache.test.ts` drives the real route against a mock that speaks the SSE
+dialect, because the bookkeeping being right says nothing about whether the
+markers reach the wire.
+
+Nothing equivalent happens on the OpenAI path: OpenAI caches long prefixes
+server-side without being asked, and Ollama has no such notion.
+
 Content the agent reads is fenced and declared to be material, the same way the
 assistant fences it.
 
