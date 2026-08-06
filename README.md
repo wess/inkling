@@ -24,10 +24,16 @@ bun run dev
 
 Open **http://localhost:4300**. That is the whole thing — one process, one port.
 
-On the first visit, the admin asks you to create the owner account. After that,
-the same screen becomes the normal sign-in form; there is no public signup.
-`BOOTSTRAP_EMAIL` and `BOOTSTRAP_PASSWORD` remain available for unattended
-deployments.
+On the first visit, the admin asks you to create the owner account — the first
+person through the door becomes the owner. After that the same screen becomes
+the normal sign-in form, the setup route closes permanently, and there is no
+public signup. `BOOTSTRAP_EMAIL` and `BOOTSTRAP_PASSWORD` remain available for
+unattended deployments.
+
+If that owner ever loses their password, `bun run password` sets a new one from
+the machine that runs the database. Nothing in the browser can help there:
+`POST /auth/password` needs the current password, changing someone else's needs
+an admin, and setup is closed.
 
 ## One origin, split by path
 
@@ -316,6 +322,7 @@ module-level, so mounting twice gives you two route sets over the same data.
 | `bun run test` | Test suite |
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun run tidy` | Biome format + lint with fixes |
+| `bun run password` | Set a user's password from the host — the way back in when the only owner is locked out |
 
 Postgres tests run automatically when a Postgres is reachable at
 `TEST_POSTGRES_URL` (default `postgres://postgres:postgres@localhost:5432/inkling_test`)

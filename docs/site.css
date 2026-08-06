@@ -92,8 +92,8 @@ a { color: inherit; }
 
 .wrap { width: min(100% - (var(--gutter) * 2), var(--frame)); margin-inline: auto; }
 
-/* ———————————————————— the cut ————————————————————
-   Bass never blended an edge. Sections take a whole colour and hand over
+/* ———————————————————— flooded sections ————————————————————
+   No blended edges anywhere. A section takes a whole colour and hands over
    abruptly; the seam is the design. */
 
 .flood { background: var(--ink); color: var(--paper); }
@@ -487,7 +487,7 @@ code {
 
 /* The Googie roofline: an upswept edge where a section would otherwise butt
    flat against the one above it. Used once, on the section that follows the
-   title card, so it reads as a deliberate cantilever and not a house style. */
+   hero, so it reads as a deliberate cantilever and not a house style. */
 .upswept {
   clip-path: polygon(0 0, 100% clamp(1.4rem, 4vw, 4rem), 100% 100%, 0 100%);
   padding-top: clamp(4.5rem, 12vh, 8rem);

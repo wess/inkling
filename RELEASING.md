@@ -30,8 +30,10 @@ Exits non-zero if anything is down or behind, so it can gate a deploy.
    bunx tsc --noEmit && bun test && bunx biome check .
    ```
 
-2. **Version.** Bump `package.json`. While Inkling is `0.x`, a minor covers new
-   surface *and* breaking changes; reserve a patch for fixes alone.
+2. **Version.** Bump `package.json` and add a `CHANGELOG.md` entry. From 1.0
+   this is semver, and the public surface is the delivery API, `createInkling()`,
+   the plugin interface, and the shape of a content type — breaking any of them
+   takes a major. New surface is a minor; fixes alone are a patch.
 
 3. **Commit and tag.** The tag is what sites pin, so it must exist before they
    can move.

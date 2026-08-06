@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Inkling — the cutting room for your content</title>
-<meta name="description" content="Write it, shape it, cut it to air. Inkling holds every word, image, and structure your sites are made of — and there's an assistant inside it that does the work when you ask.">
+<title>Inkling — the content behind your sites</title>
+<meta name="description" content="Inkling holds every word, image, and structure your sites are made of — and there's an assistant inside it that does the work when you ask.">
 <meta name="color-scheme" content="light">
-<meta property="og:title" content="Inkling — the cutting room for your content">
-<meta property="og:description" content="Write it, shape it, cut it to air.">
+<meta property="og:title" content="Inkling — the content behind your sites">
+<meta property="og:description" content="Every word, image, and shape your sites are made of.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="site.css">
 <style>
-/* Hero only. The shared system is in site.css; what follows is the title card,
-   which no other page runs. */
+/* Hero only. The shared system is in site.css; what follows is the opening
+   panel, which no other page runs. */
 
 .sequence {
   position: relative;
@@ -134,7 +134,7 @@
   animation: bloom 0.7s ease 0.5s backwards;
 }
 
-/* Narrow screens have no room for scenery. The title card keeps the atom —
+/* Narrow screens have no room for scenery. The hero keeps the atom —
    it is the signature and the page is poorer without it — but it retreats into
    the corner above the wordmark, and the two accents go entirely. A boomerang
    sitting on a button and an electron parked on the "G" both read as faults
@@ -229,7 +229,7 @@
   border: 1px solid var(--ink);
   border-radius: var(--pill);
   background: var(--ink);
-  /* Scrolls rather than squeezing. Paired with `flex: 1 0 auto` on the frames
+  /* Scrolls rather than squeezing. Paired with `flex: 1 0 auto` on the stages
      this fills the width when there is room and slides when there is not —
      the alternative was shrinking "SCHEDULED" until it read "SCHEDULE". */
   overflow-x: auto;
@@ -240,7 +240,7 @@
 .strip::-webkit-scrollbar { display: none; }
 .strip::-webkit-scrollbar { display: none; }
 
-.frame {
+.stage {
   flex: 1 0 auto;
   padding: 1rem clamp(0.9rem, 3vw, 1.4rem) 0.95rem;
   background: var(--paper);
@@ -248,10 +248,10 @@
   gap: 0.35rem;
   transition: background 0.35s, color 0.35s;
 }
-.frame:first-child { padding-left: clamp(1.2rem, 4vw, 1.9rem); }
-.frame:last-child { padding-right: clamp(1.2rem, 4vw, 1.9rem); }
-.frame-no { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--dim); transition: color 0.35s; }
-.frame-state {
+.stage:first-child { padding-left: clamp(1.2rem, 4vw, 1.9rem); }
+.stage:last-child { padding-right: clamp(1.2rem, 4vw, 1.9rem); }
+.stage-no { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--dim); transition: color 0.35s; }
+.stage-name {
   font-family: var(--display);
   font-weight: 600;
   font-size: clamp(0.76rem, 2.4vw, 0.85rem);
@@ -260,10 +260,10 @@
   white-space: nowrap;
 }
 
-.frame[data-on="true"] { background: var(--sun); }
-.frame[data-on="true"] .frame-no { color: rgba(38, 33, 28, 0.62); }
-.frame[data-live="true"] { background: var(--flame); color: var(--paper); }
-.frame[data-live="true"] .frame-no { color: rgba(255, 255, 255, 0.75); }
+.stage[data-on="true"] { background: var(--sun); }
+.stage[data-on="true"] .stage-no { color: rgba(38, 33, 28, 0.62); }
+.stage[data-live="true"] { background: var(--flame); color: var(--paper); }
+.stage[data-live="true"] .stage-no { color: rgba(255, 255, 255, 0.75); }
 
 .beat {
   display: flex;
@@ -279,7 +279,7 @@
 }
 .beat b { color: var(--flame); }
 
-/* Credits — role left, what it does right, like a title card. */
+/* A definition list: what it does on the left, what that means on the right. */
 .credits { display: grid; }
 .credit { display: grid; gap: 0.3rem 2.5rem; grid-template-columns: 1fr; padding-block: 1.3rem; border-bottom: 1px solid rgba(255, 255, 255, 0.18); }
 @media (min-width: 760px) { .credit { grid-template-columns: 15rem 1fr; } }
@@ -325,7 +325,7 @@
   <div class="cut twinkle spark" aria-hidden="true"></div>
 
   <div class="wrap">
-    <p class="slate">Reel 01 &nbsp;·&nbsp; The cutting room</p>
+    <p class="slate">A piece of writing, from first draft to live</p>
 
     <!-- The word is in the markup so it renders without script; the animation
          only re-wraps what is already there. -->
@@ -337,13 +337,13 @@
     </p>
 
     <div class="strip" role="img" aria-label="A piece of writing moving from draft through review and scheduling to live">
-      <div class="frame" data-frame><span class="frame-no">FR 01</span><span class="frame-state">Draft</span></div>
-      <div class="frame" data-frame><span class="frame-no">FR 02</span><span class="frame-state">Review</span></div>
-      <div class="frame" data-frame><span class="frame-no">FR 03</span><span class="frame-state">Scheduled</span></div>
-      <div class="frame" data-frame data-final><span class="frame-no">FR 04</span><span class="frame-state">Live</span></div>
+      <div class="stage" data-stage><span class="stage-no">01</span><span class="stage-name">Draft</span></div>
+      <div class="stage" data-stage><span class="stage-no">02</span><span class="stage-name">Review</span></div>
+      <div class="stage" data-stage><span class="stage-no">03</span><span class="stage-name">Scheduled</span></div>
+      <div class="stage" data-stage data-final><span class="stage-no">04</span><span class="stage-name">Live</span></div>
     </div>
 
-    <p class="beat"><span>On air in</span> <b id="beat">—</b></p>
+    <p class="beat"><span>Publishes in</span> <b id="beat">—</b></p>
 
     <div class="actions">
       <a class="cta" href="start/">Start writing →</a>
@@ -465,7 +465,7 @@
   <section class="flood">
     <div class="wrap">
       <div class="head enter">
-        <p class="eyebrow" style="color:var(--sun)">Reel 02</p>
+        <p class="eyebrow" style="color:var(--sun)">While you work</p>
         <h2>The change arrives on its own.</h2>
         <p class="dim">
           When something goes live, your sites are told. No timer polling for
@@ -577,15 +577,15 @@
     .join("")
 })();
 
-// The cut. Frames advance on a beat; the last one lights and holds, then it
-// starts over — the loop a piece of content actually lives in.
+// Stages advance on a beat; the last one lights and holds, then it starts
+// over — the loop a piece of content actually lives in.
 (function () {
-  var frames = Array.prototype.slice.call(document.querySelectorAll("[data-frame]"))
+  var stages = Array.prototype.slice.call(document.querySelectorAll("[data-stage]"))
   var beat = document.getElementById("beat")
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    frames.forEach(function (f) { f.setAttribute("data-on", "true") })
-    frames[frames.length - 1].setAttribute("data-live", "true")
+    stages.forEach(function (stage) { stage.setAttribute("data-on", "true") })
+    stages[stages.length - 1].setAttribute("data-live", "true")
     beat.textContent = "now"
     return
   }
@@ -594,13 +594,13 @@
   var labels = ["4s", "3s", "2s", "now"]
 
   var tick = function () {
-    frames.forEach(function (frame, i) {
-      frame.setAttribute("data-on", String(i <= index))
-      frame.removeAttribute("data-live")
+    stages.forEach(function (stage, i) {
+      stage.setAttribute("data-on", String(i <= index))
+      stage.removeAttribute("data-live")
     })
-    if (frames[index].hasAttribute("data-final")) frames[index].setAttribute("data-live", "true")
+    if (stages[index].hasAttribute("data-final")) stages[index].setAttribute("data-live", "true")
     beat.textContent = labels[index]
-    index = (index + 1) % frames.length
+    index = (index + 1) % stages.length
   }
 
   tick()

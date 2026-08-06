@@ -5,8 +5,43 @@ for one reader: someone deciding whether to move a site from one tag to the
 next. Entries say what changed and what it means for an install, not what was
 refactored.
 
-Dates are release dates. While Inkling is `0.x`, a minor covers new surface
-*and* breaking changes; a patch is fixes alone.
+Dates are release dates. From 1.0 this is semver: a major for a breaking change
+to the delivery API, `createInkling()`, the plugin interface, or the shape of a
+content type; a minor for new surface; a patch for fixes alone.
+
+## 1.0.0 — 2026-08-06
+
+The version number is the news. Everything below has been in daily use across
+two production sites for weeks; what changed is that the last thing standing
+between Inkling and a version anyone could depend on is gone.
+
+While Inkling was `0.x` a minor covered breaking changes. From here it does not:
+the delivery API, `createInkling()`, the plugin interface, and the shape of a
+content type are the public surface, and breaking any of them takes a major.
+
+### Added
+
+- **`bun run password`** — set a user's password from the machine that runs the
+  database. This was the last real gap: a site with one owner who has lost their
+  password had no way back in. `POST /auth/password` needs the current password,
+  changing someone else's needs a second admin, and setup closes permanently
+  once the first user exists. Run it with no arguments to list the accounts.
+  It revokes every session for that account and records the reset in the audit
+  trail as `auth.password.reset` with `via: cli`, because a password change with
+  no browser session behind it is the interesting kind.
+
+### Changed
+
+- The documentation site dropped the film framing it inherited from an early
+  design direction — reels, frame numbers, "on air", "the cutting room". Inkling
+  is a publishing tool, and the strip on the homepage was always showing an
+  editorial workflow rather than a filmstrip; it says so now.
+
+### Note
+
+The first person through the door still becomes the owner, and the setup route
+still closes permanently behind them. That behaviour is unchanged and is now
+covered end to end.
 
 ## 0.7.0 — 2026-08-06
 
