@@ -1,0 +1,81 @@
+name: Check
+
+# The whole verification path. There is no build step for the API, so a type
+# check, the test suite, and the linter are the entire gate — RELEASING.md says
+# all three must be clean before a tag, and this is what proves it rather than
+# taking the author's word for it.
+
+on:
+  push:
+    branches: [main]
+    # Documentation-only pushes are covered by pages.yml; there is nothing here
+    # for them to verify.
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+  pull_request: {}
+  workflow_dispatch: {}
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # --frozen-lockfile so a drifting git dependency fails here rather than
+      # silently resolving to something the lockfile never saw. Inkling pins
+      # atlas to a commit for the same reason.
+      - run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bunx tsc --noEmit
+
+      - name: Lint and format
+        run: bunx biome check src/ plugins/ scripts/ tests/
+
+      # The suite runs on in-memory SQLite and needs no services. The Postgres
+      # tests below cover the dialect it actually ships on.
+      - name: Test
+        run: bun test tests/
+
+  postgres:
+    runs-on: ubuntu-latest
+    # Postgres is the only supported store, and the SQLite run above cannot
+    # catch a dialect difference — unquoted camelCase folding, DISTINCT ON, and
+    # every other portability rule in docs/ARCHITECTURE.md fails only here.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: inkling_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      # tests/postgres.test.ts skips itself when this is unreachable, which
+      # keeps `bun test` zero-setup locally and makes it real here.
+      - name: Test against Postgres
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/inkling_test
+        run: bun test tests/
