@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorials — Inkling</title>
+<meta name="description" content="Build a blog end to end, write a plugin, run three sites at once, mount Inkling inside a site, and connect an assistant.">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="wordmark" href="../">Inkling<b>.</b></a>
+    <div class="nav-links">
+      <a href="../start/">Start</a>
+      <a href="../guide/">Guide</a>
+      <a href="./" aria-current="page">Tutorials</a>
+      <a href="../reference/">Reference</a>
+      <a href="https://github.com/wess/inkling">Source</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap doc">
+
+  <aside class="toc">
+    <h2>Walkthroughs</h2>
+    <ol>
+      <li><a href="#blog">A blog, end to end</a></li>
+      <li><a href="#plugin">Write a plugin</a></li>
+      <li><a href="#sites">Three sites at once</a></li>
+      <li><a href="#embed">Mount it inside a site</a></li>
+      <li><a href="#ai">Connect an assistant</a></li>
+    </ol>
+  </aside>
+
+  <main class="prose">
+
+    <p class="eyebrow">Tutorials</p>
+    <h1 class="page-title">Build something</h1>
+    <p class="lede">
+      Five walkthroughs, each one finished and running by the end. Start with the
+      blog if you have not used Inkling before — the rest assume it.
+    </p>
+
+    <h2 id="blog">A blog, end to end</h2>
+
+    <p>
+      A model, some writing, and a site rendering it. Assumes you have Inkling
+      running from <a href="../start/">Get set up</a>.
+    </p>
+
+    <ol class="steps">
+
+      <li class="step">
+        <h3>Model the post</h3>
+        <p>
+          <b>Types → New type</b>, named <code>Post</code>, kind
+          <b>collection</b>. Give it these fields:
+        </p>
+        <table class="table">
+          <thead><tr><th>Key</th><th>Type</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><code>summary</code></td><td>text</td><td>The card on your index page, and the meta description.</td></tr>
+            <tr><td><code>body</code></td><td>richtext</td><td>The writing. Stores portable, cleaned HTML.</td></tr>
+            <tr><td><code>cover</code></td><td>media</td><td>Comes back expanded, with dimensions, so you can lay it out without measuring.</td></tr>
+            <tr><td><code>related</code></td><td>reference → post</td><td>Links to other posts, checked against the target type on save.</td></tr>
+          </tbody>
+        </table>
+      </li>
+
+      <li class="step">
+        <h3>Add a category taxonomy</h3>
+        <p>
+          <b>Categories → New taxonomy</b>, named <code>category</code>,
+          hierarchical if you want nesting. Terms are attached to entries from the
+          editor, and come back on delivery when you ask for them.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Tell it where the post lives</h3>
+        <p>
+          On the type, set the preview URL to
+          <code>https://yoursite.com/blog/{slug}</code>. Now the admin's "view"
+          button opens the real page instead of guessing.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Write two posts and publish one</h3>
+        <p>
+          Leave the second as a draft — you want something that should
+          <em>not</em> appear when you read the API in a moment.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Render the index</h3>
+        <p>Mint a key under <b>API keys</b>, scope it to <code>post</code>, and read the list.</p>
+        <div class="screen"><pre><span class="k">const</span> res = <span class="k">await</span> fetch(<span class="s">`${process.env.INKLING_URL}/content/post?include=terms&amp;limit=10`</span>, {
+  headers: { <span class="s">"x-api-key"</span>: process.env.<span class="w">INKLING_KEY</span> },
+})
+<span class="k">const</span> { data: posts } = <span class="k">await</span> res.json()
+
+<span class="k">return</span> posts.map(post => <span class="s">`
+  &lt;article&gt;
+    &lt;img src="${post.data.cover.url}" alt="${post.data.cover.alt}" width="${post.data.cover.width}"&gt;
+    &lt;h2&gt;&lt;a href="/blog/${post.slug}"&gt;${post.title}&lt;/a&gt;&lt;/h2&gt;
+    &lt;p&gt;${post.data.summary}&lt;/p&gt;
+  &lt;/article&gt;`</span>).join(<span class="s">""</span>)</pre></div>
+        <p>Only the published post comes back. The draft is not filtered out on your side — it never left.</p>
+      </li>
+
+      <li class="step">
+        <h3>Render one post</h3>
+        <div class="screen"><pre>GET /content/post/<span class="s">my-first-post</span></pre></div>
+        <p>
+          <code>related</code> arrives as full entries rather than ids, each one
+          re-checked for publication and against your key's scopes. A draft you
+          linked to simply is not in the array.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Stop rebuilding on a timer</h3>
+        <p>
+          Subscribe to <code>content:post</code> and revalidate the one page that
+          changed. See <a href="../start/#live">Stay in sync</a> for the socket
+          handshake.
+        </p>
+      </li>
+
+    </ol>
+
+    <h2 id="plugin">Write a plugin</h2>
+
+    <p>
+      A plugin is a plain object in a directory — no class to extend, no lifecycle
+      to inherit. This one adds a reading time to every post the delivery API
+      returns, computed at read time rather than stored, so it can never go stale
+      against the writing.
+    </p>
+
+    <ol class="steps">
+
+      <li class="step">
+        <h3>Make the directory</h3>
+        <p>The directory name and the plugin's <code>name</code> must match.</p>
+        <div class="screen"><pre>mkdir -p plugins/readingtime</pre></div>
+      </li>
+
+      <li class="step">
+        <h3>Write it</h3>
+        <p>
+          <code>plugins/readingtime/index.ts</code>. The
+          <code>delivery.entry</code> filter runs on every entry on its way out,
+          which is where a derived value belongs.
+        </p>
+        <div class="screen"><pre><span class="k">import</span> { definePlugin } <span class="k">from</span> <span class="s">"../../src/plugins/define.ts"</span>
+
+<span class="c">// Words per minute is a setting rather than a constant because the right
+// number is editorial, not technical.</span>
+<span class="k">const</span> words = (html: <span class="w">string</span>): <span class="w">number</span> =&gt;
+  html.replace(<span class="s">/&lt;[^&gt;]*&gt;/g</span>, <span class="s">" "</span>).split(<span class="s">/\s+/</span>).filter(<span class="w">Boolean</span>).length
+
+<span class="k">export default</span> definePlugin({
+  name: <span class="s">"readingtime"</span>,
+  version: <span class="s">"1.0.0"</span>,
+  label: <span class="s">"Reading time"</span>,
+  description: <span class="s">"Adds an estimated reading time to delivered entries."</span>,
+
+  settings: [
+    { key: <span class="s">"wpm"</span>, label: <span class="s">"Words per minute"</span>, type: <span class="s">"number"</span>, default: <span class="m">220</span> },
+    { key: <span class="s">"field"</span>, label: <span class="s">"Field to measure"</span>, type: <span class="s">"text"</span>, default: <span class="s">"body"</span> },
+  ],
+
+  panels: [{ id: <span class="s">"readingtime"</span>, label: <span class="s">"Reading time"</span>, kind: <span class="s">"settings"</span> }],
+
+  register: ctx =&gt; {
+    ctx.filter(<span class="s">"delivery.entry"</span>, <span class="k">async</span> ({ payload, type, raw }) =&gt; {
+      <span class="k">const</span> field = <span class="k">await</span> ctx.getSetting(<span class="s">"field"</span>, <span class="s">"body"</span>)
+      <span class="k">const</span> wpm = <span class="k">await</span> ctx.getSetting(<span class="s">"wpm"</span>, <span class="m">220</span>)
+      <span class="k">const</span> source = (payload.data <span class="k">as</span> Record&lt;<span class="w">string</span>, <span class="w">unknown</span>&gt;)?.[field]
+
+      <span class="k">if</span> (<span class="k">typeof</span> source !== <span class="s">"string"</span>) <span class="k">return</span> { payload, type, raw }
+
+      <span class="k">return</span> {
+        payload: { ...payload, readingMinutes: <span class="w">Math</span>.max(<span class="m">1</span>, <span class="w">Math</span>.round(words(source) / wpm)) },
+        type,
+        raw,
+      }
+    })
+  },
+})</pre></div>
+      </li>
+
+      <li class="step">
+        <h3>Turn it on</h3>
+        <p>
+          <b>Plugins</b> in the admin, then enable it. Nothing restarts — plugin
+          routes and hooks resolve per request, so it is live on the next call.
+        </p>
+        <div class="screen"><pre>curl http://localhost:4300/content/post/hello -H <span class="s">"x-api-key: ink_…"</span>
+
+{ <span class="k">"slug"</span>: <span class="s">"hello"</span>, <span class="k">"readingMinutes"</span>: <span class="m">4</span>, … }</pre></div>
+      </li>
+
+    </ol>
+
+    <div class="note">
+      <b>A filter cannot break a save</b>
+      <p>
+        If your filter throws, its input carries forward untouched and the
+        response still goes out. That is the deal: <code>filter</code> hooks
+        transform and degrade to a no-op, <code>emit</code> hooks observe and have
+        their failures isolated. Neither can fail the core path.
+      </p>
+    </div>
+
+    <h3>Going further</h3>
+
+    <p>
+      A plugin can also declare its own content types (marked as owned by it, so
+      disabling retires them), its own taxonomies and settings, routes under
+      <code>/ext/&lt;name&gt;/…</code>, and its own database tables through
+      plugin-scoped migrations in <code>plugins/&lt;name&gt;/migrations/</code>.
+      Read the seven bundled plugins — each one demonstrates a different
+      extension point.
+    </p>
+
+    <h2 id="sites">Three sites at once</h2>
+
+    <p>
+      Inkling is single-tenant. Core settings live under one site scope, menu names
+      are globally unique, and <code>PUBLIC_URL</code> is one origin per process —
+      so separate sites means a database each, not one instance with a tenant
+      column.
+    </p>
+
+    <ol class="steps">
+
+      <li class="step">
+        <h3>A database per site</h3>
+        <p>They can share one Postgres server. What they cannot share is a schema.</p>
+        <div class="screen"><pre>createdb inkling_alpha
+createdb inkling_beta
+createdb inkling_gamma</pre></div>
+      </li>
+
+      <li class="step">
+        <h3>A configuration per site</h3>
+        <p>
+          Each gets its own <code>SECRET</code>, so rotating one invalidates that
+          site's sessions and stored credentials and stops there.
+        </p>
+        <div class="screen"><pre><span class="c"># alpha.env</span>
+<span class="k">DATABASE_URL</span>=<span class="s">postgres://…/inkling_alpha</span>
+<span class="k">PUBLIC_URL</span>=<span class="s">https://cms.alpha.com</span>
+<span class="k">PORT</span>=<span class="m">4300</span>
+<span class="k">SECRET</span>=<span class="s">…</span>
+
+<span class="c"># beta.env</span>
+<span class="k">DATABASE_URL</span>=<span class="s">postgres://…/inkling_beta</span>
+<span class="k">PUBLIC_URL</span>=<span class="s">https://cms.beta.com</span>
+<span class="k">PORT</span>=<span class="m">4301</span>
+<span class="k">SECRET</span>=<span class="s">…</span></pre></div>
+      </li>
+
+      <li class="step">
+        <h3>A process per site</h3>
+        <div class="screen"><pre>bun --env-file=alpha.env src/start.ts
+bun --env-file=beta.env  src/start.ts
+bun --env-file=gamma.env src/start.ts</pre></div>
+        <p>
+          Media can share a bucket — object keys are dated and randomized, so two
+          uploads of <code>logo.png</code> never collide, whatever site they came
+          from.
+        </p>
+      </li>
+
+    </ol>
+
+    <h3>When one instance is right</h3>
+
+    <p>
+      If the three "sites" are really one property — the same editorial team, one
+      set of settings, one menu namespace — run a single instance and give each
+      site a key scoped to the types it renders.
+    </p>
+
+    <div class="screen"><pre><span class="c">→ alpha's key: scopes ["post", "page"]</span>
+<span class="c">→ beta's key:  scopes ["product", "page"]</span></pre></div>
+
+    <p>
+      Each key sees only its own types, including through reference expansion. What
+      they still share is settings, menus, media URLs, and the user list — so this
+      is the right shape only when sharing those is what you wanted.
+    </p>
+
+    <h2 id="embed">Mount it inside a site</h2>
+
+    <p>
+      A site that would rather not deploy a second service can run Inkling in its
+      own process. It hands back a handler rather than owning a port.
+    </p>
+
+    <div class="screen"><pre><span class="k">import</span> { createInkling } <span class="k">from</span> <span class="s">"inkling"</span>
+
+<span class="k">const</span> inkling = <span class="k">await</span> createInkling({ adminBase: <span class="s">"/admin"</span>, siteKeyName: <span class="s">"site"</span> })
+
+<span class="w">Bun</span>.serve({
+  fetch: <span class="k">async</span> (request, server) =&gt; {
+    <span class="c">// Answer the upgrade before anything returns a Response, or the
+    // handshake is gone.</span>
+    <span class="k">if</span> (request.headers.get(<span class="s">"upgrade"</span>) === <span class="s">"websocket"</span>) {
+      <span class="k">if</span> (inkling.upgrade(request, server)) <span class="k">return undefined as unknown as</span> <span class="w">Response</span>
+    }
+    <span class="c">// null means no Inkling route claimed the path — keep routing.</span>
+    <span class="k">return</span> (<span class="k">await</span> inkling.fetch(request, server)) ?? myRouter(request)
+  },
+  websocket: inkling.websocket,
+})</pre></div>
+
+    <table class="table">
+      <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>adminBase</code></td>
+          <td>Confines the admin to a prefix. At <code>"/"</code> every unmatched path becomes the admin; anywhere else, <code>fetch</code> returns <code>null</code> off it so your own routes still run.</td>
+        </tr>
+        <tr>
+          <td><code>siteKeyName</code></td>
+          <td>Mints a delivery key for the site sharing the process — it has no browser in which to visit the admin and copy one. Derived from <code>SECRET</code>, so it is the same key on every boot.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>Pass <code>server</code> through</b>
+      <p>
+        It is where the real socket peer comes from, and rate-limit buckets and
+        audit rows key on it. Drop it and every request looks like it came from
+        the same nowhere — which turns the per-IP login limit into one global
+        bucket shared by every account.
+      </p>
+    </div>
+
+    <h2 id="ai">Connect an assistant</h2>
+
+    <p>
+      Optional, and absent from the admin until you connect a provider. Nothing to
+      set in the environment for the ordinary path.
+    </p>
+
+    <ol class="steps">
+
+      <li class="step">
+        <h3>Paste a key</h3>
+        <p>
+          <b>Settings → AI</b>, choose a provider, paste the key. It is sealed
+          with AES-GCM under a key derived from your <code>SECRET</code>, kept in
+          its own table rather than in settings, and never returned by the API —
+          only the last four characters, so you can tell two keys apart.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Use it while writing</h3>
+        <p>
+          The assistant appears on fields in the editor: draft, rewrite, shorten,
+          expand, summarize, titles, seo, translate, ask. Each one is handed your
+          content model and the entry, so it answers about <em>your</em> site.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Ask Inky for a page</h3>
+        <p>
+          Inky is in the bottom-right corner of every admin screen, and it knows
+          which screen you are on. Ask it for something you do not have yet:
+        </p>
+        <div class="screen"><pre><span class="c">you</span>
+We need a page about our return policy.
+
+<span class="c">inky</span>
+You have a Page type with a body and a summary — I've drafted
+one and left it unpublished so you can read it first.
+
+<span class="g">+ Page · "Returns" · draft</span>
+<span class="g">  summary  Our 30-day policy, in short.</span>
+<span class="g">  body     &lt;p&gt;If something isn't right…&lt;/p&gt;</span>
+<span class="w">                                    [ Apply ]  [ Discard ]</span></pre></div>
+        <p>
+          It reads your types, entries, media, menus, and site details before it
+          answers, then proposes. You get a diff. Applying it is an ordinary
+          save, so it lands in the entry's history under <em>your</em> name and
+          can be restored like any other edit.
+        </p>
+        <p>
+          The same conversation can reshape a type ("add a place for customer
+          quotes"), publish or unpublish something, edit your navigation, or
+          change your site title — Inky works out which of those you meant.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Or connect over OAuth instead</h3>
+        <p>
+          Register a client with the provider against your callback URL, then set
+          its id. The admin offers "Continue with …" only for providers that have
+          one, because a client is registered with the provider and cannot be
+          pasted into a form.
+        </p>
+        <div class="screen"><pre><span class="c"># redirect URI to register: PUBLIC_URL + /ai/oauth/callback</span>
+<span class="k">AI_OAUTH_ANTHROPIC_CLIENT_ID</span>=<span class="s">…</span>
+<span class="k">AI_OAUTH_ANTHROPIC_CLIENT_SECRET</span>=<span class="s">…</span></pre></div>
+      </li>
+
+      <li class="step">
+        <h3>Answer your visitors, if you want to</h3>
+        <p>
+          Enable the <code>assistant</code> plugin. It answers from published
+          content only, grounded in the page the reader is on. It is a plugin
+          rather than core because it is the one AI surface that spends your money
+          for anonymous visitors — so it should have a switch.
+        </p>
+        <p>
+          It reuses the provider you connected in step one. Write your house
+          rules into <b>Guardrails</b> — this is where you say what it must never
+          promise, and when to hand someone to a human:
+        </p>
+        <div class="screen"><pre><span class="c"># Plugins → Site assistant → Guardrails</span>
+You answer questions about Ash &amp; Ember, a ceramics studio in Columbia.
+Never quote a price or a lead time — those change weekly.
+For custom commissions, point people at the contact page.
+If you don't know, say so and offer the contact page.</pre></div>
+        <p>
+          Then turn on <b>Show a bubble on the public site</b>, list the origins
+          allowed to embed it — with none listed it answers nobody — and add one
+          line to your layout:
+        </p>
+        <div class="screen"><pre>&lt;script src="<span class="s">https://cms.yoursite.com/ext/assistant/widget.js</span>" defer&gt;&lt;/script&gt;</pre></div>
+        <p>
+          That is the whole integration — a bubble in the corner, drawn inside a
+          shadow root so it cannot collide with your CSS and your CSS cannot
+          reach it. If you would rather draw your own, <code>POST
+          /ext/assistant/public-ask</code> is the same answer as JSON.
+        </p>
+      </li>
+
+    </ol>
+
+    <div class="onward">
+      <a class="cta ghost" href="../guide/">← The guide</a>
+      <a class="cta" href="../reference/">Reference →</a>
+    </div>
+
+  </main>
+</div>
+
+<footer class="wrap foot">
+  <span>Inkling</span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="../start/">Start</a>
+    <a href="../guide/">Guide</a>
+    <a href="../reference/">Reference</a>
+    <a href="https://github.com/wess/inkling">Source</a>
+  </nav>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

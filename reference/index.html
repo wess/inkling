@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — Inkling</title>
+<meta name="description" content="Every delivery route, field type, setting, socket frame, and command.">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="wordmark" href="../">Inkling<b>.</b></a>
+    <div class="nav-links">
+      <a href="../start/">Start</a>
+      <a href="../guide/">Guide</a>
+      <a href="../tutorials/">Tutorials</a>
+      <a href="./" aria-current="page">Reference</a>
+      <a href="https://github.com/wess/inkling">Source</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap doc">
+
+  <aside class="toc">
+    <h2>Reference</h2>
+    <ol>
+      <li><a href="#delivery">Delivery API</a></li>
+      <li><a href="#socket">Socket frames</a></li>
+      <li><a href="#fields">Field types</a></li>
+      <li><a href="#roles">Roles</a></li>
+      <li><a href="#ai">AI and agent tools</a></li>
+      <li><a href="#env">Configuration</a></li>
+      <li><a href="#commands">Commands</a></li>
+      <li><a href="#errors">Errors</a></li>
+    </ol>
+  </aside>
+
+  <main class="prose">
+
+    <p class="eyebrow">Reference</p>
+    <h1 class="page-title">Look it up</h1>
+    <p class="lede">
+      The delivery surface your sites call, the shapes your content can take, and
+      every variable that configures it.
+    </p>
+
+    <h2 id="delivery">Delivery API</h2>
+
+    <p>
+      Authenticated with <code>X-Api-Key</code>. Read-only, published content
+      only. Responses are private-cacheable and vary on the credentials that
+      shape them.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Route</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /content</code></td><td>The types this key may read, with their field shapes.</td></tr>
+        <tr><td><code>GET /content/:type</code></td><td>Published entries, paged.</td></tr>
+        <tr><td><code>GET /content/:type/:slug</code></td><td>One published entry.</td></tr>
+        <tr><td><code>GET /content/:type/single</code></td><td>The entry of a single-kind type.</td></tr>
+        <tr><td><code>GET /site/settings</code></td><td>Site settings, with media ids resolved to URLs.</td></tr>
+        <tr><td><code>GET /site/menus/:name</code></td><td>One menu tree.</td></tr>
+        <tr><td><code>GET /preview/:token</code></td><td>One entry at any status, until the token expires.</td></tr>
+        <tr><td><code>POST /realtime/delivery/ticket</code></td><td>A 30-second, single-use ticket for the socket.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Query parameters</h3>
+
+    <table class="table">
+      <thead><tr><th>Parameter</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>?page=</code>, <code>?limit=</code></td><td>Paging. <code>meta</code> carries <code>total</code>, <code>page</code>, and <code>limit</code>.</td></tr>
+        <tr><td><code>?term=</code></td><td>Filter by taxonomy term slug, resolved through a join.</td></tr>
+        <tr><td><code>?locale=</code></td><td>Filter by locale.</td></tr>
+        <tr><td><code>?sort=</code></td><td>Order the list.</td></tr>
+        <tr><td><code>?include=terms,author</code></td><td>Attach taxonomy terms, and the author.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <b>Expansion is automatic</b>
+      <p>
+        Media and reference fields arrive as full objects, not ids — a page render
+        is one request. Referenced entries are re-checked for publication
+        <em>and</em> against this key's type scopes, so a reference cannot return
+        something the key could not have asked for directly.
+      </p>
+    </div>
+
+    <h2 id="socket">Socket frames</h2>
+
+    <p>
+      Open <code>ws://host/realtime?ticket=…</code> after exchanging a credential
+      for a ticket. A browser cannot set headers on a handshake and query strings
+      reach access logs, so the ticket is single-use and dies in 30 seconds.
+    </p>
+
+    <div class="screen"><pre><span class="c">→ client</span>
+{ <span class="k">"action"</span>: <span class="s">"subscribe"</span>, <span class="k">"topic"</span>: <span class="s">"content:post"</span> }
+{ <span class="k">"action"</span>: <span class="s">"unsubscribe"</span>, <span class="k">"topic"</span>: <span class="s">"content:post"</span> }
+{ <span class="k">"action"</span>: <span class="s">"ping"</span> }
+
+<span class="c">← server</span>
+{ <span class="k">"topic"</span>: <span class="s">"content:post"</span>, <span class="k">"event"</span>: <span class="s">"entry.published"</span>, <span class="k">"data"</span>: { <span class="k">"id"</span>: <span class="s">"…"</span>, <span class="k">"slug"</span>: <span class="s">"hello"</span>, <span class="k">"type"</span>: <span class="s">"post"</span> } }</pre></div>
+
+    <table class="table">
+      <thead><tr><th>Topic</th><th>Who may subscribe</th></tr></thead>
+      <tbody>
+        <tr><td><code>site</code></td><td>Sessions and delivery keys.</td></tr>
+        <tr><td><code>content:&lt;type&gt;</code></td><td>Sessions, and keys scoped to that type.</td></tr>
+        <tr><td><code>entry:&lt;id&gt;</code></td><td>Sessions only — it carries presence, which is editorial signal.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Server frames also include <code>ready</code>, <code>subscribed</code>,
+      <code>pong</code>, and <code>error</code>. A key hears only
+      <code>entry.published</code>, <code>entry.unpublished</code>, and
+      <code>entry.deleted</code>, and frames never carry content — re-read through
+      <code>/content</code> when one arrives.
+    </p>
+
+    <h2 id="fields">Field types</h2>
+
+    <p>Eighteen. Each one declares how it validates, what its empty value is, and what the editor renders.</p>
+
+    <table class="table">
+      <thead><tr><th>Type</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td><code>text</code></td><td>A single line.</td></tr>
+        <tr><td><code>textarea</code></td><td>Plain multi-line text.</td></tr>
+        <tr><td><code>richtext</code></td><td>Formatted writing, stored as portable, cleaned HTML.</td></tr>
+        <tr><td><code>markdown</code></td><td>Markdown source, stored as written.</td></tr>
+        <tr><td><code>number</code></td><td>A number, with optional bounds.</td></tr>
+        <tr><td><code>boolean</code></td><td>True or false.</td></tr>
+        <tr><td><code>date</code></td><td>A calendar date.</td></tr>
+        <tr><td><code>datetime</code></td><td>A moment, ISO-8601.</td></tr>
+        <tr><td><code>select</code></td><td>One of a declared set of options.</td></tr>
+        <tr><td><code>multiselect</code></td><td>Several of them.</td></tr>
+        <tr><td><code>media</code></td><td>One image, expanded on delivery.</td></tr>
+        <tr><td><code>gallery</code></td><td>Ordered images, expanded on delivery.</td></tr>
+        <tr><td><code>reference</code></td><td>Entries of a declared target type, enforced on save.</td></tr>
+        <tr><td><code>list</code></td><td>A repeater with its own fields. Nests, and validates recursively.</td></tr>
+        <tr><td><code>json</code></td><td>An arbitrary document, for the shape nothing else fits.</td></tr>
+        <tr><td><code>color</code></td><td>A colour value.</td></tr>
+        <tr><td><code>url</code></td><td>A URL, validated as one.</td></tr>
+        <tr><td><code>email</code></td><td>An address, validated as one.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <b>Keys are camelCase</b>
+      <p>
+        Field keys live inside a JSON document and never become database columns,
+        so <code>heroImage</code> is right and <code>hero_image</code> is not.
+        Database columns are the opposite, and deliberately so.
+      </p>
+    </div>
+
+    <h2 id="roles">Roles</h2>
+
+    <p>A strict ladder. Every request re-reads the user, so a demotion takes effect on the next click rather than at token expiry.</p>
+
+    <table class="table">
+      <thead><tr><th>Role</th><th>Can</th></tr></thead>
+      <tbody>
+        <tr><td><code>viewer</code></td><td>Read.</td></tr>
+        <tr><td><code>author</code></td><td>Write their own drafts.</td></tr>
+        <tr><td><code>editor</code></td><td>Publish, and work on anyone's content.</td></tr>
+        <tr><td><code>admin</code></td><td>Shape the model, manage users and keys.</td></tr>
+        <tr><td><code>owner</code></td><td>Everything. The last one cannot be deleted.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Admins cannot create, edit, or promote above their own rank. API keys are
+      stored only as SHA-256 and the plaintext is shown exactly once.
+    </p>
+
+    <h2 id="ai">AI providers and agent tools</h2>
+
+    <p>
+      Every AI surface — the field assistant, Inky, and the visitor bubble —
+      runs on one connected provider. Credentials are entered in the admin and
+      stored sealed; none of them is an environment variable.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Provider</th><th>Endpoint</th><th>Connect with</th></tr></thead>
+      <tbody>
+        <tr><td>Claude</td><td>api.anthropic.com</td><td>API key, or OAuth if a client is registered.</td></tr>
+        <tr><td>OpenAI</td><td>api.openai.com</td><td>API key.</td></tr>
+        <tr><td>Ollama (local)</td><td><code>http://127.0.0.1:11434</code>, overridable</td><td>Nothing — it is your machine.</td></tr>
+        <tr><td>Ollama Cloud</td><td><code>https://ollama.com</code>, fixed</td><td>API key. No URL field, because there is no choice to make.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Model names are typed, not chosen from a closed list — the suggestions are
+      a starting point. Inky needs a model that can call tools; the field
+      assistant does not.
+    </p>
+
+    <h3>What Inky can do</h3>
+
+    <p>
+      Thirteen tools: six read, seven propose. Nothing writes. A proposal is a
+      record the admin renders as a diff and applies through the same route your
+      own edit takes.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Tool</th><th>Kind</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td><code>list_content_types</code></td><td>read</td><td>The model — every type and its fields.</td></tr>
+        <tr><td><code>list_entries</code></td><td>read</td><td>Entries of a type, filtered and paged.</td></tr>
+        <tr><td><code>get_entry</code></td><td>read</td><td>One entry in full.</td></tr>
+        <tr><td><code>list_media</code></td><td>read</td><td>The library, so it can pick an existing image.</td></tr>
+        <tr><td><code>get_site_settings</code></td><td>read</td><td>Title, tagline, description, logo, social image.</td></tr>
+        <tr><td><code>list_menus</code></td><td>read</td><td>Your navigation trees.</td></tr>
+        <tr><td><code>propose_entry_update</code></td><td>propose</td><td>Change what a page says.</td></tr>
+        <tr><td><code>propose_entry_create</code></td><td>propose</td><td>Draft a page that does not exist yet.</td></tr>
+        <tr><td><code>propose_entry_status</code></td><td>propose</td><td>Publish, unpublish, or return something to draft.</td></tr>
+        <tr><td><code>propose_type_update</code></td><td>propose</td><td>Add or change a field — which affects every page of that kind, and it says so.</td></tr>
+        <tr><td><code>propose_type_create</code></td><td>propose</td><td>A new kind of page altogether.</td></tr>
+        <tr><td><code>propose_settings_update</code></td><td>propose</td><td>Site details.</td></tr>
+        <tr><td><code>propose_menu_update</code></td><td>propose</td><td>Navigation.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Visitor bubble</h3>
+
+    <table class="table">
+      <thead><tr><th>Route</th><th>Auth</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /ext/assistant/ask</code></td><td><code>X-Api-Key</code></td><td>An answer plus its sources, for a server relaying its visitors' questions.</td></tr>
+        <tr><td><code>POST /ext/assistant/public-ask</code></td><td>Origin allowlist</td><td>The same answer, straight from a browser — no key, because a key in a browser is a key given to everyone.</td></tr>
+        <tr><td><code>GET /ext/assistant/widget.js</code></td><td>—</td><td>The bubble. 404s until you enable it.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Social accounts</h3>
+
+    <p>
+      The <code>social</code> plugin's <b>Accounts</b> panel, which authorizes one
+      account per network. Tokens are sealed the same way AI credentials are, and
+      renewed before they lapse.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Route</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /ext/social/accounts</code></td><td>Every connectable network, whether an app is registered, and what is held.</td></tr>
+        <tr><td><code>POST /ext/social/accounts/:network/start</code></td><td>A consent URL, not a redirect — the caller is a fetch, and a 302 to a third party would be followed by the fetch rather than the address bar.</td></tr>
+        <tr><td><code>GET /ext/social/oauth/callback</code></td><td>The return leg. Public, because the browser arrives by top-level navigation with no session.</td></tr>
+        <tr><td><code>DELETE /ext/social/accounts/:id</code></td><td>Disconnect.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>Connecting is not posting</b>
+      <p>
+        These hold accounts; nothing publishes to a network yet. Each network
+        wants a different call, a different media upload, and a different set of
+        failures, so publishers get built one at a time — meanwhile, stage a post
+        <b>Posted</b> and paste the link.
+      </p>
+    </div>
+
+    <h2 id="env">Configuration</h2>
+
+    <p>
+      <code>.env</code> is required at runtime, and
+      <a href="https://github.com/wess/inkling/blob/main/.env.example"><code>.env.example</code></a>
+      documents every variable in place — it is the source of truth, and this
+      table is the summary.
+    </p>
+
+    <h3>Core</h3>
+    <table class="table">
+      <thead><tr><th>Variable</th><th>Default</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>PORT</code></td><td><code>4300</code></td><td>Not 4000 — Docker Desktop binds that on IPv6 and wins localhost.</td></tr>
+        <tr><td><code>HOST</code></td><td><code>0.0.0.0</code></td><td></td></tr>
+        <tr><td><code>PUBLIC_URL</code></td><td><code>http://localhost:4300</code></td><td>The one public origin. Media URLs resolve against it.</td></tr>
+        <tr><td><code>DATABASE_URL</code></td><td>local Postgres</td><td>Also the unit of separation between sites.</td></tr>
+        <tr><td><code>DB_POOL_SIZE</code></td><td><code>5</code></td><td></td></tr>
+        <tr><td><code>SECRET</code></td><td>—</td><td>Signs sessions, seals credentials. 32+ characters, or production refuses to boot.</td></tr>
+        <tr><td><code>NODE_ENV</code></td><td><code>development</code></td><td>Must not be <code>development</code> in production.</td></tr>
+        <tr><td><code>DELIVERY_ORIGINS</code></td><td>—</td><td>Browser origins allowed to call delivery. Server-to-server does not need it.</td></tr>
+        <tr><td><code>TRUSTED_PROXIES</code></td><td>—</td><td>CIDRs whose <code>X-Forwarded-For</code> is believed. Set it behind a load balancer.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Storage</h3>
+    <table class="table">
+      <thead><tr><th>Variable</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>STORAGE_DRIVER</code></td><td><code>local</code> or <code>s3</code>.</td></tr>
+        <tr><td><code>STORAGE_LOCAL_DIR</code></td><td>Where blobs land on the local driver.</td></tr>
+        <tr><td><code>S3_ENDPOINT</code>, <code>S3_BUCKET</code>, <code>S3_REGION</code></td><td>Any S3-compatible service.</td></tr>
+        <tr><td><code>S3_ACCESS_KEY</code>, <code>S3_SECRET_KEY</code></td><td>Credentials.</td></tr>
+        <tr><td><code>S3_PUBLIC_URL</code></td><td>Public base for objects, if it differs from the endpoint.</td></tr>
+        <tr><td><code>MAX_UPLOAD_BYTES</code></td><td>Default 25 MB.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Plugins, bootstrap, and AI</h3>
+    <table class="table">
+      <thead><tr><th>Variable</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>PLUGIN_DIR</code></td><td>Where plugins are scanned from.</td></tr>
+        <tr><td><code>PLUGIN_AUTOENABLE</code></td><td>Comma-separated names enabled on a fresh install.</td></tr>
+        <tr><td><code>BOOTSTRAP_EMAIL</code>, <code>BOOTSTRAP_PASSWORD</code>, <code>BOOTSTRAP_NAME</code></td><td>Creates the first owner unattended. Otherwise the first visit claims the site.</td></tr>
+        <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_CLIENT_ID</code></td><td>The only environment variables the AI feature has. Without one, only the API-key path is offered.</td></tr>
+        <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_CLIENT_SECRET</code></td><td>Paired with the id.</td></tr>
+        <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_AUTHORIZE_URL</code></td><td>Overrides the shipped default, and is how you wire up a provider with no default at all.</td></tr>
+        <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_TOKEN_URL</code></td><td>As above.</td></tr>
+        <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_SCOPES</code></td><td>Comma-separated.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_ID</code></td><td>Read only when the <code>social</code> plugin is on. Same shape, same reason — a network's OAuth app is registered against a redirect URI on your domain. Callback: <code>PUBLIC_URL + /ext/social/oauth/callback</code>.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_SECRET</code></td><td>Paired with the id.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_AUTHORIZE_URL</code>, <code>_TOKEN_URL</code>, <code>_SCOPES</code></td><td>Override the shipped defaults for that network.</td></tr>
+      </tbody>
+    </table>
+
+    <p>Provider credentials themselves are never environment variables — they are entered in the admin and stored sealed.</p>
+
+    <h2 id="commands">Commands</h2>
+
+    <p>Bun is the runtime, package manager, and bundler. There is no <code>node</code> or <code>npm</code> step.</p>
+
+    <table class="table">
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td><code>bun install</code></td><td>Install dependencies.</td></tr>
+        <tr><td><code>bun run dev</code></td><td>Everything on <code>:4300</code>, hot-reloading.</td></tr>
+        <tr><td><code>bun run start</code></td><td>Production entry — the same single process.</td></tr>
+        <tr><td><code>bun run test</code></td><td>The test suite, on in-memory SQLite. No setup.</td></tr>
+        <tr><td><code>bun run typecheck</code></td><td><code>tsc --noEmit</code>.</td></tr>
+        <tr><td><code>bun run tidy</code></td><td>Format and lint, with fixes.</td></tr>
+        <tr><td><code>bun run password</code></td><td>Set a user's password from the host. Run with no arguments to list the accounts. The way back in when the only owner is locked out — every browser path needs a credential they no longer have.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      There is no build step for the API. Type-check and test are the whole
+      verification path, and both must be clean.
+    </p>
+
+    <h2 id="errors">Errors</h2>
+
+    <p>Every error the API raises renders as JSON with a stable <code>code</code>.</p>
+
+    <div class="screen"><pre>{
+  <span class="k">"error"</span>: <span class="s">"Validation failed"</span>,
+  <span class="k">"code"</span>: <span class="s">"VALIDATION_FAILED"</span>,
+  <span class="k">"details"</span>: {
+    <span class="k">"fields"</span>: [{ <span class="k">"key"</span>: <span class="s">"summary"</span>, <span class="k">"message"</span>: <span class="s">"Required"</span> }]
+  }
+}</pre></div>
+
+    <p>
+      Field errors name the key, so the editor can mark the specific input rather
+      than showing one message for the whole form.
+    </p>
+
+    <div class="onward">
+      <a class="cta ghost" href="../tutorials/">← Tutorials</a>
+      <a class="cta" href="https://github.com/wess/inkling">Source →</a>
+    </div>
+
+  </main>
+</div>
+
+<footer class="wrap foot">
+  <span>Inkling</span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="../start/">Start</a>
+    <a href="../guide/">Guide</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/wess/inkling">Source</a>
+    <a href="../llms.txt">llms.txt</a>
+  </nav>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide — Inkling</title>
+<meta name="description" content="How Inkling works: the content model, the delivery API, live updates, previews, the assistant, plugins, and running more than one site.">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="wordmark" href="../">Inkling<b>.</b></a>
+    <div class="nav-links">
+      <a href="../start/">Start</a>
+      <a href="./" aria-current="page">Guide</a>
+      <a href="../tutorials/">Tutorials</a>
+      <a href="../reference/">Reference</a>
+      <a href="https://github.com/wess/inkling">Source</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap doc">
+
+  <aside class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#origin">One origin</a></li>
+      <li><a href="#model">The content model</a></li>
+      <li><a href="#entries">Entries and history</a></li>
+      <li><a href="#delivery">The delivery API</a></li>
+      <li><a href="#realtime">Live updates</a></li>
+      <li><a href="#previews">Previews</a></li>
+      <li><a href="#ai">The assistant and the agent</a></li>
+      <li><a href="#plugins">Plugins</a></li>
+      <li><a href="#sites">More than one site</a></li>
+      <li><a href="#deploy">Deploying</a></li>
+    </ol>
+  </aside>
+
+  <main class="prose">
+
+    <p class="eyebrow">The guide</p>
+    <h1 class="page-title">How it works</h1>
+    <p class="lede">
+      Inkling stores content and hands it to your sites over an HTTP API. It does
+      <em>not</em> render your pages — the markup stays yours.
+    </p>
+
+    <h2 id="origin">One origin, split by path</h2>
+
+    <p>
+      There is no separate admin server, no proxy, and no bundler running
+      alongside. One process serves everything, and the URL says which audience a
+      request belongs to.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Path</th><th>Who calls it</th><th>How it authenticates</th></tr></thead>
+      <tbody>
+        <tr><td><code>/</code></td><td>The admin — any path the router doesn't claim</td><td>Session</td></tr>
+        <tr><td><code>/api/…</code></td><td>The admin's whole surface</td><td>Session bearer token</td></tr>
+        <tr><td><code>/content</code>, <code>/site</code></td><td>Your websites</td><td><code>X-Api-Key</code></td></tr>
+        <tr><td><code>/preview/:token</code></td><td>Whoever you sent a share link to</td><td>The signed token</td></tr>
+        <tr><td><code>/media/file/…</code></td><td>Anything rendering an image</td><td>Public</td></tr>
+        <tr><td><code>/ext/…</code></td><td>Plugin routes</td><td>Varies by plugin</td></tr>
+        <tr><td><code>/realtime</code></td><td>The WebSocket</td><td>A single-use ticket</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      The split is by <b>audience</b>, not by module. A feature with both a public
+      and a session-gated route exports two sets of routes rather than being
+      mounted twice — which is what keeps <code>/settings</code>, an admin screen,
+      from colliding with <code>/api/settings</code>, the API.
+    </p>
+
+    <h2 id="model">The content model</h2>
+
+    <p>
+      A <b>content type</b> is a shape you define in the admin. Its
+      <code>kind</code> is either <b>collection</b> — many entries, like posts —
+      or <b>single</b>, meaning exactly one, like a homepage or your opening
+      hours.
+    </p>
+
+    <p>
+      Fields are an ordered list. There are 18 types, and three of them are worth
+      calling out because they are what most models actually need:
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Field</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td><code>list</code></td><td>A repeater. Nests, and validates recursively — a section list whose items each have their own fields.</td></tr>
+        <tr><td><code>media</code> / <code>gallery</code></td><td>One image or many. Comes back expanded on delivery, with URL, alt text, and dimensions.</td></tr>
+        <tr><td><code>reference</code></td><td>A link to entries of a declared type, which is enforced on save.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <b>Field keys are camelCase</b>
+      <p>
+        <code>heroImage</code>, not <code>hero_image</code>. Field keys live
+        inside a JSON document and never become database columns, so they follow
+        the convention of the code that reads them.
+      </p>
+    </div>
+
+    <p>
+      Field definitions are validated when the <em>type</em> is saved, not on
+      every entry write — a bad schema is rejected at author time. Publishing and
+      restoring a revision both revalidate against the current schema, so an older
+      draft cannot slip past a newly required field. A scheduled entry is checked
+      again when its hour arrives; if the model changed underneath it, it moves to
+      review instead of publishing something broken.
+    </p>
+
+    <p>
+      Deletion is refused while something still points at what you are deleting —
+      media in use by an entry, an entry referenced by another, a type another
+      model references, or an image used as your site logo or social image.
+    </p>
+
+    <h2 id="entries">Entries and history</h2>
+
+    <p>
+      An entry carries a title, a slug, a status, a locale, and a
+      <code>data</code> document validated against its type. Statuses are
+      <code>draft</code>, <code>review</code>, <code>scheduled</code>,
+      <code>published</code>, and <code>archived</code>.
+    </p>
+
+    <p>
+      <b>Every save snapshots the state it replaced.</b> That is the detail that
+      makes history useful rather than decorative: restoring a revision restores
+      what it replaced, and the restore is itself a save, so you can undo the
+      undo. You can read a version before committing to it.
+    </p>
+
+    <p>
+      Entries, media, and users are soft-deleted. Every list and read filters out
+      deleted rows, and the admin has a trash screen for putting them back. Slug
+      uniqueness ignores deleted rows, so restoring from trash never collides with
+      something written in the meantime.
+    </p>
+
+    <h2 id="delivery">The delivery API</h2>
+
+    <p>
+      Two routes cover most sites: a list and a single entry.
+    </p>
+
+    <div class="screen"><pre><span class="c">→ a list, paged</span>
+GET /content/post?page=1&amp;limit=20&amp;include=terms
+
+<span class="c">→ one entry (use /single for single-entry types)</span>
+GET /content/post/hello</pre></div>
+
+    <p>
+      Media and reference fields arrive <b>expanded</b> — full objects, not ids
+      you have to go and fetch — so a page render is one request. Add
+      <code>?include=terms</code> to attach taxonomy terms, and
+      <code>?term=news</code> to filter by one.
+    </p>
+
+    <p>
+      <code>GET /content</code> lists the types a key may read along with their
+      field shapes, so a consumer can discover the model rather than hard-coding
+      it.
+    </p>
+
+    <p>
+      Media URLs are stored root-relative and resolved against
+      <code>PUBLIC_URL</code> when they are read, so moving to a new hostname does
+      not mean rewriting rows.
+    </p>
+
+    <div class="note">
+      <b>What a key can never see</b>
+      <p>
+        A draft, a user's email, or a soft-deleted row. Reference expansion
+        re-checks both publication status and the key's own type scopes, so a
+        reference cannot leak something the key could not have requested
+        directly.
+      </p>
+    </div>
+
+    <h2 id="realtime">Live updates</h2>
+
+    <p>
+      One WebSocket at <code>/realtime</code>. It exists because the admin showed
+      stale lists whenever two people worked at once, and because a consuming site
+      had no way to learn that published content changed short of polling.
+    </p>
+
+    <p>
+      <b>The socket grants no authority the HTTP surface doesn't.</b> A session
+      sees what its role already permits; a delivery key hears only that published
+      content moved, filtered by the same scopes <code>/content</code> applies.
+      Frames never carry an entry's data — they say <em>what</em> changed, and you
+      re-read it through the API.
+    </p>
+
+    <p>
+      Connect with a ticket rather than a token. A browser cannot set headers on a
+      WebSocket handshake, which leaves the query string, and query strings land
+      in access logs — so you exchange your credential for a single-use ticket
+      that is valid for 30 seconds and worthless by the time anything could read
+      it back.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Topic</th><th>What it covers</th></tr></thead>
+      <tbody>
+        <tr><td><code>site</code></td><td>Settings and menus.</td></tr>
+        <tr><td><code>content:&lt;type&gt;</code></td><td>Entries of one type, as they publish and change.</td></tr>
+        <tr><td><code>entry:&lt;id&gt;</code></td><td>One record — and who else is looking at it. Sessions only.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      A delivery key is refused entry topics entirely: activity on one record is
+      editorial signal about work that may still be a draft.
+    </p>
+
+    <h2 id="previews">Previews</h2>
+
+    <p>
+      A content type can declare a <code>preview_url</code> template with
+      <code>{slug}</code>, <code>{id}</code>, <code>{locale}</code>, and
+      <code>{type}</code> placeholders, so the admin can open an entry on your
+      real site without guessing your routing.
+    </p>
+
+    <p>
+      To show an <em>unpublished</em> entry, mint a share link. It names exactly
+      one entry, lasts an hour, and is signed rather than stored — the value of a
+      preview link is that it can be pasted to someone with no account, and a row
+      per share is bookkeeping for something meant to be disposable. Nothing is
+      revocable, which is exactly why the lifetime is short.
+    </p>
+
+    <h2 id="ai">The assistant and the agent</h2>
+
+    <p>
+      Optional, and absent from the admin until someone connects a provider.
+      Credentials are sealed with AES-GCM under a key derived from
+      <code>SECRET</code>, kept in their own table rather than in settings, and
+      never returned by the API. Rotating <code>SECRET</code> invalidates them,
+      which surfaces as "reconnect this provider" rather than a 500.
+    </p>
+
+    <h3>Which provider</h3>
+
+    <p>Four, and Inky runs on all of them — it needs a model that can call tools, which each of these can do.</p>
+
+    <table class="table">
+      <thead><tr><th>Provider</th><th>What to enter</th></tr></thead>
+      <tbody>
+        <tr><td><b>Claude</b></td><td>A key from console.anthropic.com, or sign in over OAuth. The recommended one, and what the assistant is tuned against.</td></tr>
+        <tr><td><b>OpenAI</b></td><td>A key from platform.openai.com. Type the model you want — the list is a starting point, not a limit.</td></tr>
+        <tr><td><b>Ollama (local)</b></td><td>Nothing to enter. Defaults to <code>http://127.0.0.1:11434</code>; point it elsewhere only if your instance is.</td></tr>
+        <tr><td><b>Ollama Cloud</b></td><td>A key from ollama.com. The endpoint is fixed, so there is no URL to enter — type the model exactly as your account lists it.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Whatever you pick, the model has to support tool calling — that is what
+      lets Inky read your site before it answers. Local models vary here, so if
+      Inky cannot act on anything, that is usually the reason.
+    </p>
+
+    <h3>Two ways to connect one</h3>
+
+    <p>
+      An <b>API key</b> is pasted into the admin and works immediately.
+      <b>OAuth</b> is the second path: the admin offers "Continue with …" only for
+      providers you have registered a client for, because a client is registered
+      <em>with the provider</em> against a specific redirect URI and so cannot be
+      entered in a form. That asymmetry is real and the UI shows it rather than
+      hiding it behind a button that dead-ends.
+    </p>
+
+    <h3>The assistant</h3>
+
+    <p>
+      Not a chat window bolted onto the admin. Each intent — draft, rewrite,
+      shorten, expand, summarize, titles, seo, translate, ask — corresponds to
+      something an editor was already doing by hand, and each is handed your
+      content model and the entry, so the answer is about <em>this</em> site. It
+      streams, because a rewrite of a long field otherwise looks like a hung
+      request.
+    </p>
+
+    <h3>Inky</h3>
+
+    <p>
+      Inky is the assistant given the run of the site rather than one field. It
+      reads your types, entries, media, site details, and menus, works out which
+      page you meant, and comes back with changes.
+    </p>
+
+    <p>
+      It rides along in the bottom-right corner of every admin screen, and it
+      knows which screen that is. Open a post and ask "make this shorter" and
+      there is no ambiguity about <em>this</em> — the dock hands Inky the page
+      you are looking at along with the question, so the conversation carries
+      on across screens instead of restarting on each one.
+    </p>
+
+    <p>
+      It is built for the person who did <em>not</em> build the site. You describe
+      what you want in ordinary words — "we need somewhere to put customer
+      quotes", "take the old promo off the menu", "the homepage opening is too
+      long" — and Inky works out whether that is a change to what a page says, to
+      what a page is made of, to your navigation, or to your site details, and
+      proposes it. It talks in pages and sections rather than entries and fields.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>You say</th><th>Inky changes</th></tr></thead>
+      <tbody>
+        <tr><td>"Reword the opening"</td><td>The values on that one page.</td></tr>
+        <tr><td>"Add a section for quotes"</td><td>The shape of that page — which affects every page of its kind, and it will say so.</td></tr>
+        <tr><td>"We need a page for returns"</td><td>A new draft, written to match your other pages.</td></tr>
+        <tr><td>"Drop the promo from the menu"</td><td>Your navigation.</td></tr>
+        <tr><td>"Rename the site"</td><td>Your site title, tagline, description, logo, or social image.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>What Inky cannot do</b>
+      <p>
+        Inkling stores content; it does not render your site. Colours, fonts,
+        spacing, and layout live in your site's own code, which Inky cannot see or
+        edit. Ask for something visual and it will find the content-shaped version
+        of the request — "make the hero say less" rather than "make the hero
+        bigger" — and tell you plainly which part belongs to whoever builds the
+        site.
+      </p>
+    </div>
+
+    <div class="note">
+      <b>Every tool it has is a read</b>
+      <p>
+        The agent cannot write, and no setting makes it able to. It records a
+        proposal; the admin renders that as a diff and applies it by sending the
+        change through the same route a human edit takes. So revisions, field
+        validation, slug uniqueness, relation checks, and the audit trail all keep
+        working, and the history names the person who approved the change rather
+        than a machine nobody can ask about it.
+      </p>
+    </div>
+
+    <p>
+      Content the assistant and the agent read is fenced and declared to be
+      material, never instructions — an entry whose body says "ignore your
+      instructions" is a string an editor typed.
+    </p>
+
+    <h3>Answering your visitors</h3>
+
+    <p>
+      The public assistant is a plugin rather than core, because it is the one AI
+      surface that spends your money on behalf of anonymous visitors. That should
+      be a deliberate decision with a switch to turn it back off, which is exactly
+      what enabling a plugin is. It answers from published content only, grounded
+      in the page the visitor is on, and returns a line you configure rather than
+      guessing when the answer isn't there.
+    </p>
+
+    <p>
+      It borrows whatever provider the admin already uses, so there is no second
+      key to manage. Turn on <b>Show a bubble on the public site</b> and it ships
+      its own — one script tag, a shadow root so nothing of yours leaks in or
+      out, and no framework:
+    </p>
+
+    <div class="screen"><pre>&lt;script src="<span class="s">https://cms.yoursite.com/ext/assistant/widget.js</span>" defer&gt;&lt;/script&gt;</pre></div>
+
+    <table class="table">
+      <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Persona</td><td>Who it is and what the site is. Prepended to every answer.</td></tr>
+        <tr><td>Guardrails</td><td>Your house rules in plain sentences — what it must always say, must never promise, and which topics go to a human instead. Added to its instructions verbatim.</td></tr>
+        <tr><td>When the answer isn't in the content</td><td>Returned word for word instead of letting the model guess.</td></tr>
+        <tr><td>Sites allowed to use the bubble</td><td>Comma-separated origins. With none listed the bubble answers nobody — that is the default, and it is deliberate.</td></tr>
+        <tr><td>Content types to search</td><td>Narrow what it reads. Empty means everything published.</td></tr>
+        <tr><td>Questions per hour per visitor</td><td>The ceiling per address. 30 by default.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>Two agents, two jobs</b>
+      <p>
+        Inky works for you and can propose changes. The visitor bubble works for
+        your readers, has no tools at all, and can only answer out of published
+        content. They never share a surface: the admin dock needs a session, and
+        the public route refuses to answer for an origin you did not list.
+      </p>
+    </div>
+
+    <h2 id="plugins">Plugins</h2>
+
+    <p>
+      A plugin is a plain object in a directory. It can contribute content types,
+      taxonomies, settings, admin panels, routes, its own database tables, and
+      hook listeners.
+    </p>
+
+    <p>
+      Routes are declared relative and namespaced to <code>/ext/&lt;name&gt;/…</code>,
+      and they resolve per request — so enabling a plugin takes effect immediately,
+      with no restart and no rebuild.
+    </p>
+
+    <p>
+      Admin panels are <b>declarative</b>. The admin is bundled ahead of time, so a
+      plugin cannot inject its own interface into it; instead it describes panels
+      the admin already knows how to render. Five kinds: <code>settings</code>,
+      <code>collection</code>, <code>table</code>, <code>stats</code> — a
+      dashboard of tiles, a series, and top-N tables that the plugin aggregates
+      <em>and</em> formats, so a panel never has to guess what a number means —
+      and <code>connections</code>, a list of accounts that can be authorized,
+      where the admin owns the connect and disconnect buttons and the plugin owns
+      every word on the row.
+    </p>
+
+    <p>Two kinds of hook, and the difference is the safety model:</p>
+
+    <ul>
+      <li><b>emit</b> — notification. Every listener runs, failures are isolated. A plugin can observe anything without being able to break it.</li>
+      <li><b>filter</b> — transformation. Listeners chain, and a throwing filter is skipped rather than blanking the payload, so a broken plugin degrades to a no-op instead of blocking a save.</li>
+    </ul>
+
+    <p>Seven ship with it, each demonstrating a different extension point:</p>
+
+    <table class="table">
+      <thead><tr><th>Plugin</th><th>What it shows</th></tr></thead>
+      <tbody>
+        <tr><td><code>seo</code></td><td>A delivery filter that adds computed metadata to every response.</td></tr>
+        <tr><td><code>redirects</code></td><td>A plugin-owned content type plus a public lookup route.</td></tr>
+        <tr><td><code>forms</code></td><td>A plugin with its own table, via plugin-scoped migrations.</td></tr>
+        <tr><td><code>commerce</code></td><td>Content type, taxonomy, settings, and a convenience route together.</td></tr>
+        <tr><td><code>analytics</code></td><td>Cookieless traffic collection and a dashboard panel.</td></tr>
+        <tr><td><code>assistant</code></td><td>Public answers grounded in published content.</td></tr>
+        <tr><td><code>social</code></td><td>A queue, a calendar, and a performance report over four content types.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      <code>analytics</code> is worth a look for how it handles privacy: it stores
+      no address, and its visitor hash is salted with your secret <em>and the
+      current date</em>, so it counts uniques within a day and is uncorrelatable
+      across them. There is nothing to consent to and nothing to expire.
+    </p>
+
+    <p>
+      <code>social</code> plans, records, and holds the accounts. Its
+      <b>Accounts</b> panel authorizes one account per network — LinkedIn, X,
+      Facebook, Instagram, Threads, TikTok, YouTube, Pinterest, Google Business
+      — and seals the tokens the same way AI credentials are sealed, renewing
+      them before they lapse and saying "reconnect this" when they cannot be
+      renewed.
+    </p>
+
+    <div class="note warn">
+      <b>Connecting is not yet posting</b>
+      <p>
+        The connection is half the job. The other half is a different call per
+        network, each with its own payload, its own media upload, and its own
+        failures — and a plugin that quietly stopped posting would be worse than
+        no plugin. So posts still go out by hand: stage one <b>Posted</b> and
+        paste the link. Publishers are being built one network at a time on top
+        of the connections.
+      </p>
+    </div>
+
+    <p>
+      Each network needs a developer app registered against your callback URL,
+      the same asymmetry AI's OAuth path has. A network with no app configured
+      says so on its row rather than offering a button that dead-ends.
+    </p>
+
+    <h2 id="sites">More than one site</h2>
+
+    <p>
+      Inkling is single-tenant, and three things say so: core settings live under
+      one site scope, menu names are globally unique, and <code>PUBLIC_URL</code>
+      is one origin per process. A delivery key's scopes partition <b>content
+      types</b> — not sites.
+    </p>
+
+    <p>So the unit of separation is the database:</p>
+
+    <table class="table">
+      <thead><tr><th>You want</th><th>Run</th></tr></thead>
+      <tbody>
+        <tr><td>Sites with their own settings, menus, and origin</td><td>One instance per site — a database each</td></tr>
+        <tr><td>Sites that are one property, sharing a team and a model</td><td>One instance, a scoped key per site</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Three separate sites is three databases and three configurations. They can
+      share a Postgres server and a bucket; what they cannot share is a schema.
+      Give each its own <code>SECRET</code>, so rotating one stops at one site.
+    </p>
+
+    <div class="note warn">
+      <b>One instance per process</b>
+      <p>
+        Configuration and the database connection are read once at startup.
+        Starting Inkling twice inside a single process gives you two sets of
+        routes over the same data — which is not a second site. A second site is a
+        second process.
+      </p>
+    </div>
+
+    <h2 id="deploy">Deploying</h2>
+
+    <p>
+      <code>bun run start</code> is the production entry: the same single process,
+      without hot reloading. There is no build step for the API, and the admin is
+      bundled at boot.
+    </p>
+
+    <p>Three things to get right before you put it behind a domain:</p>
+
+    <ol>
+      <li><b>Set a real <code>SECRET</code></b>, at least 32 characters. Inkling refuses to boot in production otherwise.</li>
+      <li><b>Set <code>PUBLIC_URL</code></b> to the real origin — media URLs resolve against it.</li>
+      <li><b>Set <code>TRUSTED_PROXIES</code></b> if you run behind a load balancer, so rate limits key on the real client rather than your proxy.</li>
+    </ol>
+
+    <p>
+      A site that would rather not run a second service can mount Inkling inside
+      its own process instead. See
+      <a href="../tutorials/#embed">mounting it inside a site</a>.
+    </p>
+
+    <div class="onward">
+      <a class="cta ghost" href="../start/">← Get set up</a>
+      <a class="cta" href="../tutorials/">Tutorials →</a>
+    </div>
+
+  </main>
+</div>
+
+<footer class="wrap foot">
+  <span>Inkling</span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="../start/">Start</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="../reference/">Reference</a>
+    <a href="https://github.com/wess/inkling">Source</a>
+  </nav>
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>
