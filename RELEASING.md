@@ -58,7 +58,7 @@ Exits non-zero if anything is down or behind, so it can gate a deploy.
    ```
 
 Anything under `docs/` publishes to the site on push — check
-https://wess.io/inkling/ afterwards.
+https://inkling.wess.dev/ afterwards.
 
 ## Rolling it to a site
 

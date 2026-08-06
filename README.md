@@ -12,7 +12,7 @@ ordinary words and it reads your site, works out what you meant, and hands you a
 diff. And a **visitor bubble** you can add to the public site with one script
 tag, answering only from what you have published, under rules you write.
 
-Documentation is at **[wess.io/inkling](https://wess.io/inkling/)**.
+Documentation is at **[inkling.wess.dev](https://inkling.wess.dev/)**.
 
 ## Quick start
 
@@ -330,17 +330,17 @@ and skip otherwise, so `bun test` stays zero-setup.
 
 ## Documentation
 
-- **[wess.io/inkling](https://wess.io/inkling/)** — the site
-  - [Get set up](https://wess.io/inkling/start/) — empty database to a live site
-  - [Guide](https://wess.io/inkling/guide/) — the model, delivery, realtime,
+- **[inkling.wess.dev](https://inkling.wess.dev/)** — the site
+  - [Get set up](https://inkling.wess.dev/start/) — empty database to a live site
+  - [Guide](https://inkling.wess.dev/guide/) — the model, delivery, realtime,
     previews, AI, plugins, and running more than one site
-  - [Tutorials](https://wess.io/inkling/tutorials/) — a blog end to end, writing
+  - [Tutorials](https://inkling.wess.dev/tutorials/) — a blog end to end, writing
     a plugin, three sites at once, mounting it inside a site
-  - [Reference](https://wess.io/inkling/reference/) — every route, field type,
+  - [Reference](https://inkling.wess.dev/reference/) — every route, field type,
     variable, and command
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module layout, data model,
   plugin system, realtime, previews, AI, and the dialect-portability rules
-- [`llms.txt`](https://wess.io/inkling/llms.txt) — the same ground in one pass,
+- [`llms.txt`](https://inkling.wess.dev/llms.txt) — the same ground in one pass,
   written to be read by an agent before it touches the code
 - [`.env.example`](.env.example) — every configuration variable
 

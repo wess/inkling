@@ -9,6 +9,30 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.1.1 — 2026-08-06
+
+The documentation moved to its own home at **inkling.wess.dev**, alongside a new
+School — a knowledge base for people who do not work in software.
+
+### Changed
+
+- Every documentation link points at `inkling.wess.dev` rather than
+  `wess.io/inkling`. The old address still works and still publishes on push;
+  the pages carry a canonical link to the new one so search engines settle on a
+  single home.
+- The documentation pages link to the School, and vice versa.
+
+### Note for anyone running the site
+
+`inkling.wess.dev` serves the guide, reference, tutorials and `llms.txt`
+straight out of `node_modules/inkling/docs` — the copy that ships in the package
+it has pinned. Pin v1.1.1 and you are reading v1.1.1's reference, with no sync
+step to forget and no second copy to drift.
+
+The consequence is worth stating: a documentation change now needs a release to
+reach that site. That is the intended trade for a reference that always matches
+the code it describes.
+
 ## 1.1.0 — 2026-08-06
 
 Groundwork for templates. Nothing in this release changes how an existing site
