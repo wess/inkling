@@ -1,14 +1,32 @@
-import { get, json, parseJson, pipeline, post } from "atlas/server"
-import { requireAuth, requireCan } from "../../src/auth/guard.ts"
+import { from } from "atlas/db"
+import { badRequest, del, get, json, notFound, parseJson, pipeline, post, redirect } from "atlas/server"
+import { auth, requireAuth, requireCan } from "../../src/auth/guard.ts"
 import { can } from "../../src/auth/roles.ts"
 import { corsAll } from "../../src/http/index.ts"
 import { decodeObject, encode } from "../../src/json/index.ts"
 import { requireApiKey } from "../../src/keys/index.ts"
+import { consentUrl, exchange as exchangeCode, readState as readOAuthState } from "../../src/oauth/index.ts"
 import { definePlugin } from "../../src/plugins/define.ts"
+import { users } from "../../src/schema/index.ts"
 import { now } from "../../src/time/index.ts"
+import {
+  byId as accountById,
+  list as listAccounts,
+  present as presentAccount,
+  remove as removeAccount,
+  save as saveAccount,
+} from "./accounts.ts"
 import { byId, loadType, preview, refTitle, text } from "./entries.ts"
 import { contentTypes, OPEN_STAGES, taxonomies } from "./model.ts"
-import { labelNetworks, NETWORKS } from "./networks.ts"
+import { labelNetworks, NETWORKS, networkLabel } from "./networks.ts"
+import {
+  accountFrom,
+  CONNECTABLE,
+  NETWORK_OAUTH,
+  ready as networkReady,
+  clientFor as socialClientFor,
+  redirectUri as socialRedirectUri,
+} from "./oauth.ts"
 import { buildCalendar, buildQueue } from "./queue.ts"
 import { summarize } from "./report.ts"
 import { list as listResults, prune, read as readResult, record as recordResult } from "./results.ts"
@@ -23,12 +41,22 @@ import { week } from "./week.ts"
 // content nobody wants to assemble by hand — a queue, a week, a report, and a
 // results table — plus the small amount of tidying a post needs on its way in.
 //
-// It deliberately does not post anything anywhere. Publishing to a network
-// means an OAuth app per network, a token per client, and a refresh loop that
-// fails at 3am; a plugin that quietly stopped posting would be worse than no
-// plugin. Stage a post "Posted" when it goes out and paste the link.
+// Connections are half of publishing and are built: an operator authorizes an
+// account per network (./oauth.ts), the tokens are sealed into social_accounts
+// (./accounts.ts), and `accessToken` renews one or marks it for reconnection.
+// What is deliberately *not* here is the other half — the call that pushes a
+// post to a network. Each one wants a different payload, a different media
+// upload dance, and a different set of failures, and a plugin that quietly
+// stopped posting would be worse than no plugin. So the workflow stays what it
+// was: stage a post "Posted" when it goes out and paste the link. The
+// connection is what a per-network publisher will be built on, one at a time.
 
 const KNOWN_NETWORKS = new Set(NETWORKS.map(network => network.value))
+
+// What rides through the network and back in the sealed `state`. `clientId` is
+// carried even though it is always "" today, because the alternative is a
+// second state shape the moment per-client connections arrive.
+type SocialPending = { readonly network: string; readonly clientId: string; readonly userId: string }
 
 const setting = async (
   ctx: { getSetting: <T>(key: string, fallback: T) => Promise<T> },
@@ -144,7 +172,24 @@ export default definePlugin({
       ranges: [7, 30, 90],
       description: "Cadence against what was sold, and what the posts did.",
     },
-    { id: "socialsettings", label: "Social settings", icon: "sliders", kind: "settings" },
+    {
+      id: "accounts",
+      label: "Accounts",
+      icon: "link",
+      kind: "connections",
+      endpoint: "/ext/social/accounts",
+      description:
+        "Authorize the accounts this install may act as. Tokens are sealed and renewed automatically. Posting is still done by hand — stage a post Posted and paste the link.",
+    },
+    {
+      id: "socialsettings",
+      label: "Social settings",
+      icon: "sliders",
+      kind: "settings",
+      // Says where the accounts are, because this is the screen someone opens
+      // looking for them — "settings" is where you go to connect a thing.
+      description: "How the calendar and queue behave. To connect the accounts themselves, see Accounts.",
+    },
   ],
 
   routes: ctx => {
@@ -152,6 +197,10 @@ export default definePlugin({
     // Recording results is not, and neither is reading the report.
     const planning = pipeline(requireAuth(ctx.db), requireCan(can.writeContent, "read the social queue"))
     const reporting = pipeline(requireAuth(ctx.db), requireCan(can.publishContent, "read social performance"))
+    // Connecting an account hands this install the right to post as someone's
+    // brand. That is an administrative act, not an editorial one, so it sits
+    // with plugin management rather than with publishing.
+    const connecting = pipeline(requireAuth(ctx.db), requireCan(can.managePlugins, "connect social accounts"))
 
     const timezone = async (): Promise<string> => String(await ctx.getSetting("timezone", "America/New_York"))
 
@@ -278,6 +327,118 @@ export default definePlugin({
           return json(c, 200, { data })
         }),
       ),
+
+      // ------------------------------------------------------ connections
+
+      // What the connections panel draws: every network that could be
+      // connected, whether an app is registered for it, and what we hold.
+      get(
+        "/accounts",
+        connecting(async c => {
+          const held = new Map((await listAccounts(ctx.db)).map(row => [`${row.network}:${row.client_id}`, row]))
+
+          return json(c, 200, {
+            data: {
+              redirectUri: socialRedirectUri(),
+              connections: CONNECTABLE.map(network => {
+                const row = held.get(`${network.value}:`)
+                return {
+                  id: network.value,
+                  label: network.label,
+                  configured: networkReady(network.value),
+                  scopes: NETWORK_OAUTH[network.value]?.scopes ?? [],
+                  connection: row ? presentAccount(row) : null,
+                }
+              }),
+            },
+          })
+        }),
+      ),
+
+      // Returns the consent URL rather than redirecting: the caller is the
+      // admin SPA on a fetch, and a 302 to a third party would be followed by
+      // the fetch rather than by the browser's address bar.
+      post(
+        "/accounts/:network/start",
+        connecting(async c => {
+          const network = String(c.params.network ?? "")
+          const client = socialClientFor(network)
+          if (!client) {
+            throw badRequest(`No developer app is registered for ${networkLabel(network)}`, { code: "NO_OAUTH_CLIENT" })
+          }
+
+          const identity = auth(c)
+          const { url, expiresAt } = await consentUrl<SocialPending>(
+            client,
+            socialRedirectUri(),
+            { network, clientId: "", userId: identity.id },
+            NETWORK_OAUTH[network]?.extra ?? {},
+          )
+          return json(c, 200, { data: { url, expiresAt } })
+        }),
+      ),
+
+      del(
+        "/accounts/:id",
+        connecting(async c => {
+          const row = await accountById(ctx.db, String(c.params.id ?? ""))
+          if (!row) throw notFound("That connection no longer exists")
+          await removeAccount(ctx.db, row.id)
+          return json(c, 200, { data: { id: row.id } })
+        }),
+      ),
+
+      // Public, because the browser arrives here by top-level navigation from
+      // the network and carries no session cookie for a fetch to attach. What
+      // stands in for one is the sealed `state`: it names the admin who started
+      // the flow, expires in ten minutes, and cannot be minted without SECRET.
+      // The capability is re-read on the way through, so an account demoted
+      // mid-flow does not get to finish it.
+      get("/oauth/callback", async c => {
+        const back = (outcome: string, detail?: string) =>
+          redirect(
+            c,
+            `${ctx.adminBase}/plugins/social/accounts?connected=${encodeURIComponent(outcome)}` +
+              (detail ? `&reason=${encodeURIComponent(detail.slice(0, 300))}` : ""),
+          )
+
+        const denied = typeof c.query.error === "string" ? c.query.error : ""
+        if (denied) return back("error", String(c.query.error_description ?? denied))
+
+        const pending = await readOAuthState<SocialPending>(typeof c.query.state === "string" ? c.query.state : "")
+        if (!pending || typeof pending.network !== "string") {
+          return back("error", "That connection link expired or was not issued by this site")
+        }
+
+        const code = typeof c.query.code === "string" ? c.query.code : ""
+        if (!code) return back("error", `${networkLabel(pending.network)} returned no authorization code`)
+
+        const client = socialClientFor(pending.network)
+        if (!client) return back("error", "That network's developer app is no longer configured")
+
+        const actor = await ctx.db.one<{ id: string; role: string; deleted_at: string | null }>(
+          from(users).where(q => q("id").equals(pending.userId)),
+        )
+        if (!actor || actor.deleted_at || !can.managePlugins(actor.role)) {
+          return back("error", "That account may no longer connect social accounts")
+        }
+
+        try {
+          const tokens = await exchangeCode(client, socialRedirectUri(), code, pending.verifier)
+          const account = accountFrom(tokens.payload)
+          await saveAccount(ctx.db, {
+            network: pending.network,
+            clientId: pending.clientId ?? "",
+            account,
+            accountId: null,
+            userId: actor.id,
+            tokens,
+          })
+          return back("ok", account ?? networkLabel(pending.network))
+        } catch (error) {
+          return back("error", error instanceof Error ? error.message : "The network refused the connection")
+        }
+      }),
     ]
   },
 

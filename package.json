@@ -1,7 +1,14 @@
 {
   "name": "inkling",
-  "version": "0.6.0",
+  "version": "0.7.0",
+  "description": "A headless CMS with a plugin system and an agent that can work the whole of it.",
   "type": "module",
+  "license": "MIT",
+  "author": "Wess Cope",
+  "homepage": "https://wess.io/inkling/",
+  "repository": { "type": "git", "url": "git+https://github.com/wess/inkling.git" },
+  "bugs": "https://github.com/wess/inkling/issues",
+  "keywords": ["cms", "headless-cms", "bun", "typescript", "postgres"],
   "private": true,
   "exports": {
     ".": "./src/app.ts",
@@ -28,7 +35,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "atlas": "github:wess/atlas#main",
+    "atlas": "github:wess/atlas#2d092c0",
     "lucide-react": "^0.468.0",
     "react": "^19",
     "react-dom": "^19"

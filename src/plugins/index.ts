@@ -30,9 +30,10 @@ export type Registry = {
   readonly reload: () => Promise<void>
 }
 
-const context = (db: Connection, plugin: Plugin, hooks: Hooks): PluginContext => ({
+const context = (db: Connection, plugin: Plugin, hooks: Hooks, adminBase: string): PluginContext => ({
   db,
   name: plugin.name,
+  adminBase,
   on: (name, fn) => hooks.on(name, plugin.name, fn),
   filter: (name, fn) => hooks.addFilter(name, plugin.name, fn),
   getSetting: (key, fallback) => readSetting(db, plugin.name, key, fallback),
@@ -85,7 +86,7 @@ const loadFromDisk = async (dir: string): Promise<{ plugin?: Plugin; dir: string
   return loaded
 }
 
-export const createRegistry = async (db: Connection, hooks: Hooks, dir: string): Promise<Registry> => {
+export const createRegistry = async (db: Connection, hooks: Hooks, dir: string, adminBase = ""): Promise<Registry> => {
   let entries: LoadedPlugin[] = []
   // Routes are collected once per enabled plugin and served through a stable
   // wrapper, so enabling a plugin at runtime doesn't require restarting
@@ -96,7 +97,7 @@ export const createRegistry = async (db: Connection, hooks: Hooks, dir: string):
     db.all<{ name: string; version: string; enabled: number }>(from(pluginsTable).select("name", "version", "enabled"))
 
   const provision = async (plugin: Plugin): Promise<PluginContext> => {
-    const ctx = context(db, plugin, hooks)
+    const ctx = context(db, plugin, hooks, adminBase)
 
     // Plugin-owned tables live in <plugin>/migrations and are namespaced in
     // schema_migrations so they can never collide with core migration names.
@@ -336,7 +337,9 @@ export const uninstallPlugin = async (
   entry: LoadedPlugin,
   dir: string,
 ): Promise<void> => {
-  await entry.plugin.uninstall?.(context(db, entry.plugin, hooks))
+  // Uninstall drops tables and clears settings; nothing it does redirects a
+  // browser, so the admin's location is not worth threading this far.
+  await entry.plugin.uninstall?.(context(db, entry.plugin, hooks, ""))
 
   const migrations = resolve(`${dir}/${entry.plugin.name}/migrations`)
   if (existsSync(migrations)) await migrateDownAll(db, migrations, `plugin:${entry.plugin.name}`)

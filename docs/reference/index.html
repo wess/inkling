@@ -8,12 +8,10 @@
 <meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
-
-<div class="leader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
 <nav class="nav">
   <div class="wrap nav-in">
@@ -37,6 +35,7 @@
       <li><a href="#socket">Socket frames</a></li>
       <li><a href="#fields">Field types</a></li>
       <li><a href="#roles">Roles</a></li>
+      <li><a href="#ai">AI and agent tools</a></li>
       <li><a href="#env">Configuration</a></li>
       <li><a href="#commands">Commands</a></li>
       <li><a href="#errors">Errors</a></li>
@@ -187,6 +186,96 @@
       stored only as SHA-256 and the plaintext is shown exactly once.
     </p>
 
+    <h2 id="ai">AI providers and agent tools</h2>
+
+    <p>
+      Every AI surface — the field assistant, Inky, and the visitor bubble —
+      runs on one connected provider. Credentials are entered in the admin and
+      stored sealed; none of them is an environment variable.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Provider</th><th>Endpoint</th><th>Connect with</th></tr></thead>
+      <tbody>
+        <tr><td>Claude</td><td>api.anthropic.com</td><td>API key, or OAuth if a client is registered.</td></tr>
+        <tr><td>OpenAI</td><td>api.openai.com</td><td>API key.</td></tr>
+        <tr><td>Ollama (local)</td><td><code>http://127.0.0.1:11434</code>, overridable</td><td>Nothing — it is your machine.</td></tr>
+        <tr><td>Ollama Cloud</td><td><code>https://ollama.com</code>, fixed</td><td>API key. No URL field, because there is no choice to make.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Model names are typed, not chosen from a closed list — the suggestions are
+      a starting point. Inky needs a model that can call tools; the field
+      assistant does not.
+    </p>
+
+    <h3>What Inky can do</h3>
+
+    <p>
+      Thirteen tools: six read, seven propose. Nothing writes. A proposal is a
+      record the admin renders as a diff and applies through the same route your
+      own edit takes.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Tool</th><th>Kind</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td><code>list_content_types</code></td><td>read</td><td>The model — every type and its fields.</td></tr>
+        <tr><td><code>list_entries</code></td><td>read</td><td>Entries of a type, filtered and paged.</td></tr>
+        <tr><td><code>get_entry</code></td><td>read</td><td>One entry in full.</td></tr>
+        <tr><td><code>list_media</code></td><td>read</td><td>The library, so it can pick an existing image.</td></tr>
+        <tr><td><code>get_site_settings</code></td><td>read</td><td>Title, tagline, description, logo, social image.</td></tr>
+        <tr><td><code>list_menus</code></td><td>read</td><td>Your navigation trees.</td></tr>
+        <tr><td><code>propose_entry_update</code></td><td>propose</td><td>Change what a page says.</td></tr>
+        <tr><td><code>propose_entry_create</code></td><td>propose</td><td>Draft a page that does not exist yet.</td></tr>
+        <tr><td><code>propose_entry_status</code></td><td>propose</td><td>Publish, unpublish, or return something to draft.</td></tr>
+        <tr><td><code>propose_type_update</code></td><td>propose</td><td>Add or change a field — which affects every page of that kind, and it says so.</td></tr>
+        <tr><td><code>propose_type_create</code></td><td>propose</td><td>A new kind of page altogether.</td></tr>
+        <tr><td><code>propose_settings_update</code></td><td>propose</td><td>Site details.</td></tr>
+        <tr><td><code>propose_menu_update</code></td><td>propose</td><td>Navigation.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Visitor bubble</h3>
+
+    <table class="table">
+      <thead><tr><th>Route</th><th>Auth</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /ext/assistant/ask</code></td><td><code>X-Api-Key</code></td><td>An answer plus its sources, for a server relaying its visitors' questions.</td></tr>
+        <tr><td><code>POST /ext/assistant/public-ask</code></td><td>Origin allowlist</td><td>The same answer, straight from a browser — no key, because a key in a browser is a key given to everyone.</td></tr>
+        <tr><td><code>GET /ext/assistant/widget.js</code></td><td>—</td><td>The bubble. 404s until you enable it.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Social accounts</h3>
+
+    <p>
+      The <code>social</code> plugin's <b>Accounts</b> panel, which authorizes one
+      account per network. Tokens are sealed the same way AI credentials are, and
+      renewed before they lapse.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Route</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /ext/social/accounts</code></td><td>Every connectable network, whether an app is registered, and what is held.</td></tr>
+        <tr><td><code>POST /ext/social/accounts/:network/start</code></td><td>A consent URL, not a redirect — the caller is a fetch, and a 302 to a third party would be followed by the fetch rather than the address bar.</td></tr>
+        <tr><td><code>GET /ext/social/oauth/callback</code></td><td>The return leg. Public, because the browser arrives by top-level navigation with no session.</td></tr>
+        <tr><td><code>DELETE /ext/social/accounts/:id</code></td><td>Disconnect.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>Connecting is not posting</b>
+      <p>
+        These hold accounts; nothing publishes to a network yet. Each network
+        wants a different call, a different media upload, and a different set of
+        failures, so publishers get built one at a time — meanwhile, stage a post
+        <b>Posted</b> and paste the link.
+      </p>
+    </div>
+
     <h2 id="env">Configuration</h2>
 
     <p>
@@ -237,6 +326,9 @@
         <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_AUTHORIZE_URL</code></td><td>Overrides the shipped default, and is how you wire up a provider with no default at all.</td></tr>
         <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_TOKEN_URL</code></td><td>As above.</td></tr>
         <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_SCOPES</code></td><td>Comma-separated.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_ID</code></td><td>Read only when the <code>social</code> plugin is on. Same shape, same reason — a network's OAuth app is registered against a redirect URI on your domain. Callback: <code>PUBLIC_URL + /ext/social/oauth/callback</code>.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_SECRET</code></td><td>Paired with the id.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_AUTHORIZE_URL</code>, <code>_TOKEN_URL</code>, <code>_SCOPES</code></td><td>Override the shipped defaults for that network.</td></tr>
       </tbody>
     </table>
 

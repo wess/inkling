@@ -527,8 +527,8 @@ reversible option and leaves data intact.
 **Admin UI is declarative.** The SPA is bundled ahead of time, so a plugin
 cannot inject React into it. Instead it describes panels that the SPA already
 knows how to render — which is what makes a plugin installable without a
-rebuild. Four kinds: `settings`, `collection`, `table` (an endpoint plus
-columns), and `stats`.
+rebuild. Five kinds: `settings`, `collection`, `table` (an endpoint plus
+columns), `stats`, and `connections`.
 
 A `stats` panel is a plugin's dashboard. Its endpoint returns a `PluginStats`
 payload — tiles, one series, and any number of top-N tables — and the SPA lays
@@ -539,8 +539,22 @@ a number means. `ranges` adds a day-window switch that re-requests with `?days=`
 Bundled: `seo` (delivery filter), `redirects` (plugin-owned type + public
 route), `forms` (own table via plugin migrations), `commerce` (types +
 taxonomy + settings + route), `analytics` (own table + public write route +
+A `connections` panel is a list of things that can be authorized. Its endpoint
+returns a `PluginConnections` payload; the SPA owns exactly three verbs —
+`POST <endpoint>/<id>/start` for a consent URL, the return leg, and
+`DELETE <endpoint>/<connection id>` — and every word on a row comes from the
+plugin, because only the plugin knows what it is connecting to. A row renders in
+one of three states: no client registered, registered but unconnected, or
+connected (with the account name and, when a refresh has failed, the provider's
+own words). `ctx.adminBase` exists for this and only this: the return leg is a
+top-level navigation and has to land somewhere in the admin.
+
+Bundled: `seo` (delivery filter), `redirects` (plugin-owned type + public
+route), `forms` (own table via plugin migrations), `commerce` (types +
+taxonomy + settings + route), `analytics` (own table + public write route +
 `stats` panel), `assistant` (public AI answers grounded in published content),
-`social` (four types, an `entry.beforeSave` filter, and two `stats` panels).
+`social` (four types, an `entry.beforeSave` filter, two `stats` panels, and a
+`connections` panel).
 
 ### Social
 
@@ -567,9 +581,26 @@ hook, so a failure there leaves the editor's own values instead of failing the
 save. It runs after validation, so everything it writes has to already be legal
 for its field.
 
-Nothing is posted to any network. That would mean an OAuth app per network, a
-token per client, and a refresh loop that fails at 3am; a plugin that quietly
-stopped posting would be worse than no plugin.
+**Accounts.** A `connections` panel authorizes one account per network.
+`oauth.ts` holds each network's authorize/token URLs and default scopes; the
+client id and secret come from `SOCIAL_OAUTH_<NETWORK>_CLIENT_ID` and friends,
+because an OAuth app is registered *with the network* against a redirect URI on
+your domain. A network with no id set renders as "no app registered" rather than
+offering a button that dead-ends. Tokens are sealed into `social_accounts` with
+the same AES-GCM helper the AI credentials use — not a content type, because
+every content type is readable through an editor screen, a revision, the search
+index, and the delivery API, and a refresh token belongs in none of those.
+`accounts.ts#accessToken` is the only way to get a usable token: it renews one
+that is within five minutes of expiring, records the provider's own words when
+that fails, and returns `null` rather than throwing, because a stale connection
+is something to show in a panel.
+
+**Nothing is posted to any network yet, and that is deliberate.** The connection
+is half of publishing; the other half is a per-network call with its own payload
+shape, its own media upload dance, and its own failures. A plugin that quietly
+stopped posting would be worse than no plugin, so the workflow remains: stage a
+post `posted` when it goes out and paste the link. Publishers get built one
+network at a time on top of `accessToken`.
 
 ### Analytics
 

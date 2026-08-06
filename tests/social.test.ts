@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test"
 import { connect, from } from "atlas/db"
+import { accessToken, byId as accountById, list as listAccounts, present, save } from "../plugins/social/accounts.ts"
 import { tidyHashtags } from "../plugins/social/index.ts"
 import { overLimit } from "../plugins/social/networks.ts"
+import { accountFrom, CONNECTABLE, clientFor, ready as networkReady } from "../plugins/social/oauth.ts"
 import { buildQueue } from "../plugins/social/queue.ts"
 import { summarize } from "../plugins/social/report.ts"
 import { list, read, record } from "../plugins/social/results.ts"
@@ -220,4 +222,118 @@ test("the report measures cadence against what was sold", async () => {
   expect(withNumbers.series?.label).toBe("Impressions")
   expect(withNumbers.tiles.find(item => item.label === "Reach")?.value).toBe("4,000")
   expect(withNumbers.tiles.find(item => item.label === "Engagement")?.value).toBe("5.0%")
+})
+
+// ------------------------------------------------------------ connections
+
+test("a connected account round-trips its tokens and never stores them in the clear", async () => {
+  const db = await ready()
+
+  const saved = await save(db, {
+    network: "linkedin",
+    clientId: "",
+    account: "Ash & Ember",
+    accountId: null,
+    userId: "user-1",
+    tokens: {
+      accessToken: "at-secret-value",
+      refreshToken: "rt-secret-value",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      scope: "w_member_social",
+      payload: {},
+    },
+  })
+
+  const stored = await accountById(db, saved.id)
+  expect(stored).not.toBeNull()
+
+  // The whole point of the table: the plaintext is not in it.
+  const raw = JSON.stringify(stored)
+  expect(raw).not.toContain("at-secret-value")
+  expect(raw).not.toContain("rt-secret-value")
+
+  // And it is still readable through the one door that opens it.
+  expect(await accessToken(db, stored as NonNullable<typeof stored>)).toBe("at-secret-value")
+
+  // Nothing presented to the admin carries ciphertext either.
+  const view = present(stored as NonNullable<typeof stored>)
+  expect(view.account).toBe("Ash & Ember")
+  expect(Object.keys(view)).not.toContain("access_ct")
+})
+
+test("reconnecting replaces the connection rather than stacking a second one", async () => {
+  const db = await ready()
+  const tokens = (value: string) => ({
+    accessToken: value,
+    refreshToken: null,
+    expiresAt: null,
+    scope: null,
+    payload: {},
+  })
+
+  const first = await save(db, {
+    network: "x",
+    clientId: "",
+    account: "@ashember",
+    accountId: null,
+    userId: "user-1",
+    tokens: tokens("first"),
+  })
+  const second = await save(db, {
+    network: "x",
+    clientId: "",
+    account: "@ashember",
+    accountId: null,
+    userId: "user-1",
+    tokens: tokens("second"),
+  })
+
+  expect(second.id).toBe(first.id)
+  expect(await listAccounts(db)).toHaveLength(1)
+  expect(await accessToken(db, second)).toBe("second")
+})
+
+test("an expired connection with no way to renew reads as reconnect-me, not as a throw", async () => {
+  const db = await ready()
+
+  const row = await save(db, {
+    network: "tiktok",
+    clientId: "",
+    account: null,
+    accountId: null,
+    userId: null,
+    // Expired, and no refresh token came with it.
+    tokens: {
+      accessToken: "stale",
+      refreshToken: null,
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+      scope: null,
+      payload: {},
+    },
+  })
+
+  expect(await accessToken(db, row)).toBeNull()
+  const after = await accountById(db, row.id)
+  expect(present(after as NonNullable<typeof after>).error).toContain("Reconnect")
+})
+
+test("a network with no developer app registered is never offered", () => {
+  // Nothing sets SOCIAL_OAUTH_*_CLIENT_ID in the test environment, so every
+  // network is unconfigured — which is exactly the state a fresh install is in,
+  // and the panel has to render it without offering a button that dead-ends.
+  expect(CONNECTABLE.length).toBeGreaterThan(0)
+  for (const network of CONNECTABLE) {
+    expect(networkReady(network.value)).toBe(false)
+    expect(clientFor(network.value)).toBeNull()
+  }
+
+  // "newsletter" is a network a post can go out on, but it has no
+  // authorization server, so it must not appear in the connectable list.
+  expect(CONNECTABLE.map(network => network.value)).not.toContain("newsletter")
+})
+
+test("the account label is read out of whichever shape the network sent", () => {
+  expect(accountFrom({ username: "ashember" })).toBe("ashember")
+  expect(accountFrom({ data: { name: "Ash & Ember" } })).toBe("Ash & Ember")
+  expect(accountFrom({ expires_in: 3600 })).toBeNull()
 })

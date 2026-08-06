@@ -4,155 +4,298 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Inkling — the cutting room for your content</title>
-<meta name="description" content="Write, stage, and cut content live. Inkling holds every word, image, and structure your sites read from, and pushes the change the moment you make it.">
+<meta name="description" content="Write it, shape it, cut it to air. Inkling holds every word, image, and structure your sites are made of — and there's an assistant inside it that does the work when you ask.">
 <meta name="color-scheme" content="light">
 <meta property="og:title" content="Inkling — the cutting room for your content">
-<meta property="og:description" content="Write, stage, and cut content live.">
+<meta property="og:description" content="Write it, shape it, cut it to air.">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="site.css">
 <style>
-/* Hero only. The shared system lives in site.css; what follows is the title
-   sequence, which no other page runs. */
+/* Hero only. The shared system is in site.css; what follows is the title card,
+   which no other page runs. */
 
 .sequence {
   position: relative;
-  padding-block: clamp(3.5rem, 11vh, 7rem) clamp(3rem, 8vh, 5rem);
-  isolation: isolate;
   overflow: hidden;
+  padding-block: clamp(3rem, 9vh, 6rem) clamp(3.5rem, 10vh, 7rem);
+  isolation: isolate;
 }
 
-/* Two slow plates bleeding through each other — the ink still wet. */
-.wash-a, .wash-b { position: absolute; z-index: -1; filter: blur(80px); pointer-events: none; }
-.wash-a {
-  inset: -25% 45% 30% -15%;
-  background: radial-gradient(closest-side, rgba(0, 180, 204, 0.4), transparent);
-  animation: drift-a 24s ease-in-out infinite alternate;
+/* Mid-century geometry. A starburst, an arch, and a set of concentric rings —
+   the three figures a 1958 designer reached for when a page needed a shape and
+   not a picture. All drawn in CSS: a repeating conic gradient makes the rays,
+   a half-round makes the arch, and repeating radial stops make the rings. No
+   image, and nothing that needs a second request. */
+.cut { position: absolute; z-index: -1; pointer-events: none; }
+
+/* The arch — the doorway of every mid-century house drawing, and a
+   counterweight to the sun on the opposite corner. */
+.cut-bar {
+  width: clamp(72px, 11vw, 140px);
+  height: clamp(100px, 15vw, 190px);
+  background: var(--deep);
+  border-radius: var(--pill) var(--pill) 0 0;
+  bottom: -6%;
+  right: 8%;
+  animation: bloom 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s backwards;
 }
-.wash-b {
-  inset: -30% -15% 35% 45%;
-  background: radial-gradient(closest-side, rgba(245, 50, 127, 0.3), transparent);
-  animation: drift-b 30s ease-in-out infinite alternate;
+
+/* The atom. Three orbits and a nucleus, with one electron running the middle
+   ring — the single figure that says 1962 rather than 1958, and the only thing
+   on this page that moves once the load animation is finished.
+
+   It earns its place: a nucleus with things orbiting it and coming back around
+   is what this product does. Content sits in the middle and every site reading
+   it is told, on its own path, when it changes.
+
+   The electron travels on `offset-path`. Where that is unsupported the dot
+   simply rests at the twelve o'clock of its orbit, which still reads as part
+   of the diagram — so the fallback is a static atom, not a missing one. */
+.cut-wedge {
+  width: clamp(270px, 33vw, 450px);
+  aspect-ratio: 1;
+  top: 1%;
+  left: auto;
+  right: 2%;
+  animation: bloom 1s cubic-bezier(0.22, 1, 0.36, 1) 0.1s backwards;
 }
-@keyframes drift-a { to { transform: translate3d(5%, 7%, 0) scale(1.18); } }
-@keyframes drift-b { to { transform: translate3d(-7%, 4%, 0) scale(1.12); } }
+
+/* Heavier strokes than a diagram would use, because this is now carrying the
+   corner on its own. Mustard for the orbits and persimmon for the nucleus is
+   not a coincidence — it is the sun's colour weight, redistributed. */
+.orbit {
+  position: absolute;
+  inset: 34% 0;
+  border: 3px solid var(--sun);
+  border-radius: 50%;
+}
+.orbit:nth-child(2) { transform: rotate(60deg); }
+.orbit:nth-child(3) { transform: rotate(-60deg); }
+
+.nucleus {
+  position: absolute;
+  inset: 39%;
+  border-radius: 50%;
+  background: var(--flame);
+}
+
+/* Each electron rides its own shell, which carries the orbit's rotation. The
+   rotation cannot go on the electron itself: `transform` composes after
+   `offset-*`, so it would spin the dot about its own centre and leave the path
+   where it was. */
+.shell { position: absolute; inset: 0; }
+.shell-b { transform: rotate(60deg); }
+
+.electron {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(14px, 1.7vw, 22px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--aqua);
+  /* Matches .orbit's inset — 50% of the box wide, 16% of it tall. */
+  offset-path: ellipse(50% 16% at 50% 50%);
+  offset-rotate: 0deg;
+  animation: orbit 9s linear infinite;
+}
+/* Different periods, so the two never settle into a pattern the eye can
+   predict — which is what would make it read as a loading spinner. */
+.electron-b { background: var(--deep); animation-duration: 14s; animation-delay: -3s; }
+
+@keyframes orbit {
+  to { offset-distance: 100%; }
+}
+
+/* A boomerang, low and to the right, angled so it points into the page rather
+   than out of it. */
+.fleck {
+  width: clamp(96px, 13vw, 168px);
+  height: clamp(58px, 7.6vw, 98px);
+  background: var(--aqua);
+  bottom: 7%;
+  left: 52%;
+  transform: rotate(-10deg);
+  animation: bloom 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.36s backwards;
+}
+
+/* One spark. Two read as a pattern and three read as weather; one reads as a
+   mark someone put there. Kept well clear of the wordmark, where anything
+   overlapping a letterform is indistinguishable from a rendering fault. */
+.twinkle {
+  width: clamp(22px, 2.6vw, 34px);
+  aspect-ratio: 1;
+  background: var(--flame);
+  top: 52%;
+  left: 51%;
+  animation: bloom 0.7s ease 0.5s backwards;
+}
+
+/* Narrow screens have no room for scenery. The title card keeps the atom —
+   it is the signature and the page is poorer without it — but it retreats into
+   the corner above the wordmark, and the two accents go entirely. A boomerang
+   sitting on a button and an electron parked on the "G" both read as faults
+   rather than as decoration, and there is nowhere else for them to be. */
+@media (max-width: 760px) {
+  .cut-wedge {
+    width: clamp(150px, 44vw, 215px);
+    top: -3%;
+    right: -7%;
+  }
+  .orbit { border-width: 2px; }
+  .fleck,
+  .twinkle {
+    display: none;
+  }
+}
+
+@keyframes bloom {
+  from { opacity: 0; transform: scale(0.82) rotate(-8deg); }
+  to { opacity: 1; transform: none; }
+}
 
 .slate {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.28em;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: var(--muted);
   display: flex;
-  gap: 1.1rem;
+  gap: 1rem;
   align-items: center;
   margin-bottom: clamp(1.5rem, 4vh, 2.5rem);
 }
-.slate::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--edge), transparent); }
+/* A hairline that ends in a dot — how a mid-century diagram points at a thing
+   rather than underlining it. */
+.slate::after { content: ""; flex: 1; height: 1px; background: var(--ink); }
+.slate::before {
+  content: "";
+  order: 3;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--flame);
+  flex: none;
+}
 
 .title {
-  font-size: clamp(4.2rem, 16vw, 14rem);
-  line-height: 0.98;
-  letter-spacing: -0.015em;
-  font-weight: 600;
+  /* The word is 7 letters and measures ~6.6em at this weight and tracking, so
+     the frame (1180px, or 90vw below that) sets the ceiling: 1180 / 6.6 ≈ 10.5rem.
+     nowrap is the belt to that braces — if the webfont fails and a wider
+     fallback loads, a clipped edge beats "INKLIN / G". */
+  font-size: clamp(2.75rem, 12vw, 10.5rem);
+  white-space: nowrap;
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+  font-weight: 700;
   margin: 0;
+  text-transform: uppercase;
 }
-/* Each letter is a plate seating into register, and the last one takes the
-   magenta — the strip that finishes the print. */
-.title span { display: inline-block; animation: seat 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-.title span:last-child { color: var(--magenta); }
-@keyframes seat {
-  from { opacity: 0; transform: translateY(0.3em) rotate(-4deg); filter: blur(10px); }
-  to   { opacity: 1; transform: none; filter: blur(0); }
+/* Each letter is cut and dropped into place. */
+.title span { display: inline-block; animation: cutin 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+/* The last letter takes the third colour, not the first: it lands on top of the
+   flame disc, and flame-on-flame erased it — the word read "INKLIN". Deep blue
+   holds against the disc and against bare paper, which is the other half of
+   where it can fall. */
+.title span:last-child { color: var(--deep); }
+@keyframes cutin {
+  from { opacity: 0; transform: translateY(0.35em) scaleY(0.7); }
+  to { opacity: 1; transform: none; }
 }
 
 .hero-lede {
-  max-width: 36ch;
+  max-width: 26ch;
   margin: clamp(1.5rem, 4vh, 2.25rem) 0 0;
-  font-size: clamp(1.15rem, 1rem + 0.65vw, 1.6rem);
-  line-height: 1.4;
-  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.7s backwards;
+  font-size: clamp(1.2rem, 1rem + 0.8vw, 1.8rem);
+  line-height: 1.3;
+  font-weight: 500;
+  animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.6s backwards;
 }
-.hero-lede em { font-family: var(--display); font-style: italic; color: var(--magenta); }
-@keyframes rise { from { opacity: 0; transform: translateY(1rem); } to { opacity: 1; transform: none; } }
+.hero-lede b { color: var(--flame); font-weight: 700; }
+@keyframes rise { from { opacity: 0; transform: translateY(0.8rem); } to { opacity: 1; transform: none; } }
 
-/* The signature: the states a piece of writing actually passes through. It
-   advances on a beat, and the last frame lights — the product's whole claim in
-   one object. */
+/* The states a piece of writing actually passes through. It advances on a beat
+   and the last one lights — the product's whole claim as one object. */
+/* One capsule, divided. The lozenge is the period's control shape, and a
+   sequence of states reads as a single object with a position in it — which is
+   what a piece of writing moving toward publication actually is. */
 .strip {
   display: flex;
-  gap: 3px;
+  gap: 1px;
   margin-top: clamp(2rem, 5vh, 3rem);
-  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.95s backwards;
+  border: 1px solid var(--ink);
+  border-radius: var(--pill);
+  background: var(--ink);
+  /* Scrolls rather than squeezing. Paired with `flex: 1 0 auto` on the frames
+     this fills the width when there is room and slides when there is not —
+     the alternative was shrinking "SCHEDULED" until it read "SCHEDULE". */
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
-  padding-bottom: 2px;
+  animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.8s backwards;
 }
+.strip::-webkit-scrollbar { display: none; }
 .strip::-webkit-scrollbar { display: none; }
 
 .frame {
   flex: 1 0 auto;
-  min-width: 8rem;
-  padding: 1rem 1rem 0.85rem;
+  padding: 1rem clamp(0.9rem, 3vw, 1.4rem) 0.95rem;
   background: var(--paper);
-  border: 1px solid var(--edge);
-  border-radius: 3px;
   display: grid;
-  gap: 0.5rem;
-  transition: background 0.45s ease, color 0.45s ease, border-color 0.45s ease, transform 0.45s ease;
+  gap: 0.35rem;
+  transition: background 0.35s, color 0.35s;
 }
-.frame-no { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; color: var(--muted); transition: color 0.45s ease; }
-.frame-state { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase; }
-.frame-bar { height: 3px; border-radius: 2px; background: var(--edge); transition: background 0.45s ease; }
-
-.frame[data-on="true"] { border-color: var(--cyan); }
-.frame[data-on="true"] .frame-bar { background: var(--cyan); }
-
-/* Light is spent in exactly one place. */
-.frame[data-live="true"] {
-  background: var(--magenta);
-  border-color: var(--magenta);
-  color: #fff;
-  transform: translateY(-4px);
+.frame:first-child { padding-left: clamp(1.2rem, 4vw, 1.9rem); }
+.frame:last-child { padding-right: clamp(1.2rem, 4vw, 1.9rem); }
+.frame-no { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.14em; color: var(--dim); transition: color 0.35s; }
+.frame-state {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: clamp(0.76rem, 2.4vw, 0.85rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
+
+.frame[data-on="true"] { background: var(--sun); }
+.frame[data-on="true"] .frame-no { color: rgba(38, 33, 28, 0.62); }
+.frame[data-live="true"] { background: var(--flame); color: var(--paper); }
 .frame[data-live="true"] .frame-no { color: rgba(255, 255, 255, 0.75); }
-.frame[data-live="true"] .frame-bar { background: var(--yellow); }
 
 .beat {
   display: flex;
-  gap: 0.55rem;
+  gap: 0.5rem;
   align-items: baseline;
-  margin-top: 1rem;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
+  margin-top: 0.9rem;
+  padding-left: clamp(1.2rem, 4vw, 1.9rem);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--muted);
 }
-.beat b { color: var(--magenta); font-weight: 500; }
+.beat b { color: var(--flame); }
 
-/* Credits — role on the left, what it does on the right, like a title card. */
-.credits { display: grid; border-top: 1px solid var(--edge); }
-.credit { display: grid; gap: 0.3rem 2.5rem; grid-template-columns: 1fr; padding-block: 1.4rem; border-bottom: 1px solid var(--edge); }
+/* Credits — role left, what it does right, like a title card. */
+.credits { display: grid; }
+.credit { display: grid; gap: 0.3rem 2.5rem; grid-template-columns: 1fr; padding-block: 1.3rem; border-bottom: 1px solid rgba(255, 255, 255, 0.18); }
 @media (min-width: 760px) { .credit { grid-template-columns: 15rem 1fr; } }
-.credit dt { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan); padding-top: 0.3rem; }
-.credit:nth-child(even) dt { color: var(--magenta); }
+.credit:first-child { border-top: 1px solid rgba(255, 255, 255, 0.18); }
+.credit dt { font-family: var(--display); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--sun); padding-top: 0.3rem; }
 .credit dd { margin: 0; max-width: 54ch; }
-.credit dd span { color: var(--muted); }
 
 .split { display: grid; gap: clamp(1.75rem, 4vw, 3.5rem); grid-template-columns: 1fr; align-items: center; }
 @media (min-width: 940px) { .split { grid-template-columns: 0.9fr 1.1fr; } }
 
 .close { text-align: center; padding-block: clamp(4.5rem, 14vh, 8rem); }
-.close h2 { font-size: clamp(2.8rem, 9vw, 6.5rem); }
-.close p { color: var(--muted); margin: 1.1rem auto 2.25rem; max-width: 42ch; }
+.close h2 { font-size: clamp(3rem, 11vw, 8rem); text-transform: uppercase; }
+.close p { margin: 1.1rem auto 2.25rem; max-width: 40ch; font-size: 1.1rem; }
 </style>
 </head>
 <body>
-
-<div class="leader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
 <nav class="nav">
   <div class="wrap nav-in">
@@ -168,8 +311,18 @@
 </nav>
 
 <header class="sequence">
-  <div class="wash-a" aria-hidden="true"></div>
-  <div class="wash-b" aria-hidden="true"></div>
+  <div class="cut cut-bar" aria-hidden="true"></div>
+  <div class="cut cut-wedge" aria-hidden="true">
+    <span class="orbit"></span>
+    <span class="orbit"></span>
+    <span class="orbit"></span>
+    <span class="nucleus"></span>
+    <span class="shell"><span class="electron"></span></span>
+    <span class="shell shell-b"><span class="electron electron-b"></span></span>
+  </div>
+
+  <div class="cut fleck boomerang" aria-hidden="true"></div>
+  <div class="cut twinkle spark" aria-hidden="true"></div>
 
   <div class="wrap">
     <p class="slate">Reel 01 &nbsp;·&nbsp; The cutting room</p>
@@ -179,36 +332,65 @@
     <h1 class="title" id="title">Inkling</h1>
 
     <p class="hero-lede">
-      Every word, image, and shape your sites are made of, held in one place —
-      and <em>cut to air</em> the moment you say so.
+      Every word, image, and shape your sites are made of — and an assistant
+      inside that <b>does the work when you ask</b>.
     </p>
 
     <div class="strip" role="img" aria-label="A piece of writing moving from draft through review and scheduling to live">
-      <div class="frame" data-frame><span class="frame-no">FR 01</span><span class="frame-state">Draft</span><span class="frame-bar"></span></div>
-      <div class="frame" data-frame><span class="frame-no">FR 02</span><span class="frame-state">Review</span><span class="frame-bar"></span></div>
-      <div class="frame" data-frame><span class="frame-no">FR 03</span><span class="frame-state">Scheduled</span><span class="frame-bar"></span></div>
-      <div class="frame" data-frame data-final><span class="frame-no">FR 04</span><span class="frame-state">Live</span><span class="frame-bar"></span></div>
+      <div class="frame" data-frame><span class="frame-no">FR 01</span><span class="frame-state">Draft</span></div>
+      <div class="frame" data-frame><span class="frame-no">FR 02</span><span class="frame-state">Review</span></div>
+      <div class="frame" data-frame><span class="frame-no">FR 03</span><span class="frame-state">Scheduled</span></div>
+      <div class="frame" data-frame data-final><span class="frame-no">FR 04</span><span class="frame-state">Live</span></div>
     </div>
 
     <p class="beat"><span>On air in</span> <b id="beat">—</b></p>
 
     <div class="actions">
-      <a class="cta" href="start/">Start writing <span aria-hidden="true">→</span></a>
-      <a class="cta ghost" href="guide/">Read the guide</a>
+      <a class="cta" href="start/">Start writing →</a>
+      <a class="cta ghost" href="guide/">See how it works</a>
     </div>
   </div>
 </header>
 
 <main>
 
+  <!-- ————————————————————— Inky, up front ————————————————————— -->
+  <section class="flood-flame upswept">
+    <div class="wrap split">
+      <div class="head enter" style="margin-bottom:0">
+        <p class="eyebrow">Meet Inky</p>
+        <h2>Just say what you want.</h2>
+        <p class="dim">
+          Inky reads your site — the pages, the shapes they take, your images,
+          your menus — then does the thing you asked for. It shows you the change
+          before anything is saved.
+        </p>
+      </div>
+
+      <div class="screen enter" aria-label="An example of asking Inky for a change">
+<pre><span class="c">→ you</span>
+<span class="w">Add a page about our new roastery, and put it in the menu</span>
+
+<span class="c">→ inky</span>
+<span class="g">read</span> your page shapes … 3 kinds
+<span class="g">read</span> two existing pages, for the voice
+<span class="m">drafted</span> "Our Roastery" — intro, body, hours
+<span class="m">queued</span> a menu item under Visit
+
+<span class="w">Both are waiting for you to look at. Nothing is live yet.</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ————————————————————— what it holds ————————————————————— -->
   <section class="wrap">
     <div class="head enter">
       <p class="eyebrow">What it holds</p>
       <h2>Shape the content, not the page.</h2>
-      <p>
-        You describe what a product, a post, or a landing page is made of. Inkling
-        gives your team the screens to fill it in, and gives your sites one clean
-        way to read it back.
+      <p class="dim">
+        You describe what a product, a post, or a landing page is made of.
+        Inkling gives your team the screens to fill it in, and your sites one
+        clean way to read it back.
       </p>
     </div>
 
@@ -216,42 +398,43 @@
       <article class="cell">
         <span class="tag">Models</span>
         <h3>Your own shapes</h3>
-        <p>Build the models your work actually has — repeating sections, image galleries, links between records. No field type you have to work around.</p>
+        <p>Repeating sections, image galleries, links between records. No field type you have to work around.</p>
       </article>
       <article class="cell">
         <span class="tag">History</span>
         <h3>A real edit history</h3>
-        <p>Every save keeps what it replaced. Read an old version before you restore it, and put anything back without losing the thing you're replacing.</p>
+        <p>Every save keeps what it replaced. Read an old version before you restore it, and undo the undo.</p>
       </article>
       <article class="cell">
         <span class="tag">Sharing</span>
         <h3>Show work early</h3>
-        <p>Send an unpublished piece to anyone with a link that opens for an hour and expires on its own. No account, no access to anything else.</p>
+        <p>Send an unpublished piece to anyone with a link that opens for an hour and expires on its own.</p>
       </article>
       <article class="cell">
         <span class="tag">Together</span>
         <h3>Move together</h3>
-        <p>See who else is in a record while you're in it. Lists update as your colleagues work, so nobody edits a version that changed ten minutes ago.</p>
+        <p>See who else is in a record while you're in it. Nobody edits a version that changed ten minutes ago.</p>
       </article>
       <article class="cell">
         <span class="tag">Timing</span>
         <h3>Publish on a schedule</h3>
-        <p>Set the hour and step away. Anything that no longer fits its model comes back to review instead of going out broken.</p>
+        <p>Set the hour and step away. Anything that no longer fits its model comes back to review rather than going out broken.</p>
       </article>
       <article class="cell">
         <span class="tag">Access</span>
         <h3>Roles that hold</h3>
-        <p>Writers keep to their own drafts, editors publish, admins shape the model. Change someone's role and it takes effect on their next click.</p>
+        <p>Writers keep to their drafts, editors publish, admins shape the model. Change a role and it takes effect on the next click.</p>
       </article>
     </div>
   </section>
 
-  <section class="wrap">
-    <div class="split">
+  <!-- ————————————————————— delivery ————————————————————— -->
+  <section class="flood-mist">
+    <div class="wrap split">
       <div class="head enter" style="margin-bottom:0">
         <p class="eyebrow">What your sites read</p>
         <h2>One request, whole page.</h2>
-        <p>
+        <p class="dim">
           Ask for a piece of content and the images and linked records come back
           filled in — not as references you have to go and fetch. Drafts never
           appear here, whoever asks.
@@ -278,92 +461,91 @@
     </div>
   </section>
 
-  <section class="wrap">
-    <div class="head enter">
-      <p class="eyebrow">Reel 02</p>
-      <h2>The change arrives on its own.</h2>
-      <p>
-        When something goes live, your sites are told. No timer polling for news,
-        no cache you have to guess the age of — the page that changed is the page
-        that refreshes.
-      </p>
-    </div>
+  <!-- ————————————————————— the rest of the reel ————————————————————— -->
+  <section class="flood">
+    <div class="wrap">
+      <div class="head enter">
+        <p class="eyebrow" style="color:var(--sun)">Reel 02</p>
+        <h2>The change arrives on its own.</h2>
+        <p class="dim">
+          When something goes live, your sites are told. No timer polling for
+          news, no cache you have to guess the age of.
+        </p>
+      </div>
 
-    <dl class="credits enter">
-      <div class="credit">
-        <dt>Live updates</dt>
-        <dd>Your sites hear the moment a piece is published, pulled, or replaced. <span>They're told what changed, then read it back the same way they always do.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>In the room</dt>
-        <dd>Names appear on a record while your colleagues have it open. <span>Nobody discovers the collision at save time.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>Working assistant</dt>
-        <dd>Bring your own assistant and it works on <em>this</em> content. <span>Draft into a field, tighten a paragraph, write the summary, suggest titles — it can see your models, so it answers about your site instead of in general.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>A hand with the page</dt>
-        <dd>Ask for a page to be reshaped or drafted and it reads your models, your writing, and your images before it answers. <span>It proposes; you see exactly what would change and decide. Applying it is an ordinary save, so it lands in your history like any other edit.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>Answers for visitors</dt>
-        <dd>Turn on the public assistant and readers can ask questions of the page they're on. <span>It answers from what you've published and says so plainly when the answer isn't there.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>Many at once</dt>
-        <dd>Select a season's worth of posts and publish, archive, or retire them together. <span>Each one is checked on its own, and you're told exactly which didn't pass.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>A plan for social</dt>
-        <dd>Keep the campaign, the channels, and every post on one calendar, and see what actually happened after they went out. <span>It plans and records; it never posts on your behalf.</span></dd>
-      </div>
-      <div class="credit">
-        <dt>Extendable</dt>
-        <dd>Add your own sections, screens, and content shapes as self-contained pieces. <span>Switch one on and it's there — nothing restarts, nothing rebuilds.</span></dd>
-      </div>
-    </dl>
+      <dl class="credits enter">
+        <div class="credit">
+          <dt>Live updates</dt>
+          <dd>Your sites hear the moment a piece is published, pulled, or replaced. <span class="dim">They're told what changed, then read it back the way they always do.</span></dd>
+        </div>
+        <div class="credit">
+          <dt>In the room</dt>
+          <dd>Names appear on a record while your colleagues have it open. <span class="dim">Nobody discovers the collision at save time.</span></dd>
+        </div>
+        <div class="credit">
+          <dt>Ask for anything</dt>
+          <dd>Inky is in the corner of every screen, and knows what you're looking at. <span class="dim">"Reword this", "add a section for quotes", "take the promo off the menu" — it proposes, you approve, and it lands in your history under your name.</span></dd>
+        </div>
+        <div class="credit">
+          <dt>Answers for visitors</dt>
+          <dd>Add a chat bubble to your public site with one line. <span class="dim">It answers from what you've published, follows the rules you write, and says so plainly when the answer isn't there.</span></dd>
+        </div>
+        <div class="credit">
+          <dt>Your model, your money</dt>
+          <dd>Bring Claude, OpenAI, or Ollama — local or hosted. <span class="dim">Nothing is on until you connect one, and you can turn it off again.</span></dd>
+        </div>
+        <div class="credit">
+          <dt>Many at once</dt>
+          <dd>Select a season's worth of posts and publish, archive, or retire them together. <span class="dim">Each is checked on its own, and you're told which didn't pass.</span></dd>
+        </div>
+        <div class="credit">
+          <dt>Extendable</dt>
+          <dd>Add your own sections, screens, and content shapes as self-contained pieces. <span class="dim">Switch one on and it's there — nothing restarts, nothing rebuilds.</span></dd>
+        </div>
+      </dl>
+    </div>
   </section>
 
+  <!-- ————————————————————— doors ————————————————————— -->
   <section class="wrap">
     <div class="head enter">
       <p class="eyebrow">Where to go</p>
       <h2>Pick up the reel.</h2>
-      <p>Twenty minutes gets you from an empty database to a site reading live content.</p>
+      <p class="dim">Twenty minutes from an empty database to a site reading live content.</p>
     </div>
 
     <div class="doors enter">
       <a class="door" href="start/">
         <span class="go">Start →</span>
         <h3>Get set up</h3>
-        <p>Install it, claim the owner account, build your first model, and read it back from a real site.</p>
+        <p>Install it, claim the owner account, build your first model, read it back from a real site.</p>
       </a>
       <a class="door" href="guide/">
         <span class="go">Guide →</span>
         <h3>How it works</h3>
-        <p>The content model, the delivery API, live updates, previews, the assistant, plugins, and running more than one site.</p>
+        <p>The model, delivery, live updates, previews, Inky, plugins, and running more than one site.</p>
       </a>
       <a class="door" href="tutorials/">
         <span class="go">Tutorials →</span>
         <h3>Build something</h3>
-        <p>A blog end to end, a plugin of your own, three sites at once, and connecting an assistant.</p>
+        <p>A blog end to end, a plugin of your own, three sites at once, a bubble on your site.</p>
       </a>
       <a class="door" href="reference/">
         <span class="go">Reference →</span>
         <h3>Look it up</h3>
-        <p>Every delivery route, every field type, every setting, and the commands that run it.</p>
+        <p>Every delivery route, field type, setting, and command.</p>
       </a>
     </div>
   </section>
 
-  <section class="wrap close">
-    <h2 class="enter">Roll it.</h2>
-    <p class="enter">Run it, open the admin, and start writing. The first person through the door becomes the owner.</p>
-    <!-- The reveal lives on the wrapper: putting .enter on the anchor would let
-         its `transform: none` win over the hover lift. -->
-    <div class="enter actions" style="justify-content:center">
-      <a class="cta" href="start/">Get started <span aria-hidden="true">→</span></a>
-      <a class="cta ghost" href="https://github.com/wess/inkling">Source</a>
+  <section class="flood-sun close">
+    <div class="wrap">
+      <h2 class="enter">Roll it.</h2>
+      <p class="enter">Run it, open the admin, start writing. The first person through the door becomes the owner.</p>
+      <div class="enter actions" style="justify-content:center">
+        <a class="cta" href="start/">Get started →</a>
+        <a class="cta ghost" href="https://github.com/wess/inkling">Source</a>
+      </div>
     </div>
   </section>
 
@@ -382,65 +564,65 @@
 </footer>
 
 <script>
-// Each letter becomes its own plate so they can seat into register one at a
-// time. The word is already in the markup — this only wraps it, so the heading
-// still reads correctly to anything that never runs this.
+// Each letter is cut out and dropped into place. The word is already in the
+// markup — this only wraps it, so the heading still reads correctly to anything
+// that never runs this.
 (function () {
-  const el = document.getElementById("title");
-  const word = el.textContent.trim();
-  el.setAttribute("aria-label", word);
+  var el = document.getElementById("title")
+  var word = el.textContent.trim()
+  el.setAttribute("aria-label", word)
   el.innerHTML = word
     .split("")
-    .map((ch, i) => `<span aria-hidden="true" style="animation-delay:${0.12 + i * 0.055}s">${ch}</span>`)
-    .join("");
+    .map(function (ch, i) { return '<span aria-hidden="true" style="animation-delay:' + (0.1 + i * 0.05) + 's">' + ch + "</span>" })
+    .join("")
 })();
 
-// The cut. Frames advance on a beat; the last one lights and holds, then the
-// sequence starts over — the loop a piece of content actually lives in.
+// The cut. Frames advance on a beat; the last one lights and holds, then it
+// starts over — the loop a piece of content actually lives in.
 (function () {
-  const frames = Array.from(document.querySelectorAll("[data-frame]"));
-  const beat = document.getElementById("beat");
+  var frames = Array.prototype.slice.call(document.querySelectorAll("[data-frame]"))
+  var beat = document.getElementById("beat")
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    frames.forEach(f => f.setAttribute("data-on", "true"));
-    frames[frames.length - 1].setAttribute("data-live", "true");
-    beat.textContent = "now";
-    return;
+    frames.forEach(function (f) { f.setAttribute("data-on", "true") })
+    frames[frames.length - 1].setAttribute("data-live", "true")
+    beat.textContent = "now"
+    return
   }
 
-  let index = 0;
-  const labels = ["4s", "3s", "2s", "now"];
+  var index = 0
+  var labels = ["4s", "3s", "2s", "now"]
 
-  const tick = () => {
-    frames.forEach((frame, i) => {
-      frame.setAttribute("data-on", String(i <= index));
-      frame.removeAttribute("data-live");
-    });
-    if (frames[index].hasAttribute("data-final")) frames[index].setAttribute("data-live", "true");
-    beat.textContent = labels[index];
-    index = (index + 1) % frames.length;
-  };
+  var tick = function () {
+    frames.forEach(function (frame, i) {
+      frame.setAttribute("data-on", String(i <= index))
+      frame.removeAttribute("data-live")
+    })
+    if (frames[index].hasAttribute("data-final")) frames[index].setAttribute("data-live", "true")
+    beat.textContent = labels[index]
+    index = (index + 1) % frames.length
+  }
 
-  tick();
-  setInterval(tick, 1600);
+  tick()
+  setInterval(tick, 1600)
 })();
 
 // Reveal on scroll.
 (function () {
-  const items = document.querySelectorAll(".enter");
+  var items = document.querySelectorAll(".enter")
   if (!("IntersectionObserver" in window)) {
-    items.forEach(i => i.classList.add("seen"));
-    return;
+    Array.prototype.forEach.call(items, function (i) { i.classList.add("seen") })
+    return
   }
-  const io = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
       if (entry.isIntersecting) {
-        entry.target.classList.add("seen");
-        io.unobserve(entry.target);
+        entry.target.classList.add("seen")
+        io.unobserve(entry.target)
       }
-    });
-  }, { rootMargin: "0px 0px -10% 0px" });
-  items.forEach(i => io.observe(i));
+    })
+  }, { rootMargin: "0px 0px -10% 0px" })
+  Array.prototype.forEach.call(items, function (i) { io.observe(i) })
 })();
 </script>
 

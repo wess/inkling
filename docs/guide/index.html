@@ -8,12 +8,10 @@
 <meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
-
-<div class="leader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
 <nav class="nav">
   <div class="wrap nav-in">
@@ -310,6 +308,14 @@ GET /content/post/hello</pre></div>
     </p>
 
     <p>
+      It rides along in the bottom-right corner of every admin screen, and it
+      knows which screen that is. Open a post and ask "make this shorter" and
+      there is no ambiguity about <em>this</em> — the dock hands Inky the page
+      you are looking at along with the question, so the conversation carries
+      on across screens instead of restarting on each one.
+    </p>
+
+    <p>
       It is built for the person who did <em>not</em> build the site. You describe
       what you want in ordinary words — "we need somewhere to put customer
       quotes", "take the old promo off the menu", "the homepage opening is too
@@ -370,6 +376,37 @@ GET /content/post/hello</pre></div>
       guessing when the answer isn't there.
     </p>
 
+    <p>
+      It borrows whatever provider the admin already uses, so there is no second
+      key to manage. Turn on <b>Show a bubble on the public site</b> and it ships
+      its own — one script tag, a shadow root so nothing of yours leaks in or
+      out, and no framework:
+    </p>
+
+    <div class="screen"><pre>&lt;script src="<span class="s">https://cms.yoursite.com/ext/assistant/widget.js</span>" defer&gt;&lt;/script&gt;</pre></div>
+
+    <table class="table">
+      <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Persona</td><td>Who it is and what the site is. Prepended to every answer.</td></tr>
+        <tr><td>Guardrails</td><td>Your house rules in plain sentences — what it must always say, must never promise, and which topics go to a human instead. Added to its instructions verbatim.</td></tr>
+        <tr><td>When the answer isn't in the content</td><td>Returned word for word instead of letting the model guess.</td></tr>
+        <tr><td>Sites allowed to use the bubble</td><td>Comma-separated origins. With none listed the bubble answers nobody — that is the default, and it is deliberate.</td></tr>
+        <tr><td>Content types to search</td><td>Narrow what it reads. Empty means everything published.</td></tr>
+        <tr><td>Questions per hour per visitor</td><td>The ceiling per address. 30 by default.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note warn">
+      <b>Two agents, two jobs</b>
+      <p>
+        Inky works for you and can propose changes. The visitor bubble works for
+        your readers, has no tools at all, and can only answer out of published
+        content. They never share a surface: the admin dock needs a session, and
+        the public route refuses to answer for an origin you did not list.
+      </p>
+    </div>
+
     <h2 id="plugins">Plugins</h2>
 
     <p>
@@ -387,10 +424,13 @@ GET /content/post/hello</pre></div>
     <p>
       Admin panels are <b>declarative</b>. The admin is bundled ahead of time, so a
       plugin cannot inject its own interface into it; instead it describes panels
-      the admin already knows how to render. Four kinds: <code>settings</code>,
-      <code>collection</code>, <code>table</code>, and <code>stats</code> — a
+      the admin already knows how to render. Five kinds: <code>settings</code>,
+      <code>collection</code>, <code>table</code>, <code>stats</code> — a
       dashboard of tiles, a series, and top-N tables that the plugin aggregates
-      <em>and</em> formats, so a panel never has to guess what a number means.
+      <em>and</em> formats, so a panel never has to guess what a number means —
+      and <code>connections</code>, a list of accounts that can be authorized,
+      where the admin owns the connect and disconnect buttons and the plugin owns
+      every word on the row.
     </p>
 
     <p>Two kinds of hook, and the difference is the safety model:</p>
@@ -423,10 +463,30 @@ GET /content/post/hello</pre></div>
     </p>
 
     <p>
-      <code>social</code> plans and records; it posts to no network. That would
-      mean an OAuth app per network, a token per client, and a refresh loop that
-      fails at 3am — and a plugin that quietly stopped posting would be worse than
-      no plugin.
+      <code>social</code> plans, records, and holds the accounts. Its
+      <b>Accounts</b> panel authorizes one account per network — LinkedIn, X,
+      Facebook, Instagram, Threads, TikTok, YouTube, Pinterest, Google Business
+      — and seals the tokens the same way AI credentials are sealed, renewing
+      them before they lapse and saying "reconnect this" when they cannot be
+      renewed.
+    </p>
+
+    <div class="note warn">
+      <b>Connecting is not yet posting</b>
+      <p>
+        The connection is half the job. The other half is a different call per
+        network, each with its own payload, its own media upload, and its own
+        failures — and a plugin that quietly stopped posting would be worse than
+        no plugin. So posts still go out by hand: stage one <b>Posted</b> and
+        paste the link. Publishers are being built one network at a time on top
+        of the connections.
+      </p>
+    </div>
+
+    <p>
+      Each network needs a developer app registered against your callback URL,
+      the same asymmetry AI's OAuth path has. A network with no app configured
+      says so on its row rather than offering a button that dead-ends.
     </p>
 
     <h2 id="sites">More than one site</h2>

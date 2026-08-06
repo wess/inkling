@@ -139,7 +139,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   // route list is resolved per-request through pluginDispatch, so enabling a
   // plugin later does not need a restart.
   const pluginDir = fromRoot(options.pluginDir ?? config.pluginDir)
-  const registry = await createRegistry(db, hooks, pluginDir)
+  const registry = await createRegistry(db, hooks, pluginDir, adminBase === "/" ? "" : adminBase)
 
   // Auto-enable on a fresh install so a new instance boots with the intended
   // baseline rather than an empty plugin list.

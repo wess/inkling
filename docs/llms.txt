@@ -109,18 +109,42 @@ never in `settings`, and are never returned by the API.
   content and does not render the site — so colours, fonts, and layout are the
   consuming site's code, not Inky's. The transcript accepts `role: "tool"`
   (OpenAI carries tool results as their own messages) but never `system`.
+  The admin mounts it as a dock in the corner of every screen (`InkyDock` in
+  `src/web/app.tsx`); `describe(route, types)` turns the current route into one
+  sentence of context that rides along with the question, which is why "make
+  this shorter" resolves without the user naming the entry.
 - `POST /ext/assistant/ask` — the optional public assistant (a plugin), answering
-  from published content only, grounded in the page the visitor is on.
+  from published content only, grounded in the page the visitor is on. Requires
+  an API key, for a site relaying its own visitors' questions server-side.
+- `POST /ext/assistant/public-ask` — the same answer with **no credential**,
+  reached straight from a visitor's browser, because a key shipped to a browser
+  is a key given to everyone. What stands in for it: an operator-set origin
+  allowlist (empty by default, so it answers nobody), a per-address hourly
+  ceiling, and the plugin being disabled until someone turns it on. The origin is
+  checked before the body is read.
+- `GET /ext/assistant/widget.js` — a self-contained bubble (`plugins/assistant/widget.ts`),
+  rendered into a shadow root, that reads its own endpoint off the tag it was
+  loaded by. 403s while the `widget` setting is off. Note the content-type is set
+  *after* `text()`, which would otherwise leave it `text/plain` — and `nosniff`
+  makes a browser refuse that outright.
 
 **Every agent tool is a read, and adding a write one is a bug.** The agent cannot
-write and no flag makes it able to: `propose_entry_update`, `propose_entry_create`,
-`propose_type_update`, `propose_settings_update`, and `propose_menu_update`
-record an intention that the admin renders as a diff and
-applies through `PUT /api/entries/:id` — the same route a human edit takes, so
+write and no flag makes it able to. Six read — `list_content_types`,
+`list_entries`, `get_entry`, `list_media`, `get_site_settings`, `list_menus` —
+and seven record an intention: `propose_entry_update`, `propose_entry_create`,
+`propose_entry_status`, `propose_type_update`, `propose_type_create`,
+`propose_settings_update`, `propose_menu_update`. The admin renders a proposal as
+a diff and applies it through the ordinary route a human edit takes — so
 revisions, validation, slug uniqueness, relation checks, hooks, and the audit
 trail keep working and the history names the person who approved it.
 `tests/aiagent.test.ts` asserts the tool list contains nothing but reads and
 proposals.
+
+Prompt caching (`src/ai/agent.ts`) marks the tool schemas and system prompt once
+and rolls at most two breakpoints across the transcript, because the render order
+is tools → system → messages and Anthropic allows four. `clearBreakpoints` runs
+before `roll` so a long conversation cannot accumulate them; `tests/aicache.test.ts`
+asserts the count stays at or below two.
 
 Two ways to connect a provider. An **API key** is pasted into the admin. **OAuth**
 (`src/ai/oauth.ts`) is authorization-code with PKCE: `POST
@@ -144,9 +168,29 @@ migrations, and hook listeners. Routes are declared relative and namespaced to
 `emit` hooks observe and can never break the core path. `filter` hooks transform,
 and a throwing filter degrades to a no-op rather than blanking the payload.
 
+Panels are declarative — the SPA is bundled before a plugin exists, so a plugin
+describes panels rather than shipping React. Five kinds: `settings`,
+`collection`, `table`, `stats`, `connections`. A `connections` panel is a list
+of authorizable accounts; the SPA owns three verbs (`POST <endpoint>/<id>/start`
+for a consent URL, the return leg, `DELETE <endpoint>/<connection id>`) and the
+plugin owns every word on a row. `ctx.adminBase` exists solely so a plugin's
+OAuth return leg — a top-level navigation — can land back in the admin.
+
 Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`,
 `social` (four content types, an `entry.beforeSave` filter, two `stats` panels,
-and its own `social_results` table; it posts to no network by design).
+a `connections` panel, and its own `social_results` and `social_accounts`
+tables). Social accounts are OAuth'd per network with clients from
+`SOCIAL_OAUTH_<NETWORK>_CLIENT_ID`; tokens are sealed with the same AES-GCM
+helper as AI credentials, and `accounts.ts#accessToken` is the only door that
+opens one — it refreshes inside a five-minute window, records the provider's own
+error when that fails, and returns null rather than throwing. **It still posts
+to no network**: a connection is half of publishing, and the per-network call is
+deliberately not built until it can be built one network at a time.
+
+The generic authorization-code + PKCE machinery is `src/oauth/index.ts` — sealed
+`state` rather than a pending-flows table, ten-minute expiry, form-encoded token
+request with a JSON retry, Basic auth for the providers that demand it.
+`src/ai/oauth.ts` and `plugins/social/oauth.ts` are both thin adapters over it.
 
 ## Gotchas that cost real bugs
 

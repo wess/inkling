@@ -46,7 +46,9 @@ export type PluginPanel = {
   // "collection" renders the CRUD table for one of its content types.
   // "table" renders rows fetched from `endpoint` using `columns`.
   // "stats" renders a PluginStats payload fetched from `endpoint`.
-  readonly kind: "settings" | "collection" | "table" | "stats"
+  // "connections" renders a PluginConnections payload from `endpoint`, with a
+  // connect / reconnect / disconnect control per row.
+  readonly kind: "settings" | "collection" | "table" | "stats" | "connections"
   readonly contentType?: string
   readonly endpoint?: string
   readonly columns?: readonly { key: string; label: string }[]
@@ -70,9 +72,41 @@ export type PluginStats = {
   }[]
 }
 
+// What a "connections" panel's endpoint returns under `data`. The SPA owns the
+// three verbs and nothing else: it POSTs `<endpoint>/<id>/start` for a consent
+// URL and sends the browser there, and DELETEs `<endpoint>/<connection id>` to
+// disconnect. Everything a row *says* — whether an app is registered, what the
+// account is called, why a connection went stale — is the plugin's to decide,
+// because only the plugin knows what it is connecting to.
+export type PluginConnections = {
+  // Printed for the operator to paste into the provider's developer console. A
+  // mismatch here is the most common reason one of these flows fails.
+  readonly redirectUri?: string
+  readonly connections: readonly {
+    id: string
+    label: string
+    // False when no developer app is registered. The row explains itself
+    // instead of offering a button that dead-ends.
+    configured: boolean
+    scopes?: readonly string[]
+    connection: {
+      id: string
+      account: string | null
+      expiresAt: string | null
+      error: string | null
+      connectedAt: string
+    } | null
+  }[]
+}
+
 export type PluginContext = {
   readonly db: Connection
   readonly name: string
+  // Where the admin lives, without a trailing slash ("" when it is at the
+  // root). A plugin needs this for exactly one thing: sending a browser back
+  // into the admin after a top-level redirect it did not initiate, such as an
+  // OAuth return leg. It is not the public URL and not a route prefix.
+  readonly adminBase: string
   readonly on: <K extends EmitName>(name: K, fn: (payload: EmitMap[K]) => void | Promise<void>) => void
   readonly filter: <K extends FilterName>(
     name: K,

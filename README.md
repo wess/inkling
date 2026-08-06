@@ -1,9 +1,18 @@
 # Inkling
 
-A headless CMS with a plugin system, built on [Atlas](https://github.com/wess/atlas).
+A headless CMS with a plugin system and an agent that can work the whole of it,
+built on [Atlas](https://github.com/wess/atlas).
 
-Content lives here; your websites read it over an HTTP delivery API. Runs on
-Postgres, with no build step for the API.
+Content lives here; your websites read it over an HTTP delivery API. One process
+on one port, running on Postgres, with no build step for the API.
+
+Two things set it apart from the rest of the field. **Inky** sits in the corner
+of every admin screen and knows which screen that is — describe a change in
+ordinary words and it reads your site, works out what you meant, and hands you a
+diff. And a **visitor bubble** you can add to the public site with one script
+tag, answering only from what you have published, under rules you write.
+
+Documentation is at **[wess.io/inkling](https://wess.io/inkling/)**.
 
 ## Quick start
 
@@ -63,20 +72,11 @@ database of its own.
 - **Shareable previews** — a signed, hour-long link that shows an unpublished
   entry to someone who has no account
 - **Bulk actions** and one-click duplication across a selection
-- **An editorial assistant** — connect your own AI provider and get drafting,
-  rewriting, summarizing, titles, and metadata that know your content model.
-  Optional, off until you connect one, and available to the public site as a
-  page-aware plugin. Connect it with an API key, or by authorizing an account
-  over OAuth
-- **Inky**, an agent for site work — describe what you want in ordinary words and
-  it reads your content types, entries, media, site details, and menus before
-  answering. Built for the person who did not build the site: it works out
-  whether you mean the words on a page, the shape of that page, your navigation,
-  or your site details. It proposes; you review a diff and apply, and applying is
-  an ordinary save, so every change leaves a revision you can restore. It cannot
-  touch colours, fonts, or layout — those live in your site's own code, and it
-  says so rather than pretending. Runs on Claude, OpenAI, Ollama, or Ollama
-  Cloud
+- **An editorial assistant** — drafting, rewriting, summarizing, titles, and
+  metadata that know your content model, on the fields where you are already
+  working. Connect it with an API key or by authorizing an account over OAuth
+- **[Inky](#inky)**, an agent with the run of the site, and a **visitor bubble**
+  for your public pages. Both optional, both off until you connect a provider
 - **Webhooks** on content events, HMAC-signed
 - **Activity history** for sign-ins, edits, publishing, and media changes
 - **Plugins** that add content types, routes, settings, admin panels, and their
@@ -84,6 +84,65 @@ database of its own.
 - **Nontechnical admin** for building content models, organizing categories,
   writing rich text, nesting menus, scheduling releases, restoring trash,
   managing users safely, and searching or paging through large libraries
+
+## Inky
+
+Connect a provider under **Settings → AI** — Claude, OpenAI, Ollama on your own
+machine, or Ollama Cloud — and Inky appears in the corner of every admin screen.
+Nothing in the admin mentions AI until you do; the credential is sealed with
+AES-GCM under a key derived from `SECRET`, kept in its own table, and never
+returned by the API.
+
+It is built for the person who did *not* build the site. You describe what you
+want the way you would say it out loud, and Inky works out whether that is a
+change to what a page says, to what a page is made of, to your navigation, or to
+your site details:
+
+```
+you   We need a page about our new roastery, and put it in the menu.
+
+inky  read  your page shapes … 3 kinds
+      read  two existing pages, for the voice
+      drafted  "Our Roastery" — intro, body, hours
+      queued   a menu item under Visit
+
+      Both are waiting for you to look at. Nothing is live yet.
+```
+
+Because the dock travels with you, "make this shorter" on an open post has no
+ambiguity about *this* — the screen you are on is handed over with the question.
+
+**Every tool it has is a read.** Inky has thirteen tools: six read your site, and
+seven record a *proposal*. None of them writes, and no setting makes them able
+to. The admin renders a proposal as a diff, and applying it sends the change
+through the same route your own edit takes — so revisions, field validation, slug
+uniqueness, reference checks, and the audit trail all keep working, and the
+history names the person who approved it rather than a machine nobody can ask.
+
+What it will not do is pretend. Inkling stores content; it does not render your
+site. Colours, fonts, spacing, and layout live in your own code, which Inky
+cannot see. Ask for something visual and it finds the content-shaped version of
+the request, then tells you which part belongs to whoever builds the site.
+
+### A bubble for your visitors
+
+The public-facing assistant is the `assistant` plugin rather than core, because
+it is the one AI surface that spends your money on behalf of anonymous
+strangers — that should be a deliberate decision with a switch. Enable it, write
+your house rules into **Guardrails**, list the origins allowed to embed it, and
+add one line to your layout:
+
+```html
+<script src="https://cms.yoursite.com/ext/assistant/widget.js" defer></script>
+```
+
+That is the whole integration — a bubble drawn inside a shadow root, so it cannot
+collide with your CSS and your CSS cannot reach it. It borrows the provider you
+already connected, answers from published content only, grounds itself in the
+page the reader is on, and returns a line you wrote rather than guessing when the
+answer is not there. With no origins listed it answers nobody, which is the
+default. If you would rather draw your own, `POST /ext/assistant/public-ask`
+returns the same answer as JSON.
 
 ## Plugins
 
@@ -97,7 +156,7 @@ Drop a directory into `plugins/` and enable it in the admin. Seven ship with it:
 | `commerce` | Content type + taxonomy + settings + a convenience route |
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
 | `assistant` | A public, page-aware assistant answering from published content only |
-| `social` | Social media management — a queue, a calendar, and a performance report built out of four content types and one results table |
+| `social` | Social media management — a queue, a calendar, a performance report, and OAuth account connections, built out of four content types and two of its own tables |
 
 ```ts
 import { definePlugin } from "../../src/plugins/define.ts"
@@ -178,9 +237,9 @@ through `/content` when you get one, so scopes and publication status are
 enforced on the way out. A key hears only about published content, and only for
 types it is scoped to.
 
-`/Users/wess/Desktop/apothecary` is a worked example: a real site whose every
-word, product, and image comes from Inkling while its markup and CSS stay
-hand-written.
+Nothing about this dictates how your site is built. The sites running on Inkling
+today take every word, product, and image from the delivery API while their
+markup and CSS stay entirely hand-written.
 
 ## Running more than one site
 
@@ -207,7 +266,7 @@ A site that would rather not deploy a second service can mount Inkling in its ow
 process. Install it from GitHub — there is no npm release:
 
 ```bash
-bun add github:wess/inkling#v0.3.0   # pin to a release
+bun add github:wess/inkling#v0.6.0   # pin to a release
 bun add github:wess/inkling          # or follow main
 ```
 
@@ -281,3 +340,14 @@ and skip otherwise, so `bun test` stays zero-setup.
 `docs/` is the site. Anything committed there publishes to the `gh-pages` branch
 on push (`.github/workflows/pages.yml`), so `llms.txt` lands at the site root
 where agents look for it.
+
+## Releases
+
+Sites install Inkling from GitHub and pin it by tag; nothing is published to
+npm. [`CHANGELOG.md`](CHANGELOG.md) is written for the one person who needs it —
+someone deciding whether to move a site from one tag to the next.
+[`RELEASING.md`](RELEASING.md) is how a release is cut and how it reaches a site.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).

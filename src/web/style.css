@@ -2190,3 +2190,183 @@ tbody tr.click:hover {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------- connections
+   A "connections" panel row. Three states share one layout — no developer app
+   registered, registered but unconnected, and connected — because they are the
+   same thing at different stages, and moving the controls between them would
+   make the list read as three different lists. */
+.conns {
+  display: flex;
+  flex-direction: column;
+}
+.conn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+}
+.conn:first-child {
+  border-top: 0;
+}
+.conninfo {
+  flex: 1;
+  min-width: 220px;
+}
+.connname {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+.connmeta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text3);
+}
+.connmeta code {
+  font-size: 11px;
+}
+.pill.ok {
+  background: var(--goodwash);
+  color: var(--good);
+}
+.pill.bad {
+  background: var(--badwash);
+  color: var(--bad);
+}
+/* The redirect URI, which exists to be copied into a developer console. Shown
+   whole and wrapping rather than truncated — a half-copied URI is the failure
+   this element is here to prevent. */
+code.copyable {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius2);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ---------------------------------------------------------------- hints
+   The "?" beside a label. Deliberately quiet: it should be findable when
+   someone is stuck and invisible when they are not, so it carries no colour
+   until it is hovered or focused. */
+.hint {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+.hintdot {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--line2);
+  border-radius: 50%;
+  background: var(--paper3);
+  color: var(--text2);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  display: grid;
+  place-items: center;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+.hintdot:hover,
+.hintdot:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.hinttip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 10px;
+  border-radius: var(--radius2);
+  background: var(--ink);
+  color: #fff;
+  /* --ink is not re-picked for dark mode, where it lands within a few points
+     of --paper. The border is what keeps the tooltip a distinct object there. */
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s,
+    visibility 0.12s;
+  z-index: 60;
+}
+.hinttip.wide {
+  max-width: 340px;
+}
+.hinttip.on,
+.hint:hover .hinttip {
+  opacity: 1;
+  visibility: visible;
+}
+.hinttip code {
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+}
+/* Near the left edge a centred tooltip is clipped by the panel; anchoring it
+   to the trigger keeps the whole sentence on screen. */
+.hint:first-child .hinttip,
+.fl .hinttip {
+  left: -8px;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hinttip {
+    transition: none;
+  }
+}
+/* In a heading the dot must not scale with the title, and its tooltip must not
+   inherit the heading's weight or tracking. */
+h1 > .hint,
+h2 > .hint,
+legend > .hint {
+  margin-left: 8px;
+  transform: translateY(-1px);
+}
+/* And it opens downward. A heading is the first thing on its screen, so there
+   is nothing above it to open into — the default upward tooltip is clipped by
+   the top of the viewport every single time. Below it there is a whole page. */
+h1 > .hint .hinttip,
+h2 > .hint .hinttip,
+legend > .hint .hinttip {
+  top: calc(100% + 7px);
+  bottom: auto;
+  left: -8px;
+  transform: none;
+}
+/* .note lays its children out in a row, which is right for the one-sentence
+   case it was built for. A note with a heading, a paragraph, and a value to
+   copy needs them stacked, so it passes one child and stacks inside it. */
+.notebody {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.notebody p {
+  margin: 0;
+}

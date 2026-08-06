@@ -55,6 +55,7 @@ import type {
   Media,
   MenuItem,
   Plugin,
+  PluginConnectionsPayload,
   PluginPanel,
   PluginStatsPayload,
   Stats,
@@ -85,16 +86,25 @@ const ROLE_RANK: Record<string, number> = { viewer: 0, author: 1, editor: 2, adm
 const hasRole = (role: string, minimum: "author" | "editor" | "admin" | "owner"): boolean =>
   (ROLE_RANK[role] ?? -1) >= (ROLE_RANK[minimum] ?? 99)
 
+// Relative time in whichever direction the moment lies. Plenty of what this
+// formats is in the future — a scheduled publish, a key's expiry, when a social
+// token renews — and a past-only version reports every one of them as "just
+// now", because the difference goes negative and lands under the first
+// threshold. That is worse than a wrong number: it reads as fine.
 const ago = (iso: string | null): string => {
   if (!iso) return "—"
-  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
-  if (seconds < 60) return "just now"
+  const delta = Date.now() - new Date(iso).getTime()
+  const past = delta >= 0
+  const seconds = Math.round(Math.abs(delta) / 1000)
+  const say = (value: string) => (past ? `${value} ago` : `in ${value}`)
+
+  if (seconds < 60) return past ? "just now" : "in a moment"
   const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60) return say(`${minutes}m`)
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return say(`${hours}h`)
   const days = Math.round(hours / 24)
-  if (days < 30) return `${days}d ago`
+  if (days < 30) return say(`${days}d`)
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
 }
 
@@ -258,6 +268,48 @@ const Note = ({ kind, children }: { kind: "err" | "ok" | "info" | "warn"; childr
 )
 
 const Pill = ({ status }: { status: string }) => <span className={`pill ${status}`}>{status}</span>
+
+// A "?" next to a label that most people will never press, and that the one
+// person who needs it can find without leaving the screen.
+//
+// The tooltip is always in the DOM and always referenced by aria-describedby,
+// so assistive technology reads it on focus whether or not it is visible —
+// only sighted reveal is conditional. Hover shows it, focus shows it, and a
+// press toggles it, because on a touch screen there is no hover and a hint you
+// cannot open is decoration. Escape closes it, like every other transient
+// layer in this admin.
+const Hint = ({ text, wide }: { text: React.ReactNode; wide?: boolean }) => {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+
+  // Hover is CSS, not state: a handler on the wrapping span would make a static
+  // element interactive for a behaviour :hover already does, and the pointer
+  // never needs React to know where it is.
+  return (
+    <span className="hint">
+      <button
+        type="button"
+        className="hintdot"
+        aria-label="What is this?"
+        aria-describedby={id}
+        aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={event => {
+          if (event.key !== "Escape" || !open) return
+          event.stopPropagation()
+          setOpen(false)
+        }}
+      >
+        ?
+      </button>
+      <span role="tooltip" id={id} className={cx("hinttip", open && "on", wide && "wide")}>
+        {text}
+      </span>
+    </span>
+  )
+}
 
 const Modal = ({
   title,
@@ -1806,7 +1858,10 @@ const Editor = ({
                   </div>
                   {canPublish && writers.length > 0 ? (
                     <label className="field">
-                      <span className="fl">Credited to</span>
+                      <span className="fl">
+                        Credited to
+                        <Hint text="Who the site shows as the author. Separate from who last edited it — the history records that, and it does not change the byline." />
+                      </span>
                       <select
                         value={entry.authorId ?? ""}
                         onChange={async event => {
@@ -1849,7 +1904,10 @@ const Editor = ({
                         <details className="schedulebox">
                           <summary>Schedule for later</summary>
                           <label className="f">
-                            <span className="fl">Publish at</span>
+                            <span className="fl">
+                              Publish at
+                              <Hint text="It goes live on its own at this time. Anything that no longer fits its content type when the moment arrives comes back to review rather than going out broken." />
+                            </span>
                             <input
                               type="datetime-local"
                               value={scheduleAt}
@@ -1925,7 +1983,10 @@ const Editor = ({
             </div>
             <div className="cardbody">
               <label className="f">
-                <span className="fl">Language</span>
+                <span className="fl">
+                  Language
+                  <Hint text="Which language version this is. Two entries can share a slug if their language differs, which is how a translated page keeps the same URL shape." />
+                </span>
                 <input
                   type="text"
                   value={locale}
@@ -2302,7 +2363,10 @@ const MediaDetail = ({
       </div>
 
       <label className="f">
-        <span className="fl">Alt text</span>
+        <span className="fl">
+          Alt text
+          <Hint text="What the image says, for someone who cannot see it. Describe the content, not the file — &quot;a potter trimming a bowl&quot;, not &quot;IMG_4021&quot;." />
+        </span>
         <input
           disabled={!canManage}
           value={alt}
@@ -2366,7 +2430,13 @@ const Plugins = ({ go, toast }: { go: (route: Route) => void; toast: (message: s
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>Plugins</h1>
+          <h1>
+            Plugins
+            <Hint
+              wide
+              text="Self-contained additions — extra content shapes, screens, routes, and settings. Enabling one takes effect immediately; nothing restarts and nothing rebuilds."
+            />
+          </h1>
           <p className="dim2">Extensions loaded from the plugins directory.</p>
         </div>
       </div>
@@ -2406,18 +2476,26 @@ const Plugins = ({ go, toast }: { go: (route: Route) => void; toast: (message: s
                 <button type="button" className="btn" onClick={() => toggle(plugin)} disabled={!!plugin.error}>
                   {plugin.enabled ? "Disable" : "Enable"}
                 </button>
-                {plugin.enabled && plugin.panels.length > 0 ? (
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => {
-                      const first = plugin.panels[0]
-                      if (first) go({ name: "plugin", plugin: plugin.name, panel: first.id })
-                    }}
-                  >
-                    Open
-                  </button>
-                ) : null}
+                {/* Named after where it lands. A plugin with seven panels has
+                    no obvious "open", and a button that says so beats one that
+                    picks silently — which reads as a bug the first time the
+                    first panel is not the one you wanted. Settings wins when
+                    there is one, because configuring is why you came here. */}
+                {plugin.enabled && plugin.panels.length > 0
+                  ? (() => {
+                      const target = plugin.panels.find(p => p.kind === "settings") ?? plugin.panels[0]
+                      if (!target) return null
+                      return (
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          onClick={() => go({ name: "plugin", plugin: plugin.name, panel: target.id })}
+                        >
+                          {target.label}
+                        </button>
+                      )
+                    })()
+                  : null}
               </div>
             </div>
           </div>
@@ -2565,6 +2643,189 @@ const StatsPanel = ({ panel, toast }: { panel: PluginPanel; toast: (message: str
   )
 }
 
+// A "connections" panel is a list of things that can be authorized, each in one
+// of three states: no developer app registered, registered but not connected,
+// or connected. The SPA owns only the three verbs — start, return, disconnect —
+// and every word on a row comes from the plugin, because only the plugin knows
+// what it is connecting to. See src/plugins/define.ts#PluginConnections.
+const ConnectionsPanel = ({
+  panel,
+  toast,
+}: {
+  panel: PluginPanel
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [payload, setPayload] = useState<PluginConnectionsPayload | null>(null)
+  const [busy, setBusy] = useState(true)
+  const [working, setWorking] = useState("")
+
+  const endpoint = panel.endpoint
+
+  const load = useCallback(() => {
+    if (!endpoint) return
+    setBusy(true)
+    api
+      .pluginConnections(endpoint)
+      .then(setPayload)
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [endpoint, toast])
+
+  useEffect(load, [load])
+
+  // The provider redirects the browser back here with the outcome on the query
+  // string, because a top-level navigation is the only thing it can do. Read it
+  // once, say it out loud, then strip it so a refresh does not re-announce a
+  // connection made ten minutes ago.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const outcome = params.get("connected")
+    if (!outcome) return
+
+    const reason = params.get("reason") ?? ""
+    toast(
+      outcome === "ok" ? `Connected${reason ? ` as ${reason}` : ""}` : reason || "That connection did not complete",
+      outcome !== "ok",
+    )
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [toast])
+
+  const connect = async (id: string) => {
+    if (!endpoint) return
+    setWorking(id)
+    try {
+      // A full-page navigation, not a popup: consent screens routinely refuse
+      // to render in one, and a blocked popup is indistinguishable from a
+      // button that does nothing.
+      window.location.href = (await api.pluginConnect(endpoint, id)).url
+    } catch (error) {
+      toast(errorOf(error), true)
+      setWorking("")
+    }
+  }
+
+  const disconnect = async (row: NonNullable<PluginConnectionsPayload["connections"][number]["connection"]>) => {
+    if (!endpoint) return
+    setWorking(row.id)
+    try {
+      await api.pluginDisconnect(endpoint, row.id)
+      toast("Disconnected")
+      load()
+    } catch (error) {
+      toast(errorOf(error), true)
+    } finally {
+      setWorking("")
+    }
+  }
+
+  if (!endpoint) return <Note kind="warn">This panel does not declare an endpoint to read from.</Note>
+  if (busy && !payload) return <Spinner />
+  if (!payload) return <Empty title="Nothing to connect" hint={panel.description ?? ""} />
+
+  const unconfigured = payload.connections.filter(row => !row.configured)
+
+  return (
+    <>
+      {payload.redirectUri ? (
+        <Note kind="info">
+          {/* One flex child, because .note lays its children out in a row —
+              three siblings here become three columns. */}
+          <div className="notebody">
+            <b>Redirect URI</b>
+            <p>
+              Register this exact value with every provider below. A mismatch is the most common reason one of these
+              refuses, and it fails with a message about our request rather than yours.
+            </p>
+            <code className="copyable">{payload.redirectUri}</code>
+          </div>
+        </Note>
+      ) : null}
+
+      <div className="card">
+        <div className="cardhead">
+          <h2>{panel.label}</h2>
+          {panel.description ? <span className="dim2">{panel.description}</span> : null}
+        </div>
+
+        <div className="conns">
+          {payload.connections.map(row => {
+            const live = row.connection
+            const stale = live?.error ?? null
+
+            return (
+              <div className="conn" key={row.id}>
+                <div className="conninfo">
+                  <div className="connname">
+                    {row.label}
+                    {live && !stale ? <span className="pill ok">Connected</span> : null}
+                    {stale ? <span className="pill bad">Needs attention</span> : null}
+                    {!row.configured ? <span className="pill">No app registered</span> : null}
+                  </div>
+
+                  <div className="connmeta">
+                    {stale ? (
+                      stale
+                    ) : live ? (
+                      <>
+                        {live.account ? `${live.account} · ` : ""}
+                        connected {ago(live.connectedAt)}
+                        {live.expiresAt ? ` · renews ${ago(live.expiresAt)}` : " · does not expire"}
+                      </>
+                    ) : row.configured ? (
+                      (row.scopes ?? []).join(" · ") || "Not connected"
+                    ) : (
+                      <>
+                        Set <code>SOCIAL_OAUTH_{row.id.toUpperCase()}_CLIENT_ID</code> and <code>_CLIENT_SECRET</code>{" "}
+                        to offer this one.
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="row">
+                  {row.configured ? (
+                    <button
+                      type="button"
+                      className={cx("btn sm", live ? "ghost" : "primary")}
+                      disabled={working === row.id}
+                      onClick={() => connect(row.id)}
+                    >
+                      {live ? "Reconnect" : "Connect"}
+                    </button>
+                  ) : null}
+                  {live ? (
+                    <button
+                      type="button"
+                      className="btn sm ghost danger"
+                      disabled={working === live.id}
+                      onClick={() => disconnect(live)}
+                    >
+                      Disconnect
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {unconfigured.length === payload.connections.length ? (
+        <Note kind="warn">
+          <div className="notebody">
+            <b>Nothing is connectable yet</b>
+            <p>
+              Each of these needs a developer app registered with that network, against the redirect URI above. Most
+              take a day or two to be approved. Add the id and secret to your environment and the network appears here
+              ready to connect.
+            </p>
+          </div>
+        </Note>
+      ) : null}
+    </>
+  )
+}
+
 // Plugins cannot ship React into a bundle that was built before they existed,
 // so they describe panels declaratively and this renders them. See
 // src/plugins/define.ts#PluginPanel.
@@ -2602,6 +2863,8 @@ const PluginPanelView = ({
   }
 
   if (panel.kind === "stats") return <StatsPanel panel={panel} toast={toast} />
+
+  if (panel.kind === "connections") return <ConnectionsPanel panel={panel} toast={toast} />
 
   if (panel.kind === "table") {
     const columns = panel.columns ?? []
@@ -2735,7 +2998,13 @@ const TaxonomiesScreen = ({ toast }: { toast: (message: string, bad?: boolean) =
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>Categories</h1>
+          <h1>
+            Categories
+            <Hint
+              wide
+              text="Ways of grouping content that are not the content itself — topics, collections, seasons. You define a grouping once and attach entries to it from the editor; your site can then ask for everything in one."
+            />
+          </h1>
           <p className="dim2">Organize content into groups visitors can browse and filter.</p>
         </div>
         <button type="button" className="btn primary rowend" onClick={() => setCreatingGroup(true)}>
@@ -3163,7 +3432,10 @@ const MenusScreen = ({ toast }: { toast: (message: string, bad?: boolean) => voi
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>Menus</h1>
+          <h1>
+            Menus
+            <Hint text="Your site's navigation, edited here rather than in code. A menu is a named tree of links your site asks for by name." />
+          </h1>
           <p className="dim2">Build navigation your website can place in its header, footer, or anywhere else.</p>
         </div>
         <button type="button" className="btn primary rowend" onClick={() => setCreating(true)}>
@@ -3371,7 +3643,10 @@ const TrashScreen = ({
   return (
     <>
       <div style={{ marginBottom: 18 }}>
-        <h1>Trash</h1>
+        <h1>
+          Trash
+          <Hint text="Deleted entries are kept here rather than removed, so a mistake is one click back. Restoring returns an entry exactly as it was, including its history." />
+        </h1>
         <p className="dim2">Restore something deleted by mistake, or remove it permanently.</p>
       </div>
       <div className="tabs">
@@ -3557,7 +3832,13 @@ const WebhooksScreen = ({ toast }: { toast: (message: string, bad?: boolean) => 
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>Webhooks</h1>
+          <h1>
+            Webhooks
+            <Hint
+              wide
+              text="Tell another system when something happens here. We POST to a URL you own on the events you pick, signed so the receiver can prove it came from this install."
+            />
+          </h1>
           <p className="dim2">Notify another service when content or media changes.</p>
         </div>
         <button type="button" className="btn primary rowend" onClick={() => open()}>
@@ -3699,7 +3980,10 @@ const WebhooksScreen = ({ toast }: { toast: (message: string, bad?: boolean) => 
             />
           </label>
           <label className="f">
-            <span className="fl">Endpoint URL</span>
+            <span className="fl">
+              Endpoint URL
+              <Hint text="Where we POST when the events you pick happen. Every delivery is signed, so the receiver can prove it came from here and not from someone who guessed the URL." />
+            </span>
             <input
               type="url"
               value={form.url}
@@ -3814,7 +4098,10 @@ const ActivityScreen = () => {
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>Activity</h1>
+          <h1>
+            Activity
+            <Hint text="Who did what, and when. Sign-ins, edits, publishing, and media changes, kept whether or not the thing they touched still exists." />
+          </h1>
           <p className="dim2">A record of sign-ins, publishing, edits, and media changes.</p>
         </div>
         <div className="search rowend">
@@ -3965,7 +4252,13 @@ const Keys = ({ types, toast }: { types: ContentType[]; toast: (message: string,
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>API keys</h1>
+          <h1>
+            API keys
+            <Hint
+              wide
+              text="How your websites read this content. A key sees published content and nothing else — never a draft, never a user's email. The full key is shown once, when you mint it, and only its hash is kept."
+            />
+          </h1>
           <p className="dim2">Keys authenticate the delivery API that your website reads from.</p>
         </div>
         <button type="button" className="btn primary rowend" onClick={() => setCreating(true)}>
@@ -4070,7 +4363,13 @@ const Keys = ({ types, toast }: { types: ContentType[]; toast: (message: string,
             <span className="fh">Something that identifies where the key is used.</span>
           </label>
           <fieldset className="keyscopes">
-            <legend>Content access</legend>
+            <legend>
+              Content access
+              <Hint
+                wide
+                text="A key only ever sees published content. This narrows it further, to the types one site actually renders — so a key on your marketing site cannot read your internal notes even if someone finds it."
+              />
+            </legend>
             <p className="dim2">
               Leave every box clear to allow all published content, or choose only what this site needs.
             </p>
@@ -4303,7 +4602,13 @@ const UsersScreen = ({ me, toast }: { me: Identity; toast: (message: string, bad
             </button>
           </label>
           <label className="f">
-            <span className="fl">Role</span>
+            <span className="fl">
+              Role
+              <Hint
+                wide
+                text="Author writes and edits their own drafts. Editor publishes anyone's. Admin also shapes the content model, keys, and users. Owner is all of that and cannot be removed."
+              />
+            </span>
             <select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>
               {roles.map(role => (
                 <option key={role.value} value={role.value}>
@@ -4703,7 +5008,10 @@ const FieldDefinitionEditor = ({
         <details className="fieldadvanced">
           <summary>Advanced</summary>
           <label className="f">
-            <span className="fl">API field name</span>
+            <span className="fl">
+              API field name
+              <Hint text="The key your website reads this value under. camelCase — heroImage, not hero_image. Renaming it after entries exist orphans what they already hold." />
+            </span>
             <input
               type="text"
               className="mono"
@@ -4714,7 +5022,10 @@ const FieldDefinitionEditor = ({
           </label>
           {field.type === "text" || field.type === "textarea" ? (
             <label className="f">
-              <span className="fl">Validation pattern</span>
+              <span className="fl">
+                Validation pattern
+                <Hint text="A regular expression the value must match before it saves. Leave it empty unless you have a format in mind, like a postcode or a product code." />
+              </span>
               <input
                 type="text"
                 className="mono"
@@ -4950,7 +5261,10 @@ const TypeBuilder = ({
             <details className="fieldadvanced">
               <summary>Advanced</summary>
               <label className="f">
-                <span className="fl">API name</span>
+                <span className="fl">
+                  API name
+                  <Hint text="What your website asks for. It appears in the delivery URL — /content/post — and cannot be changed once entries exist, because every site reading it would break." />
+                </span>
                 <input
                   type="text"
                   className="mono"
@@ -4964,7 +5278,10 @@ const TypeBuilder = ({
                 <span className="fh">Site code uses this name. It cannot change after creation.</span>
               </label>
               <label className="f">
-                <span className="fl">Live page URL</span>
+                <span className="fl">
+                  Live page URL
+                  <Hint text="Where this content appears on your real site. Fill it in and the &quot;view&quot; button opens the actual page instead of guessing." />
+                </span>
                 <input
                   type="text"
                   value={form.previewUrl}
@@ -5077,7 +5394,13 @@ const TypesScreen = ({
     <>
       <div className="row" style={{ marginBottom: 18 }}>
         <div>
-          <h1>Content types</h1>
+          <h1>
+            Content types
+            <Hint
+              wide
+              text="The shapes your content can take — what a post, a product, or a landing page is made of. Everything follows from these: the editor screens, what the delivery API returns, and what is checked on save."
+            />
+          </h1>
           <p className="dim2">Decide what your team can create and which fields they fill in.</p>
         </div>
         <button type="button" className="btn primary rowend" onClick={() => go({ name: "types", type: "new" })}>
@@ -5368,12 +5691,24 @@ const GlobalSearch = ({ go }: { go: (route: Route) => void }) => {
   )
 }
 
+// Panel icons are declared by name so a plugin never imports from the bundle.
+// An unknown name falls back to Blocks rather than failing — a plugin naming an
+// icon this build has never heard of is a cosmetic miss, not a broken screen.
 const ICONS: Record<string, typeof FileText> = {
   "shopping-bag": LayoutGrid,
   "corner-up-right": ListTree,
+  "list-checks": List,
+  "trending-up": Activity,
+  "at-sign": Link,
   inbox: Inbox,
   search: Search,
   settings: Settings,
+  sliders: Settings,
+  link: Link,
+  send: Send,
+  calendar: LayoutGrid,
+  target: Activity,
+  briefcase: Users,
 }
 
 // Changing your own password, which is the one account action nobody else can
@@ -6110,7 +6445,13 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
           <h3 style={{ marginTop: 0 }}>Connect a provider</h3>
 
           <label className="f">
-            <span className="fl">Provider</span>
+            <span className="fl">
+              Provider
+              <Hint
+                wide
+                text="Whose model answers, and whose bill it lands on. Every AI surface in Inkling — the writing tools, Inky, and the visitor bubble — runs on the one you connect here."
+              />
+            </span>
             <select
               value={choice}
               onChange={event => {
@@ -6172,7 +6513,10 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
 
           {selected?.needsBaseUrl ? (
             <label className="f">
-              <span className="fl">Base URL</span>
+              <span className="fl">
+                Base URL
+                <Hint text="Only for an instance that is not where this provider normally lives. Leave it alone unless you are running the model yourself and know the address." />
+              </span>
               <input
                 value={baseUrl}
                 placeholder="http://127.0.0.1:11434"
@@ -6182,7 +6526,13 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
           ) : null}
 
           <label className="f">
-            <span className="fl">Model</span>
+            <span className="fl">
+              Model
+              <Hint
+                wide
+                text="Typed, not chosen — the suggestions are a starting point, not a limit. Inky needs one that can call tools; the writing tools do not."
+              />
+            </span>
             <input
               value={model}
               placeholder={selected?.defaultModel}

@@ -8,12 +8,10 @@
 <meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,600;1,6..96,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
-
-<div class="leader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
 <nav class="nav">
   <div class="wrap nav-in">
@@ -382,12 +380,32 @@ bun --env-file=gamma.env src/start.ts</pre></div>
       </li>
 
       <li class="step">
-        <h3>Ask the agent for a page</h3>
+        <h3>Ask Inky for a page</h3>
         <p>
-          The agent reads your types, entries, and media before answering, then
-          proposes changes. You get a diff. Applying it is an ordinary save, so it
-          lands in the entry's history under your name and can be restored like
-          any other edit.
+          Inky is in the bottom-right corner of every admin screen, and it knows
+          which screen you are on. Ask it for something you do not have yet:
+        </p>
+        <div class="screen"><pre><span class="c">you</span>
+We need a page about our return policy.
+
+<span class="c">inky</span>
+You have a Page type with a body and a summary — I've drafted
+one and left it unpublished so you can read it first.
+
+<span class="g">+ Page · "Returns" · draft</span>
+<span class="g">  summary  Our 30-day policy, in short.</span>
+<span class="g">  body     &lt;p&gt;If something isn't right…&lt;/p&gt;</span>
+<span class="w">                                    [ Apply ]  [ Discard ]</span></pre></div>
+        <p>
+          It reads your types, entries, media, menus, and site details before it
+          answers, then proposes. You get a diff. Applying it is an ordinary
+          save, so it lands in the entry's history under <em>your</em> name and
+          can be restored like any other edit.
+        </p>
+        <p>
+          The same conversation can reshape a type ("add a place for customer
+          quotes"), publish or unpublish something, edit your navigation, or
+          change your site title — Inky works out which of those you meant.
         </p>
       </li>
 
@@ -411,6 +429,28 @@ bun --env-file=gamma.env src/start.ts</pre></div>
           content only, grounded in the page the reader is on. It is a plugin
           rather than core because it is the one AI surface that spends your money
           for anonymous visitors — so it should have a switch.
+        </p>
+        <p>
+          It reuses the provider you connected in step one. Write your house
+          rules into <b>Guardrails</b> — this is where you say what it must never
+          promise, and when to hand someone to a human:
+        </p>
+        <div class="screen"><pre><span class="c"># Plugins → Site assistant → Guardrails</span>
+You answer questions about Ash &amp; Ember, a ceramics studio in Columbia.
+Never quote a price or a lead time — those change weekly.
+For custom commissions, point people at the contact page.
+If you don't know, say so and offer the contact page.</pre></div>
+        <p>
+          Then turn on <b>Show a bubble on the public site</b>, list the origins
+          allowed to embed it — with none listed it answers nobody — and add one
+          line to your layout:
+        </p>
+        <div class="screen"><pre>&lt;script src="<span class="s">https://cms.yoursite.com/ext/assistant/widget.js</span>" defer&gt;&lt;/script&gt;</pre></div>
+        <p>
+          That is the whole integration — a bubble in the corner, drawn inside a
+          shadow root so it cannot collide with your CSS and your CSS cannot
+          reach it. If you would rather draw your own, <code>POST
+          /ext/assistant/public-ask</code> is the same answer as JSON.
         </p>
       </li>
 

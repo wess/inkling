@@ -133,7 +133,7 @@ export type PluginPanel = {
   id: string
   label: string
   icon?: string
-  kind: "settings" | "collection" | "table" | "stats"
+  kind: "settings" | "collection" | "table" | "stats" | "connections"
   contentType?: string
   endpoint?: string
   columns?: { key: string; label: string }[]
@@ -147,6 +147,24 @@ export type PluginStatsPayload = {
   tiles: { label: string; value: string; hint?: string }[]
   series?: { label: string; points: { label: string; value: number }[] }
   tables?: { label: string; columns: { key: string; label: string }[]; rows: Record<string, string | number>[] }[]
+}
+
+// Mirrors PluginConnections in src/plugins/define.ts.
+export type PluginConnectionsPayload = {
+  redirectUri?: string
+  connections: {
+    id: string
+    label: string
+    configured: boolean
+    scopes?: string[]
+    connection: {
+      id: string
+      account: string | null
+      expiresAt: string | null
+      error: string | null
+      connectedAt: string
+    } | null
+  }[]
 }
 
 export type PluginSetting = {
@@ -484,6 +502,15 @@ export const api = {
   pluginTable: (endpoint: string) => request<{ data: Record<string, unknown>[] }>(endpoint).then(r => r.data),
   pluginStats: (endpoint: string, days?: number) =>
     request<Wrapped<PluginStatsPayload>>(endpoint, { query: { days } }).then(r => r.data),
+  pluginConnections: (endpoint: string) => request<Wrapped<PluginConnectionsPayload>>(endpoint).then(r => r.data),
+  // Returns the consent URL rather than following it: a redirect to a third
+  // party would be followed by this fetch, not by the address bar.
+  pluginConnect: (endpoint: string, id: string) =>
+    request<Wrapped<{ url: string }>>(`${endpoint}/${encodeURIComponent(id)}/start`, { method: "POST" }).then(
+      r => r.data,
+    ),
+  pluginDisconnect: (endpoint: string, id: string) =>
+    request<Wrapped<{ id: string }>>(`${endpoint}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   keys: () =>
     request<

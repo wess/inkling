@@ -6,7 +6,7 @@
       "name": "inkling",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.115.0",
-        "atlas": "github:wess/atlas#main",
+        "atlas": "github:wess/atlas#2d092c0",
         "lucide-react": "^0.468.0",
         "react": "^19",
         "react-dom": "^19",
