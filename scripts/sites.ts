@@ -43,6 +43,13 @@ const SITES: readonly Site[] = [
     host: "gohan",
     container: "803media",
   },
+  {
+    name: "inkling",
+    url: "https://inkling.wess.dev",
+    admin: "/admin",
+    host: "gohan",
+    container: "inkling",
+  },
 ]
 
 const TIMEOUT_MS = 15_000

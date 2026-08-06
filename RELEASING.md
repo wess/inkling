@@ -9,6 +9,19 @@ a redeploy. Nothing is published to npm.
 |---|---|---|---|---|
 | apothecary | https://apothecary.wess.dev | `/admin` | `wess/apothecary` (private) | gohan |
 | 803media | https://803media.wess.dev | `/studio` | `wess/803media` (private) | gohan |
+| inkling | https://inkling.wess.dev | `/admin` | `inkling-site` (local) | gohan |
+
+`inkling.wess.dev` is the School — this project's own documentation, running on
+this project. Its lessons are content in its Inkling, so a deploy that changes
+them needs a seed afterwards:
+
+```sh
+ssh gohan 'sudo docker exec inkling bun run seed'
+```
+
+The seed is idempotent and deliberately *not* part of boot: it rewrites every
+lesson, and doing that automatically would overwrite anything edited in the
+admin since.
 
 Both mount Inkling in-process with `createInkling()` and pin it by tag. Both run
 on the `gohan` droplet behind Caddy, deployed from the **devops** repo
