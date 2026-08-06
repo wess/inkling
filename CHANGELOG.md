@@ -9,6 +9,42 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.1.0 — 2026-08-06
+
+Groundwork for templates. Nothing in this release changes how an existing site
+behaves — `createInkling()` does not import any of it, and a site that does not
+ask for a template will not notice it exists.
+
+### Added
+
+- **`templates/`, the registry.** One directory per design, one validated
+  manifest in each. Shaped like a registry rather than a directory because a
+  template eventually arrives from somewhere other than this repository, and
+  discovering that shape afterwards means rewriting every template that already
+  exists.
+- **`src/theme/`, the compiler.** Typed tokens in, CSS custom properties out.
+  Values are checked against the token's own type rather than scrubbed for
+  dangerous characters: a colour that must match a colour pattern cannot be a
+  URL, and `url(https://…)` in a token used for a background is an outbound
+  request on every page load that no amount of character stripping makes safe.
+  Anything failing its type falls back to the template's default, because
+  rendering in the designed colours beats rendering a blank page.
+- **Five designs, fifteen palettes.** Quarto, Foundry, Orchard, Lattice, and
+  Aster — each declaring a different structure, not a different palette, and
+  each carrying three palettes of its own. Three are dark. A test asserts no two
+  share a layout signature or a type pairing.
+- **`bun run templates`** renders every design in every palette to one page.
+  Its markup branches on layout and on nothing else, which is what proves a
+  section can work in all five.
+- **`docs/TEMPLATES.md`** — the design this is the first phase of, including why
+  templates must be data rather than code, and where the renderer will mount.
+
+### Note
+
+There is no renderer yet, deliberately. This is the theme and layout layer, and
+it exists to make the designs real enough to judge before the expensive part
+gets built.
+
 ## 1.0.0 — 2026-08-06
 
 The version number is the news. Everything below has been in daily use across
