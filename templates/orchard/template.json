@@ -1,0 +1,559 @@
+{
+  "name": "orchard",
+  "label": "Orchard",
+  "version": "1.0.0",
+  "author": "Inkling",
+  "description": "A split opening with a rounded image, soft filled cards, and a lot of air between things.",
+  "suits": "Food, wellness, and local businesses that want to feel welcoming.",
+  "layout": {
+    "nav": "bar",
+    "hero": "split",
+    "cards": "filled",
+    "align": "left",
+    "rhythm": "airy"
+  },
+  "fonts": [
+    {
+      "family": "Outfit",
+      "weights": [
+        400,
+        500,
+        600
+      ],
+      "stack": "\"Outfit\", system-ui, sans-serif"
+    },
+    {
+      "family": "Nunito Sans",
+      "weights": [
+        400,
+        600,
+        700
+      ],
+      "stack": "\"Nunito Sans\", system-ui, sans-serif"
+    }
+  ],
+  "palettes": [
+    {
+      "id": "sage",
+      "label": "Sage",
+      "colors": {
+        "bg": "#FAF7F2",
+        "surface": "#F1EBE0",
+        "text": "#3D3630",
+        "textMuted": "#7D7365",
+        "border": "#E3DACB",
+        "accent": "#6F7D45",
+        "accentText": "#FAF7F2"
+      }
+    },
+    {
+      "id": "clay",
+      "label": "Clay",
+      "colors": {
+        "bg": "#FBF6F1",
+        "surface": "#F3E7DC",
+        "text": "#40332B",
+        "textMuted": "#86735F",
+        "border": "#E7D6C4",
+        "accent": "#B4552D",
+        "accentText": "#FBF6F1"
+      }
+    },
+    {
+      "id": "bloom",
+      "label": "Bloom",
+      "colors": {
+        "bg": "#FDF7F6",
+        "surface": "#F7E8E6",
+        "text": "#40323A",
+        "textMuted": "#8A7480",
+        "border": "#EBD5D3",
+        "accent": "#A85570",
+        "accentText": "#FDF7F6"
+      }
+    }
+  ],
+  "theme": [
+    {
+      "id": "color",
+      "label": "Colour",
+      "tokens": [
+        {
+          "key": "bg",
+          "label": "Page background",
+          "type": "color",
+          "default": "#FAF7F2"
+        },
+        {
+          "key": "surface",
+          "label": "Panel background",
+          "type": "color",
+          "default": "#F1EBE0",
+          "help": "Cards, quotes, and anything raised off the page."
+        },
+        {
+          "key": "text",
+          "label": "Text",
+          "type": "color",
+          "default": "#3D3630"
+        },
+        {
+          "key": "textMuted",
+          "label": "Secondary text",
+          "type": "color",
+          "default": "#7D7365",
+          "help": "Captions, dates, and anything supporting."
+        },
+        {
+          "key": "border",
+          "label": "Lines",
+          "type": "color",
+          "default": "#E3DACB"
+        },
+        {
+          "key": "accent",
+          "label": "Accent",
+          "type": "color",
+          "default": "#6F7D45",
+          "help": "Links, buttons, and the one thing you want looked at."
+        },
+        {
+          "key": "accentText",
+          "label": "Text on accent",
+          "type": "color",
+          "default": "#FAF7F2",
+          "help": "Must stay readable against the accent above."
+        }
+      ]
+    },
+    {
+      "id": "type",
+      "label": "Type",
+      "tokens": [
+        {
+          "key": "fontDisplay",
+          "label": "Headings",
+          "type": "font",
+          "default": "Outfit"
+        },
+        {
+          "key": "fontBody",
+          "label": "Body",
+          "type": "font",
+          "default": "Nunito Sans"
+        },
+        {
+          "key": "baseSize",
+          "label": "Body size",
+          "type": "number",
+          "default": 17,
+          "unit": "px"
+        },
+        {
+          "key": "scale",
+          "label": "Heading scale",
+          "type": "number",
+          "default": 1.26,
+          "unit": "",
+          "help": "How much larger each heading step is than the last."
+        },
+        {
+          "key": "displayWeight",
+          "label": "Heading weight",
+          "type": "select",
+          "default": "600",
+          "options": [
+            {
+              "value": "400",
+              "label": "Regular"
+            },
+            {
+              "value": "500",
+              "label": "Medium"
+            },
+            {
+              "value": "600",
+              "label": "Semibold"
+            },
+            {
+              "value": "700",
+              "label": "Bold"
+            },
+            {
+              "value": "800",
+              "label": "Extrabold"
+            }
+          ]
+        },
+        {
+          "key": "displayTracking",
+          "label": "Heading letter spacing",
+          "type": "number",
+          "default": -0.01,
+          "unit": "em"
+        },
+        {
+          "key": "displayCase",
+          "label": "Heading case",
+          "type": "select",
+          "default": "none",
+          "options": [
+            {
+              "value": "none",
+              "label": "As typed"
+            },
+            {
+              "value": "uppercase",
+              "label": "Uppercase"
+            }
+          ]
+        },
+        {
+          "key": "lineHeight",
+          "label": "Body line height",
+          "type": "number",
+          "default": 1.75,
+          "unit": ""
+        }
+      ]
+    },
+    {
+      "id": "layout",
+      "label": "Layout",
+      "tokens": [
+        {
+          "key": "measure",
+          "label": "Reading width",
+          "type": "number",
+          "default": 62,
+          "unit": "ch",
+          "help": "How many characters a line of text runs to."
+        },
+        {
+          "key": "frame",
+          "label": "Page width",
+          "type": "number",
+          "default": 1140,
+          "unit": "px"
+        },
+        {
+          "key": "space",
+          "label": "Spacing",
+          "type": "number",
+          "default": 2.0,
+          "unit": "rem",
+          "help": "The rhythm everything else is a multiple of."
+        },
+        {
+          "key": "radius",
+          "label": "Corner rounding",
+          "type": "number",
+          "default": 20,
+          "unit": "px"
+        },
+        {
+          "key": "borderWidth",
+          "label": "Line weight",
+          "type": "number",
+          "default": 1,
+          "unit": "px"
+        }
+      ]
+    }
+  ],
+  "contentTypes": [
+    {
+      "name": "page",
+      "label": "Page",
+      "pluralLabel": "Pages",
+      "kind": "collection",
+      "icon": "file-text",
+      "description": "A page, built from sections.",
+      "fields": [
+        {
+          "key": "summary",
+          "type": "textarea",
+          "label": "Summary",
+          "help": "Used for search results and link previews."
+        },
+        {
+          "key": "sections",
+          "type": "list",
+          "label": "Sections",
+          "help": "The page, in order.",
+          "fields": [
+            {
+              "key": "type",
+              "type": "select",
+              "label": "Section",
+              "required": true,
+              "options": [
+                {
+                  "value": "hero",
+                  "label": "Hero"
+                },
+                {
+                  "value": "richtext",
+                  "label": "Text"
+                },
+                {
+                  "value": "features",
+                  "label": "Feature grid"
+                },
+                {
+                  "value": "gallery",
+                  "label": "Gallery"
+                },
+                {
+                  "value": "cta",
+                  "label": "Call to action"
+                },
+                {
+                  "value": "offerings",
+                  "label": "Offerings"
+                }
+              ]
+            },
+            {
+              "key": "heading",
+              "type": "text",
+              "label": "Heading"
+            },
+            {
+              "key": "body",
+              "type": "richtext",
+              "label": "Body"
+            },
+            {
+              "key": "image",
+              "type": "media",
+              "label": "Image"
+            },
+            {
+              "key": "images",
+              "type": "gallery",
+              "label": "Images"
+            },
+            {
+              "key": "ctaLabel",
+              "type": "text",
+              "label": "Button label"
+            },
+            {
+              "key": "ctaUrl",
+              "type": "url",
+              "label": "Button link"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "post",
+      "label": "Post",
+      "pluralLabel": "Posts",
+      "kind": "collection",
+      "icon": "pen-line",
+      "description": "A dated piece of writing.",
+      "fields": [
+        {
+          "key": "excerpt",
+          "type": "textarea",
+          "label": "Excerpt",
+          "required": true,
+          "help": "Shown on the index and in link previews."
+        },
+        {
+          "key": "cover",
+          "type": "media",
+          "label": "Cover image"
+        },
+        {
+          "key": "body",
+          "type": "richtext",
+          "label": "Body",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "offering",
+      "label": "Offering",
+      "pluralLabel": "Offerings",
+      "kind": "collection",
+      "icon": "leaf",
+      "description": "Something you sell or serve.",
+      "fields": [
+        {
+          "key": "summary",
+          "type": "textarea",
+          "label": "Summary",
+          "required": true
+        },
+        {
+          "key": "price",
+          "type": "text",
+          "label": "Price"
+        },
+        {
+          "key": "image",
+          "type": "media",
+          "label": "Image"
+        },
+        {
+          "key": "body",
+          "type": "richtext",
+          "label": "Details"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": "hero",
+      "label": "Hero",
+      "description": "The opening statement, with an optional image and one action.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading",
+          "required": true
+        },
+        {
+          "key": "subheading",
+          "type": "textarea",
+          "label": "Subheading"
+        },
+        {
+          "key": "image",
+          "type": "media",
+          "label": "Image"
+        },
+        {
+          "key": "ctaLabel",
+          "type": "text",
+          "label": "Button label"
+        },
+        {
+          "key": "ctaUrl",
+          "type": "url",
+          "label": "Button link"
+        }
+      ]
+    },
+    {
+      "name": "richtext",
+      "label": "Text",
+      "description": "A block of writing.",
+      "fields": [
+        {
+          "key": "body",
+          "type": "richtext",
+          "label": "Body",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "features",
+      "label": "Feature grid",
+      "description": "Three or more things, side by side.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading"
+        },
+        {
+          "key": "items",
+          "type": "list",
+          "label": "Items",
+          "fields": [
+            {
+              "key": "title",
+              "type": "text",
+              "label": "Title",
+              "required": true
+            },
+            {
+              "key": "body",
+              "type": "textarea",
+              "label": "Description"
+            },
+            {
+              "key": "image",
+              "type": "media",
+              "label": "Image"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "gallery",
+      "label": "Gallery",
+      "description": "A set of images.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading"
+        },
+        {
+          "key": "images",
+          "type": "gallery",
+          "label": "Images",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "cta",
+      "label": "Call to action",
+      "description": "A closing prompt.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading",
+          "required": true
+        },
+        {
+          "key": "body",
+          "type": "textarea",
+          "label": "Body"
+        },
+        {
+          "key": "label",
+          "type": "text",
+          "label": "Button label"
+        },
+        {
+          "key": "url",
+          "type": "url",
+          "label": "Button link"
+        }
+      ]
+    },
+    {
+      "name": "offerings",
+      "label": "Offerings",
+      "description": "What you serve, with prices.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading"
+        },
+        {
+          "key": "items",
+          "type": "reference",
+          "label": "Offerings",
+          "of": "offering",
+          "multiple": true
+        }
+      ]
+    }
+  ]
+}

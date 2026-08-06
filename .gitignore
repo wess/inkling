@@ -99,3 +99,4 @@ AGENTS.md
 *.db
 *.db*
 uploads
+.preview

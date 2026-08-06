@@ -39,7 +39,7 @@ jobs:
         run: bunx tsc --noEmit
 
       - name: Lint and format
-        run: bunx biome check src/ plugins/ scripts/ tests/
+        run: bunx biome check src/ plugins/ scripts/ tests/ templates/
 
       # The suite runs on in-memory SQLite and needs no services. The Postgres
       # tests below cover the dialect it actually ships on.

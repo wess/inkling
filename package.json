@@ -21,12 +21,13 @@
     "seed": "bun scripts/seed.ts",
     "sites": "bun scripts/sites.ts",
     "password": "bun scripts/password.ts",
+    "templates": "bun templates/preview.ts",
     "test": "bun test tests/",
     "typecheck": "bunx tsc --noEmit",
-    "lint": "biome lint src/ plugins/ scripts/ tests/",
-    "format": "biome format src/ plugins/ scripts/ tests/",
-    "check": "biome check src/ plugins/ scripts/ tests/",
-    "tidy": "biome check --write src/ plugins/ scripts/ tests/"
+    "lint": "biome lint src/ plugins/ scripts/ tests/ templates/",
+    "format": "biome format src/ plugins/ scripts/ tests/ templates/",
+    "check": "biome check src/ plugins/ scripts/ tests/ templates/",
+    "tidy": "biome check --write src/ plugins/ scripts/ tests/ templates/"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",

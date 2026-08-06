@@ -1,0 +1,575 @@
+{
+  "name": "lattice",
+  "label": "Lattice",
+  "version": "1.0.0",
+  "author": "Inkling",
+  "description": "A dense top bar, a split opening beside a spec panel, and cards that lift off the page rather than sit in boxes.",
+  "suits": "Software, hardware, and documentation-heavy products.",
+  "layout": {
+    "nav": "bar",
+    "hero": "split",
+    "cards": "raised",
+    "align": "left",
+    "rhythm": "tight"
+  },
+  "fonts": [
+    {
+      "family": "Manrope",
+      "weights": [
+        500,
+        700,
+        800
+      ],
+      "stack": "\"Manrope\", system-ui, sans-serif"
+    },
+    {
+      "family": "IBM Plex Sans",
+      "weights": [
+        400,
+        500,
+        600
+      ],
+      "stack": "\"IBM Plex Sans\", system-ui, sans-serif"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "weights": [
+        400,
+        500
+      ],
+      "stack": "\"IBM Plex Mono\", ui-monospace, monospace"
+    }
+  ],
+  "palettes": [
+    {
+      "id": "sky",
+      "label": "Sky",
+      "colors": {
+        "bg": "#FFFFFF",
+        "surface": "#F8FAFC",
+        "text": "#0F172A",
+        "textMuted": "#64748B",
+        "border": "#E2E8F0",
+        "accent": "#0284C7",
+        "accentText": "#FFFFFF"
+      }
+    },
+    {
+      "id": "graphite",
+      "label": "Graphite",
+      "colors": {
+        "bg": "#FCFCFD",
+        "surface": "#F4F4F6",
+        "text": "#18181B",
+        "textMuted": "#6B6B76",
+        "border": "#E4E4E8",
+        "accent": "#3F3F52",
+        "accentText": "#FCFCFD"
+      }
+    },
+    {
+      "id": "midnight",
+      "label": "Midnight",
+      "colors": {
+        "bg": "#0B1120",
+        "surface": "#131C31",
+        "text": "#E6EDF7",
+        "textMuted": "#8296B4",
+        "border": "#1E2A44",
+        "accent": "#22D3EE",
+        "accentText": "#0B1120"
+      },
+      "dark": true
+    }
+  ],
+  "theme": [
+    {
+      "id": "color",
+      "label": "Colour",
+      "tokens": [
+        {
+          "key": "bg",
+          "label": "Page background",
+          "type": "color",
+          "default": "#FFFFFF"
+        },
+        {
+          "key": "surface",
+          "label": "Panel background",
+          "type": "color",
+          "default": "#F8FAFC",
+          "help": "Cards, quotes, and anything raised off the page."
+        },
+        {
+          "key": "text",
+          "label": "Text",
+          "type": "color",
+          "default": "#0F172A"
+        },
+        {
+          "key": "textMuted",
+          "label": "Secondary text",
+          "type": "color",
+          "default": "#64748B",
+          "help": "Captions, dates, and anything supporting."
+        },
+        {
+          "key": "border",
+          "label": "Lines",
+          "type": "color",
+          "default": "#E2E8F0"
+        },
+        {
+          "key": "accent",
+          "label": "Accent",
+          "type": "color",
+          "default": "#0284C7",
+          "help": "Links, buttons, and the one thing you want looked at."
+        },
+        {
+          "key": "accentText",
+          "label": "Text on accent",
+          "type": "color",
+          "default": "#FFFFFF",
+          "help": "Must stay readable against the accent above."
+        }
+      ]
+    },
+    {
+      "id": "type",
+      "label": "Type",
+      "tokens": [
+        {
+          "key": "fontDisplay",
+          "label": "Headings",
+          "type": "font",
+          "default": "Manrope"
+        },
+        {
+          "key": "fontBody",
+          "label": "Body",
+          "type": "font",
+          "default": "IBM Plex Sans"
+        },
+        {
+          "key": "baseSize",
+          "label": "Body size",
+          "type": "number",
+          "default": 16,
+          "unit": "px"
+        },
+        {
+          "key": "scale",
+          "label": "Heading scale",
+          "type": "number",
+          "default": 1.24,
+          "unit": "",
+          "help": "How much larger each heading step is than the last."
+        },
+        {
+          "key": "displayWeight",
+          "label": "Heading weight",
+          "type": "select",
+          "default": "700",
+          "options": [
+            {
+              "value": "400",
+              "label": "Regular"
+            },
+            {
+              "value": "500",
+              "label": "Medium"
+            },
+            {
+              "value": "600",
+              "label": "Semibold"
+            },
+            {
+              "value": "700",
+              "label": "Bold"
+            },
+            {
+              "value": "800",
+              "label": "Extrabold"
+            }
+          ]
+        },
+        {
+          "key": "displayTracking",
+          "label": "Heading letter spacing",
+          "type": "number",
+          "default": -0.02,
+          "unit": "em"
+        },
+        {
+          "key": "displayCase",
+          "label": "Heading case",
+          "type": "select",
+          "default": "none",
+          "options": [
+            {
+              "value": "none",
+              "label": "As typed"
+            },
+            {
+              "value": "uppercase",
+              "label": "Uppercase"
+            }
+          ]
+        },
+        {
+          "key": "lineHeight",
+          "label": "Body line height",
+          "type": "number",
+          "default": 1.6,
+          "unit": ""
+        }
+      ]
+    },
+    {
+      "id": "layout",
+      "label": "Layout",
+      "tokens": [
+        {
+          "key": "measure",
+          "label": "Reading width",
+          "type": "number",
+          "default": 74,
+          "unit": "ch",
+          "help": "How many characters a line of text runs to."
+        },
+        {
+          "key": "frame",
+          "label": "Page width",
+          "type": "number",
+          "default": 1240,
+          "unit": "px"
+        },
+        {
+          "key": "space",
+          "label": "Spacing",
+          "type": "number",
+          "default": 1.15,
+          "unit": "rem",
+          "help": "The rhythm everything else is a multiple of."
+        },
+        {
+          "key": "radius",
+          "label": "Corner rounding",
+          "type": "number",
+          "default": 10,
+          "unit": "px"
+        },
+        {
+          "key": "borderWidth",
+          "label": "Line weight",
+          "type": "number",
+          "default": 1,
+          "unit": "px"
+        }
+      ]
+    }
+  ],
+  "contentTypes": [
+    {
+      "name": "page",
+      "label": "Page",
+      "pluralLabel": "Pages",
+      "kind": "collection",
+      "icon": "file-text",
+      "description": "A page, built from sections.",
+      "fields": [
+        {
+          "key": "summary",
+          "type": "textarea",
+          "label": "Summary",
+          "help": "Used for search results and link previews."
+        },
+        {
+          "key": "sections",
+          "type": "list",
+          "label": "Sections",
+          "help": "The page, in order.",
+          "fields": [
+            {
+              "key": "type",
+              "type": "select",
+              "label": "Section",
+              "required": true,
+              "options": [
+                {
+                  "value": "hero",
+                  "label": "Hero"
+                },
+                {
+                  "value": "richtext",
+                  "label": "Text"
+                },
+                {
+                  "value": "features",
+                  "label": "Feature grid"
+                },
+                {
+                  "value": "gallery",
+                  "label": "Gallery"
+                },
+                {
+                  "value": "cta",
+                  "label": "Call to action"
+                },
+                {
+                  "value": "spectable",
+                  "label": "Specifications"
+                }
+              ]
+            },
+            {
+              "key": "heading",
+              "type": "text",
+              "label": "Heading"
+            },
+            {
+              "key": "body",
+              "type": "richtext",
+              "label": "Body"
+            },
+            {
+              "key": "image",
+              "type": "media",
+              "label": "Image"
+            },
+            {
+              "key": "images",
+              "type": "gallery",
+              "label": "Images"
+            },
+            {
+              "key": "ctaLabel",
+              "type": "text",
+              "label": "Button label"
+            },
+            {
+              "key": "ctaUrl",
+              "type": "url",
+              "label": "Button link"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "post",
+      "label": "Post",
+      "pluralLabel": "Posts",
+      "kind": "collection",
+      "icon": "pen-line",
+      "description": "A dated piece of writing.",
+      "fields": [
+        {
+          "key": "excerpt",
+          "type": "textarea",
+          "label": "Excerpt",
+          "required": true,
+          "help": "Shown on the index and in link previews."
+        },
+        {
+          "key": "cover",
+          "type": "media",
+          "label": "Cover image"
+        },
+        {
+          "key": "body",
+          "type": "richtext",
+          "label": "Body",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "feature",
+      "label": "Feature",
+      "pluralLabel": "Features",
+      "kind": "collection",
+      "icon": "box",
+      "description": "One capability, described once and reused.",
+      "fields": [
+        {
+          "key": "summary",
+          "type": "textarea",
+          "label": "Summary",
+          "required": true
+        },
+        {
+          "key": "icon",
+          "type": "text",
+          "label": "Icon name"
+        },
+        {
+          "key": "body",
+          "type": "richtext",
+          "label": "Detail"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": "hero",
+      "label": "Hero",
+      "description": "The opening statement, with an optional image and one action.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading",
+          "required": true
+        },
+        {
+          "key": "subheading",
+          "type": "textarea",
+          "label": "Subheading"
+        },
+        {
+          "key": "image",
+          "type": "media",
+          "label": "Image"
+        },
+        {
+          "key": "ctaLabel",
+          "type": "text",
+          "label": "Button label"
+        },
+        {
+          "key": "ctaUrl",
+          "type": "url",
+          "label": "Button link"
+        }
+      ]
+    },
+    {
+      "name": "richtext",
+      "label": "Text",
+      "description": "A block of writing.",
+      "fields": [
+        {
+          "key": "body",
+          "type": "richtext",
+          "label": "Body",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "features",
+      "label": "Feature grid",
+      "description": "Three or more things, side by side.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading"
+        },
+        {
+          "key": "items",
+          "type": "list",
+          "label": "Items",
+          "fields": [
+            {
+              "key": "title",
+              "type": "text",
+              "label": "Title",
+              "required": true
+            },
+            {
+              "key": "body",
+              "type": "textarea",
+              "label": "Description"
+            },
+            {
+              "key": "image",
+              "type": "media",
+              "label": "Image"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "gallery",
+      "label": "Gallery",
+      "description": "A set of images.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading"
+        },
+        {
+          "key": "images",
+          "type": "gallery",
+          "label": "Images",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "cta",
+      "label": "Call to action",
+      "description": "A closing prompt.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading",
+          "required": true
+        },
+        {
+          "key": "body",
+          "type": "textarea",
+          "label": "Body"
+        },
+        {
+          "key": "label",
+          "type": "text",
+          "label": "Button label"
+        },
+        {
+          "key": "url",
+          "type": "url",
+          "label": "Button link"
+        }
+      ]
+    },
+    {
+      "name": "spectable",
+      "label": "Specifications",
+      "description": "Label-and-value rows.",
+      "fields": [
+        {
+          "key": "heading",
+          "type": "text",
+          "label": "Heading"
+        },
+        {
+          "key": "rows",
+          "type": "list",
+          "label": "Rows",
+          "fields": [
+            {
+              "key": "label",
+              "type": "text",
+              "label": "Label",
+              "required": true
+            },
+            {
+              "key": "value",
+              "type": "text",
+              "label": "Value",
+              "required": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
