@@ -2395,10 +2395,17 @@ legend > .hint .hinttip {
   margin-top: 16px;
 }
 
+/* A fieldset, so the group has a name and the boxes inside it are real
+   checkboxes. Every default a fieldset brings has to go, though — the border
+   and padding are from a form era this admin does not draw. */
 .netpick {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 .netchip {
   display: inline-flex;
@@ -2417,6 +2424,16 @@ legend > .hint .hinttip {
 .netchip:hover {
   border-color: var(--text3);
 }
+/* The input is off-screen, so the ring it would have drawn has to be borrowed
+   by the chip — otherwise tabbing through these lands nowhere visible. */
+.netchip:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.netchip:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
 .netchip.on {
   background: var(--accentwash);
   border-color: var(--accent);
@@ -2428,6 +2445,23 @@ legend > .hint .hinttip {
   border-color: var(--bad);
   color: var(--bad);
 }
+/* A real box, sized whether or not it is ticked — an icon that appears on
+   check would reflow the chip and shuffle the row under the pointer. */
+.netchipbox {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 1px solid var(--text3);
+  border-radius: 3px;
+}
+.netchip.on .netchipbox {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+}
+/* The small chips are read-only status, not choices, so they carry no box. */
 .netchip.sm {
   padding: 2px 8px;
   font-size: 11px;

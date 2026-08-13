@@ -7446,22 +7446,35 @@ const SocialComposer = ({
                   }
                 />
               ) : (
-                <div className="netpick">
+                // Real checkboxes in a real fieldset, drawn as chips. These are
+                // several independent yes/no choices, which is what a checkbox
+                // is — and the built-in element brings the state, the grouping,
+                // and the keyboard for free. Faking it with buttons left the
+                // answer carried by a colour and a tick, which a screen reader
+                // announces as neither.
+                <fieldset className="netpick">
+                  <legend className="sr">Post to</legend>
                   {accounts.map(({ account, network }) => (
-                    <button
-                      type="button"
+                    <label
                       key={account.id}
                       className={cx("netchip", selected[account.id] && "on", account.error !== null && "bad")}
-                      disabled={locked}
                       title={account.error ?? undefined}
-                      onClick={() => toggle(account.id)}
                     >
-                      {selected[account.id] ? <Check size={12} /> : null}
+                      <input
+                        type="checkbox"
+                        className="sr"
+                        checked={selected[account.id] !== undefined}
+                        disabled={locked}
+                        onChange={() => toggle(account.id)}
+                      />
+                      <span className="netchipbox" aria-hidden="true">
+                        {selected[account.id] ? <Check size={11} /> : null}
+                      </span>
                       {network.label}
                       <span className="netchipwho">{account.account ?? ""}</span>
-                    </button>
+                    </label>
                   ))}
-                </div>
+                </fieldset>
               )}
 
               {errors.targets ? <div className="fieldhelp req">{errors.targets}</div> : null}

@@ -9,6 +9,19 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.3.1 — 2026-08-13
+
+### Fixed
+
+- **The composer's network picker is now actually a set of checkboxes.** It was
+  a row of buttons whose on/off state was carried entirely by a colour and a
+  tick, with nothing programmatic behind it — a screen reader announced nine
+  plain buttons with no indication which were selected, and keyboard focus drew
+  no ring at all. They are real `<input type="checkbox">` in a real `<fieldset>`
+  now, drawn as the same chips, with a box that ticks and a visible focus ring.
+  Choosing where a post goes was the one control in that screen you could not
+  operate without a mouse.
+
 ## 1.3.0 — 2026-08-12
 
 Inkling posts to social networks. There is a **Social** section in the admin
