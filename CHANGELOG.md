@@ -9,6 +9,43 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.4.0 — 2026-08-13
+
+An agent can now work a site from outside it. `scripts/mcp.ts` serves Inkling's
+admin API as MCP tools over stdio, so a coding agent in a terminal can read and
+edit content the same way a person at the admin does.
+
+This is the gap Inky does not cover, and deliberately so. Inky sits *inside* the
+admin and every change it makes is a proposal a human applies — right for an
+editor already looking at the screen, useless to an agent editing a site from
+somewhere else entirely. The two are the same constraint solved for different
+rooms: Inky asks a person to press the button, this asks a person for the
+credential.
+
+**Nothing changes for an install that does not run it.** This adds no route, no
+runtime surface, and no dependency — the delivery API, `createInkling()`, the
+plugin interface, and the shape of a content type are all untouched. It is a
+script you point at a site you already have credentials for.
+
+### Added
+
+- **`bun run mcp`** — 22 tools over entries, content types, media, menus,
+  settings, taxonomy, search, and revisions. Configured by environment
+  (`INKLING_URL`, `INKLING_EMAIL`, `INKLING_PASSWORD`) and run one process per
+  site, because credentials are per-site and a `site` argument on every tool
+  would mean holding all of them at once.
+- **Every write goes through the same `/api` route the admin calls**, rather
+  than a second path into the database. Revisions, validation, slug uniqueness,
+  relation checks, plugin hooks, and the audit trail all keep working without a
+  parallel implementation to keep honest, and history shows the account that
+  made the change rather than a machine nobody can ask about it.
+- **`INKLING_MCP_READONLY=1`**, for pointing an agent at production to look
+  rather than touch. Write tools are hidden from `tools/list` as well as
+  refused, so the model never plans around a call that cannot succeed.
+- **stdio JSON-RPC, hand-rolled.** The framing is newline-delimited JSON and
+  three methods — less code than the SDK's dependency tree would have been.
+  Inkling still has four dependencies.
+
 ## 1.3.1 — 2026-08-13
 
 ### Fixed

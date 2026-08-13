@@ -150,6 +150,27 @@ answer is not there. With no origins listed it answers nobody, which is the
 default. If you would rather draw your own, `POST /ext/assistant/public-ask`
 returns the same answer as JSON.
 
+### An agent working the site from outside
+
+Inky is for the person at the admin. For a coding agent in a terminal somewhere
+else, `bun run mcp` serves the admin API as MCP tools over stdio — entries,
+content types, media, menus, settings, taxonomy, search, and revisions.
+
+```sh
+claude mcp add mysite -s user \
+  -e INKLING_URL=https://cms.yoursite.com \
+  -e INKLING_EMAIL=you@yoursite.com \
+  -e INKLING_PASSWORD=… \
+  -- bun run /path/to/inkling/scripts/mcp.ts
+```
+
+One process per site, because credentials are per-site. Every write goes through
+the same `/api` route the admin calls, so revisions, validation, hooks, and the
+audit trail keep working, and the history shows the account that made the change.
+Set `INKLING_MCP_READONLY=1` to expose only the tools that read — the write ones
+are hidden rather than merely refused, so the agent never plans around a call it
+cannot make.
+
 ## Social
 
 Inkling posts to **X, Facebook, Instagram, Threads, LinkedIn, TikTok, YouTube,
@@ -363,6 +384,7 @@ module-level, so mounting twice gives you two route sets over the same data.
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun run tidy` | Biome format + lint with fixes |
 | `bun run password` | Set a user's password from the host — the way back in when the only owner is locked out |
+| `bun run mcp` | The admin API as MCP tools, for an agent working a site from outside it |
 
 Postgres tests run automatically when a Postgres is reachable at
 `TEST_POSTGRES_URL` (default `postgres://postgres:postgres@localhost:5432/inkling_test`)
