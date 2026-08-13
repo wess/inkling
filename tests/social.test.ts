@@ -1,15 +1,23 @@
 import { expect, test } from "bun:test"
 import { connect, from } from "atlas/db"
-import { accessToken, byId as accountById, list as listAccounts, present, save } from "../plugins/social/accounts.ts"
 import { tidyHashtags } from "../plugins/social/index.ts"
 import { overLimit } from "../plugins/social/networks.ts"
-import { accountFrom, CONNECTABLE, clientFor, ready as networkReady } from "../plugins/social/oauth.ts"
 import { buildQueue } from "../plugins/social/queue.ts"
 import { summarize } from "../plugins/social/report.ts"
 import { list, read, record } from "../plugins/social/results.ts"
 import { week } from "../plugins/social/week.ts"
 import { encode } from "../src/json/index.ts"
 import { up } from "../src/migrate/index.ts"
+import { accessToken, byId as accountById, list as listAccounts, present, save } from "../src/social/accounts.ts"
+import {
+  byNetwork as appFor,
+  clientFor,
+  ready as networkReady,
+  present as presentApp,
+  save as saveApp,
+} from "../src/social/apps.ts"
+import { NETWORKS as PUBLISHABLE, violations, withDefaults } from "../src/social/networks.ts"
+import { publishable, rollUp } from "../src/social/publish.ts"
 import { now } from "../src/time/index.ts"
 
 const ready = async () => {
@@ -230,8 +238,7 @@ test("a connected account round-trips its tokens and never stores them in the cl
   const db = await ready()
 
   const saved = await save(db, {
-    network: "linkedin",
-    clientId: "",
+    network: "facebook",
     account: "Ash & Ember",
     accountId: null,
     userId: "user-1",
@@ -239,7 +246,7 @@ test("a connected account round-trips its tokens and never stores them in the cl
       accessToken: "at-secret-value",
       refreshToken: "rt-secret-value",
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      scope: "w_member_social",
+      scope: "pages_manage_posts",
       payload: {},
     },
   })
@@ -273,7 +280,6 @@ test("reconnecting replaces the connection rather than stacking a second one", a
 
   const first = await save(db, {
     network: "x",
-    clientId: "",
     account: "@ashember",
     accountId: null,
     userId: "user-1",
@@ -281,7 +287,6 @@ test("reconnecting replaces the connection rather than stacking a second one", a
   })
   const second = await save(db, {
     network: "x",
-    clientId: "",
     account: "@ashember",
     accountId: null,
     userId: "user-1",
@@ -298,7 +303,6 @@ test("an expired connection with no way to renew reads as reconnect-me, not as a
 
   const row = await save(db, {
     network: "tiktok",
-    clientId: "",
     account: null,
     accountId: null,
     userId: null,
@@ -317,23 +321,244 @@ test("an expired connection with no way to renew reads as reconnect-me, not as a
   expect(present(after as NonNullable<typeof after>).error).toContain("Reconnect")
 })
 
-test("a network with no developer app registered is never offered", () => {
-  // Nothing sets SOCIAL_OAUTH_*_CLIENT_ID in the test environment, so every
-  // network is unconfigured — which is exactly the state a fresh install is in,
-  // and the panel has to render it without offering a button that dead-ends.
-  expect(CONNECTABLE.length).toBeGreaterThan(0)
-  for (const network of CONNECTABLE) {
-    expect(networkReady(network.value)).toBe(false)
-    expect(clientFor(network.value)).toBeNull()
-  }
+test("a network with no developer app set up is never offered", async () => {
+  const db = await ready()
 
-  // "newsletter" is a network a post can go out on, but it has no
-  // authorization server, so it must not appear in the connectable list.
-  expect(CONNECTABLE.map(network => network.value)).not.toContain("newsletter")
+  // A fresh install has neither a `social_apps` row nor a SOCIAL_OAUTH_*
+  // environment variable, so every network renders as "not set up" — which the
+  // settings and accounts screens both have to draw without offering a button
+  // that dead-ends.
+  expect(PUBLISHABLE.length).toBeGreaterThan(0)
+  for (const network of PUBLISHABLE) {
+    expect(await networkReady(db, network.value)).toBe(false)
+    expect(await clientFor(db, network.value)).toBeNull()
+  }
 })
 
-test("the account label is read out of whichever shape the network sent", () => {
-  expect(accountFrom({ username: "ashember" })).toBe("ashember")
-  expect(accountFrom({ data: { name: "Ash & Ember" } })).toBe("Ash & Ember")
-  expect(accountFrom({ expires_in: 3600 })).toBeNull()
+test("every network in the catalog has a publisher behind it", () => {
+  // The two lists are the whole contract of this feature: a network that can be
+  // connected but not posted to is the failure it was built to remove, and a
+  // publisher nobody can reach is dead code. Neither is visible until someone
+  // presses send, so it is asserted here.
+  for (const network of PUBLISHABLE) {
+    expect(publishable(network.value)).toBe(true)
+  }
+  expect(publishable("myspace")).toBe(false)
+})
+
+test("a developer app set up in the admin is preferred over the environment", async () => {
+  const db = await ready()
+  process.env.SOCIAL_OAUTH_X_CLIENT_ID = "from-the-environment"
+  process.env.SOCIAL_OAUTH_X_CLIENT_SECRET = "env-secret"
+
+  try {
+    // With no row, the environment is what there is — that is what keeps an
+    // install configured before this screen existed working untouched.
+    expect((await clientFor(db, "x"))?.clientId).toBe("from-the-environment")
+    expect(presentApp("x", await appFor(db, "x")).source).toBe("environment")
+
+    await saveApp(
+      db,
+      "x",
+      {
+        enabled: true,
+        clientId: "from-the-admin",
+        clientSecret: "admin-secret",
+        authorizeUrl: null,
+        tokenUrl: null,
+        scopes: null,
+      },
+      "user-1",
+    )
+
+    const client = await clientFor(db, "x")
+    expect(client?.clientId).toBe("from-the-admin")
+    expect(client?.clientSecret).toBe("admin-secret")
+    // And the shipped defaults still fill in what the admin left blank.
+    expect(client?.authorizeUrl).toContain("x.com")
+    expect(client?.scopes).toContain("media.write")
+
+    const view = presentApp("x", await appFor(db, "x"))
+    expect(view.source).toBe("admin")
+    // The secret is never in what the screen is handed — only enough of it to
+    // be recognised against a developer console.
+    expect(JSON.stringify(view)).not.toContain("admin-secret")
+    expect(view.secretHint).toBe("••••cret")
+    expect(view.hasSecret).toBe(true)
+  } finally {
+    delete process.env.SOCIAL_OAUTH_X_CLIENT_ID
+    delete process.env.SOCIAL_OAUTH_X_CLIENT_SECRET
+  }
+})
+
+test("switching a network off stops it being offered without forgetting its app", async () => {
+  const db = await ready()
+  const app = {
+    clientId: "still-here",
+    clientSecret: "kept",
+    authorizeUrl: null,
+    tokenUrl: null,
+    scopes: null,
+  }
+
+  await saveApp(db, "linkedin", { ...app, enabled: true }, "user-1")
+  expect(await networkReady(db, "linkedin")).toBe(true)
+
+  // Set up and switched on are different states: an operator mid-way through a
+  // network's review wants the credentials saved and the network not yet live.
+  await saveApp(db, "linkedin", { ...app, enabled: false }, "user-1")
+  expect(await networkReady(db, "linkedin")).toBe(false)
+  expect(await clientFor(db, "linkedin")).toBeNull()
+
+  const view = presentApp("linkedin", await appFor(db, "linkedin"))
+  expect(view.enabled).toBe(false)
+  expect(view.clientId).toBe("still-here")
+  expect(view.hasSecret).toBe(true)
+})
+
+test("saving without a secret keeps the stored one rather than wiping it", async () => {
+  const db = await ready()
+  await saveApp(
+    db,
+    "pinterest",
+    {
+      enabled: true,
+      clientId: "pin-1",
+      clientSecret: "the-secret",
+      authorizeUrl: null,
+      tokenUrl: null,
+      scopes: null,
+    },
+    "user-1",
+  )
+
+  // The form never echoes a secret back, so a save of any other field arrives
+  // with the secret absent. Absent has to mean "keep it" or every edit to the
+  // client id would silently break the connection.
+  await saveApp(
+    db,
+    "pinterest",
+    {
+      enabled: true,
+      clientId: "pin-2",
+      authorizeUrl: null,
+      tokenUrl: null,
+      scopes: null,
+    },
+    "user-1",
+  )
+
+  const client = await clientFor(db, "pinterest")
+  expect(client?.clientId).toBe("pin-2")
+  expect(client?.clientSecret).toBe("the-secret")
+
+  // An empty string is the other intent, and has to be distinguishable from it.
+  await saveApp(
+    db,
+    "pinterest",
+    {
+      enabled: true,
+      clientId: "pin-2",
+      clientSecret: "",
+      authorizeUrl: null,
+      tokenUrl: null,
+      scopes: null,
+    },
+    "user-1",
+  )
+  expect((await clientFor(db, "pinterest"))?.clientSecret).toBe("")
+})
+
+test("TikTok's spelling of the OAuth client survives into the request", async () => {
+  const db = await ready()
+
+  // client_key rather than client_id, comma-separated scopes, and no Basic
+  // header. All three are TikTok-only and all three are silent failures if
+  // dropped: the first reads back as an invalid client, the second as a scope
+  // that was never requested, the third as a refused request.
+  await saveApp(
+    db,
+    "tiktok",
+    {
+      enabled: true,
+      clientId: "test-key",
+      clientSecret: "s",
+      authorizeUrl: null,
+      tokenUrl: null,
+      scopes: null,
+    },
+    null,
+  )
+  await saveApp(
+    db,
+    "x",
+    {
+      enabled: true,
+      clientId: "test-x",
+      clientSecret: "s",
+      authorizeUrl: null,
+      tokenUrl: null,
+      scopes: null,
+    },
+    null,
+  )
+
+  const tiktok = await clientFor(db, "tiktok")
+  expect(tiktok?.clientParam).toBe("client_key")
+  expect(tiktok?.scopeSeparator).toBe(",")
+  expect(tiktok?.basicAuth).toBe(false)
+
+  // Every other network keeps the spec's spelling.
+  expect((await clientFor(db, "x"))?.clientParam).toBeUndefined()
+})
+
+test("a post is checked against what each network will actually take", () => {
+  const nothing = { images: 0, videos: 0 }
+  const oneVideo = { images: 0, videos: 1 }
+  const fiveImages = { images: 5, videos: 0 }
+
+  // Arithmetic, not judgement: 281 characters is not a matter of taste.
+  expect(violations("x", "a".repeat(281), nothing)[0]).toContain("280")
+  expect(violations("x", "hello", nothing)).toEqual([])
+
+  // The video networks refuse a text post outright rather than posting an
+  // empty one, which is what "requiresVideo" is for.
+  expect(violations("tiktok", "hello", nothing)[0]).toContain("needs a video")
+  expect(violations("youtube", "hello", oneVideo)).toEqual([])
+
+  // X takes four images; the fifth is the whole message.
+  expect(violations("x", "hi", fiveImages)[0]).toContain("up to 4")
+  expect(violations("facebook", "hi", fiveImages)).toEqual([])
+
+  // Nobody takes both.
+  expect(violations("facebook", "hi", { images: 1, videos: 1 }).join(" ")).toContain("not both")
+
+  // A network nothing can post to says so rather than passing silently.
+  expect(violations("myspace", "hi", nothing)).toHaveLength(1)
+})
+
+test("per-network options fall back to the network's own defaults", () => {
+  // A post saved before an option existed still has to publish, so unknown and
+  // absent keys both resolve rather than reaching a publisher as undefined.
+  const tiktok = withDefaults("tiktok", { disableComment: true, nonsense: "x" })
+  expect(tiktok.privacy).toBe("SELF_ONLY")
+  expect(tiktok.disableComment).toBe(true)
+  expect(tiktok.disableDuet).toBe(false)
+  expect(tiktok).not.toHaveProperty("nonsense")
+
+  // A select is validated against its own choices, not trusted.
+  expect(withDefaults("youtube", { privacy: "world-readable" }).privacy).toBe("private")
+  expect(withDefaults("youtube", { privacy: "unlisted" }).privacy).toBe("unlisted")
+})
+
+test("a post is as done as its worst target", () => {
+  const at = (...statuses: string[]) => statuses.map(status => ({ status }))
+
+  expect(rollUp(at("posted", "posted"))).toBe("posted")
+  expect(rollUp(at("failed", "failed"))).toBe("failed")
+  // The common real outcome, and the reason it has a name: X took it and
+  // TikTok did not, which is neither a success nor a failure.
+  expect(rollUp(at("posted", "failed"))).toBe("partial")
+  expect(rollUp(at("posted", "skipped"))).toBe("posted")
+  expect(rollUp(at())).toBe("failed")
 })

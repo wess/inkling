@@ -1,11 +1,14 @@
 import {
   Activity,
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Blocks,
   Bold,
+  CalendarDays,
   Check,
   ChevronLeft,
+  Clock,
   Copy,
   ExternalLink,
   FileText,
@@ -21,6 +24,7 @@ import {
   Lock,
   LogOut,
   Maximize2,
+  Megaphone,
   Menu as MenuIcon,
   Minimize2,
   Minus,
@@ -33,6 +37,7 @@ import {
   Send,
   Settings,
   Shapes,
+  SlidersHorizontal as Sliders,
   Sparkles,
   Trash2,
   Undo2,
@@ -58,6 +63,12 @@ import type {
   PluginConnectionsPayload,
   PluginPanel,
   PluginStatsPayload,
+  SocialAccount,
+  SocialNetwork,
+  SocialOverview,
+  SocialPost,
+  SocialPostInput,
+  SocialSetting,
   Stats,
   Taxonomy,
   Term,
@@ -187,6 +198,14 @@ type Route =
   | { name: "keys" }
   | { name: "users" }
   | { name: "ai" }
+  // Social is five screens rather than one because they are five jobs: see what
+  // is going out, write something, look at the month, and connect an account.
+  | { name: "social" }
+  | { name: "socialposts" }
+  | { name: "socialcompose"; id: string | null }
+  | { name: "socialcalendar" }
+  | { name: "socialaccounts" }
+  | { name: "socialsettings" }
 
 // Where the admin is mounted, injected by src/web/serve.ts. Empty when Inkling
 // owns the origin; "/admin" or similar when a site does. Every route the SPA
@@ -212,6 +231,14 @@ const parse = (path: string): Route => {
   if (head === "keys") return { name: "keys" }
   if (head === "users") return { name: "users" }
   if (head === "ai") return { name: "ai" }
+  if (head === "social") {
+    if (a === "posts") return { name: "socialposts" }
+    if (a === "compose") return { name: "socialcompose", id: !b || b === "new" ? null : b }
+    if (a === "calendar") return { name: "socialcalendar" }
+    if (a === "accounts") return { name: "socialaccounts" }
+    if (a === "settings") return { name: "socialsettings" }
+    return { name: "social" }
+  }
   return { name: "dashboard" }
 }
 
@@ -227,6 +254,18 @@ const href = (route: Route): string => {
       return route.type ? `/types/${route.type}` : "/types"
     case "dashboard":
       return "/"
+    case "social":
+      return "/social"
+    case "socialposts":
+      return "/social/posts"
+    case "socialcompose":
+      return `/social/compose/${route.id ?? "new"}`
+    case "socialcalendar":
+      return "/social/calendar"
+    case "socialaccounts":
+      return "/social/accounts"
+    case "socialsettings":
+      return "/social/settings"
     default:
       return `/${route.name}`
   }
@@ -327,6 +366,16 @@ const Modal = ({
   const dialog = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
+  // Read through a ref rather than depending on it. Every caller passes an
+  // inline arrow, so `onClose` is a new identity on each parent render — and a
+  // dependency on it would tear the trap down and rebuild it after every
+  // keystroke, refocusing the first control and pulling the caret out of the
+  // field being typed into.
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const focusable = () =>
@@ -334,7 +383,7 @@ const Modal = ({
         ...(dialog.current?.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]") ?? []),
       ].filter(element => !element.hasAttribute("disabled") && element.tabIndex >= 0)
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose()
+      if (event.key === "Escape") close.current()
       if (event.key !== "Tab") return
       const controls = focusable()
       const first = controls[0]
@@ -354,7 +403,8 @@ const Modal = ({
       removeEventListener("keydown", onKey)
       previous?.focus()
     }
-  }, [onClose])
+    // Mount-once: the trap belongs to the modal being open, not to any prop.
+  }, [])
 
   return (
     <div className="scrim">
@@ -390,11 +440,15 @@ const MediaPicker = ({
   multiple,
   onPick,
   onClose,
+  // Field media is images; a social post may also be a video, and a picker that
+  // refuses to upload one would send an editor to a different screen mid-compose.
+  accept = "image/*",
 }: {
   value: string | string[] | null
   multiple: boolean
   onPick: (value: string | string[] | null) => void
   onClose: () => void
+  accept?: string
 }) => {
   const [items, setItems] = useState<Media[]>([])
   const [busy, setBusy] = useState(true)
@@ -460,7 +514,7 @@ const MediaPicker = ({
       }
     >
       <label className="drop" style={{ display: "block", marginBottom: 16 }}>
-        <input type="file" multiple hidden onChange={event => upload(event.target.files)} accept="image/*" />
+        <input type="file" multiple hidden onChange={event => upload(event.target.files)} accept={accept} />
         <Upload size={19} style={{ marginBottom: 6 }} />
         <div style={{ fontSize: 13 }}>Click to upload</div>
       </label>
@@ -6646,6 +6700,1683 @@ const AiScreen = ({
   )
 }
 
+// ---------------------------------------------------------------- social
+
+// A post's status maps onto the pill colours entries already use, because they
+// mean the same things to the eye: green is out, blue is coming, amber wants
+// looking at, red went wrong.
+const SOCIAL_PILL: Record<string, string> = {
+  draft: "draft",
+  scheduled: "scheduled",
+  publishing: "review",
+  posted: "published",
+  partial: "review",
+  failed: "archived",
+  canceled: "off",
+}
+
+const SOCIAL_WORD: Record<string, string> = {
+  draft: "draft",
+  scheduled: "scheduled",
+  publishing: "sending",
+  posted: "posted",
+  partial: "part posted",
+  failed: "failed",
+  canceled: "canceled",
+}
+
+const SocialStatus = ({ status }: { status: string }) => (
+  <span className={cx("pill", SOCIAL_PILL[status] ?? "draft")}>{SOCIAL_WORD[status] ?? status}</span>
+)
+
+// The same rules the server applies in src/social/networks.ts#violations,
+// repeated here so the composer can say "X allows 280 characters" while it is
+// being typed rather than after a round trip. The server stays the authority —
+// this is only ever allowed to be *earlier*, never more permissive.
+const socialProblems = (
+  network: SocialNetwork,
+  caption: string,
+  shape: { images: number; videos: number },
+): string[] => {
+  const out: string[] = []
+  const rule = network.media
+  if (caption.length > network.limit) {
+    out.push(
+      `${network.label} allows ${network.limit.toLocaleString()} characters and this is ${caption.length.toLocaleString()}`,
+    )
+  }
+  if (shape.videos > 1) out.push(`${network.label} takes one video per post`)
+  if (shape.videos > 0 && !rule.video) out.push(`${network.label} does not take video`)
+  if (shape.images > 0 && rule.images === 0) out.push(`${network.label} does not take images`)
+  if (shape.images > rule.images && rule.images > 0) {
+    out.push(`${network.label} takes up to ${rule.images} image${rule.images === 1 ? "" : "s"}`)
+  }
+  if (shape.images > 0 && shape.videos > 0 && !rule.coverImage) {
+    out.push(`${network.label} takes images or a video, not both`)
+  }
+  if (shape.videos > 0 && shape.images === 0 && rule.coverImage) {
+    out.push(`A ${network.label} video needs a cover image — ${network.label} will not make one`)
+  }
+  if (rule.requiresMedia === "video" && shape.videos === 0) out.push(`${network.label} needs a video`)
+  if (rule.requiresMedia === "image" && shape.images === 0) out.push(`${network.label} needs an image`)
+  if (rule.requiresMedia === "any" && shape.images + shape.videos === 0) {
+    out.push(`${network.label} needs an image or a video`)
+  }
+  if (!rule.requiresMedia && caption.trim() === "" && shape.images + shape.videos === 0) {
+    out.push(`${network.label} needs a caption or something to show`)
+  }
+  return out
+}
+
+const SocialTargets = ({ post }: { post: SocialPost }) => (
+  <div className="socialtargets">
+    {post.targets.map(target => (
+      <span
+        key={target.id}
+        className={cx(
+          "netchip sm",
+          target.status === "posted" && "ok",
+          target.status === "failed" && "bad",
+          target.status === "publishing" && "busy",
+        )}
+        title={target.error ?? target.account ?? target.networkLabel}
+      >
+        {target.networkLabel}
+        {target.status === "posted" && target.url ? (
+          <a href={target.url} target="_blank" rel="noreferrer noopener" aria-label={`Open on ${target.networkLabel}`}>
+            <ExternalLink size={11} />
+          </a>
+        ) : null}
+        {target.status === "failed" ? <AlertTriangle size={11} /> : null}
+      </span>
+    ))}
+  </div>
+)
+
+const SocialPostRow = ({ post, go }: { post: SocialPost; go: (route: Route) => void }) => {
+  const failures = post.targets.filter(target => target.status === "failed")
+  return (
+    <div className="socialrow">
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <button type="button" className="tablelink" onClick={() => go({ name: "socialcompose", id: post.id })}>
+          {post.title}
+        </button>
+        <div className="dim2 socialcaption">{post.caption || "No caption"}</div>
+        <div className="row" style={{ marginTop: 7, gap: 8 }}>
+          <SocialStatus status={post.status} />
+          <SocialTargets post={post} />
+        </div>
+        {failures.length > 0 ? (
+          <div className="socialerror">
+            {/* The network's own sentence, not a count. It is the whole
+                diagnosis, and hiding it behind a click hides the fix. */}
+            {failures[0]?.networkLabel}: {failures[0]?.error}
+          </div>
+        ) : null}
+      </div>
+      <div className="dim2 socialwhen">
+        {post.status === "scheduled" ? (
+          <>
+            <Clock size={12} /> {ago(post.scheduledAt)}
+          </>
+        ) : post.publishedAt ? (
+          ago(post.publishedAt)
+        ) : (
+          `edited ${ago(post.updatedAt)}`
+        )}
+      </div>
+    </div>
+  )
+}
+
+const SocialDashboard = ({
+  go,
+  canConnect,
+  toast,
+}: {
+  go: (route: Route) => void
+  canConnect: boolean
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [data, setData] = useState<SocialOverview | null>(null)
+  const [busy, setBusy] = useState(true)
+
+  useEffect(() => {
+    api
+      .socialOverview()
+      .then(setData)
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [toast])
+
+  if (busy) return <Spinner />
+  if (!data) return <Note kind="warn">The social dashboard could not be loaded.</Note>
+
+  const nothingConnected = data.accounts.length === 0
+
+  return (
+    <>
+      <div className="cardhead" style={{ padding: 0, border: 0, marginBottom: 16 }}>
+        <h2>Social</h2>
+        <div className="row rowend">
+          <button type="button" className="btn" onClick={() => go({ name: "socialcalendar" })}>
+            <CalendarDays size={14} /> Calendar
+          </button>
+          <button type="button" className="btn primary" onClick={() => go({ name: "socialcompose", id: null })}>
+            <Plus size={14} /> New post
+          </button>
+        </div>
+      </div>
+
+      {nothingConnected ? (
+        <Note kind="info">
+          <div className="notebody">
+            <b>No accounts are connected yet</b>
+            <p>
+              A post needs somewhere to go. Connect an account and it becomes an option in the composer — nothing else
+              here changes.
+            </p>
+            {canConnect ? (
+              <button type="button" className="btn primary sm" onClick={() => go({ name: "socialaccounts" })}>
+                Connect an account
+              </button>
+            ) : (
+              <span className="dim2">An admin connects accounts.</span>
+            )}
+          </div>
+        </Note>
+      ) : null}
+
+      <div className="grid g4">
+        {(
+          [
+            ["Drafts", data.counts.drafts],
+            ["Scheduled", data.counts.scheduled],
+            ["Posted", data.counts.posted],
+            ["Need attention", data.counts.partial + data.counts.failed],
+          ] as const
+        ).map(([label, value]) => (
+          <div className="card stat" key={label}>
+            <div className="statnum">{value.toLocaleString()}</div>
+            <div className="statlabel">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="cardhead">
+          <h2>Going out next</h2>
+          <button type="button" className="btn ghost sm rowend" onClick={() => go({ name: "socialposts" })}>
+            All posts
+          </button>
+        </div>
+        <div className="cardbody">
+          {data.upcoming.length === 0 ? (
+            <Empty title="Nothing scheduled" hint="A post with a time on it appears here until it goes out." />
+          ) : (
+            data.upcoming.map(post => <SocialPostRow key={post.id} post={post} go={go} />)
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="cardhead">
+          <h2>Recently sent</h2>
+        </div>
+        <div className="cardbody">
+          {data.recent.length === 0 ? (
+            <Empty
+              title="Nothing has gone out yet"
+              hint="Write a post and send it, and it lands here with its links."
+            />
+          ) : (
+            data.recent.map(post => <SocialPostRow key={post.id} post={post} go={go} />)
+          )}
+        </div>
+      </div>
+
+      {data.accounts.some(account => account.error) ? (
+        <Note kind="warn">
+          <div className="notebody">
+            <b>A connection needs attention</b>
+            {data.accounts
+              .filter(account => account.error)
+              .map(account => (
+                <p key={account.id}>
+                  {account.account ?? account.network}: {account.error}
+                </p>
+              ))}
+            {canConnect ? (
+              <button type="button" className="btn sm" onClick={() => go({ name: "socialaccounts" })}>
+                Open accounts
+              </button>
+            ) : null}
+          </div>
+        </Note>
+      ) : null}
+    </>
+  )
+}
+
+const SOCIAL_FILTERS = [
+  { value: "", label: "All" },
+  { value: "draft", label: "Drafts" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "posted", label: "Posted" },
+  { value: "failed", label: "Failed" },
+] as const
+
+const SocialPosts = ({
+  go,
+  toast,
+}: {
+  go: (route: Route) => void
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [posts, setPosts] = useState<SocialPost[]>([])
+  const [status, setStatus] = useState("")
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [busy, setBusy] = useState(true)
+
+  useEffect(() => {
+    setBusy(true)
+    api
+      .socialPosts({ status, page, limit: 25 })
+      .then(result => {
+        setPosts(result.data)
+        setTotal(result.meta.total)
+      })
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [status, page, toast])
+
+  return (
+    <>
+      <div className="cardhead" style={{ padding: 0, border: 0, marginBottom: 16 }}>
+        <h2>Posts</h2>
+        <button type="button" className="btn primary rowend" onClick={() => go({ name: "socialcompose", id: null })}>
+          <Plus size={14} /> New post
+        </button>
+      </div>
+
+      <div className="tabs">
+        {SOCIAL_FILTERS.map(filter => (
+          <button
+            type="button"
+            key={filter.value}
+            className={cx("tab", status === filter.value && "on")}
+            onClick={() => {
+              setStatus(filter.value)
+              setPage(1)
+            }}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="cardbody">
+          {busy ? (
+            <Spinner />
+          ) : posts.length === 0 ? (
+            <Empty title="No posts here" hint="Write one and it shows up in this list whatever happens to it." />
+          ) : (
+            posts.map(post => <SocialPostRow key={post.id} post={post} go={go} />)
+          )}
+        </div>
+      </div>
+
+      {total > 25 ? (
+        <div className="pager">
+          <span>
+            {(page - 1) * 25 + 1}–{Math.min(page * 25, total)} of {total}
+          </span>
+          <div className="rowend">
+            <button type="button" className="btn sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
+              Previous
+            </button>
+            <button type="button" className="btn sm" disabled={page * 25 >= total} onClick={() => setPage(page + 1)}>
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+type Chosen = { caption: string | null; options: Record<string, unknown> }
+
+// Moves one id one place. Found by id rather than by the thumbnail's position,
+// because a piece of media deleted from the library resolves to nothing and the
+// two lists stop lining up — reordering by grid position would then move a
+// different file than the one under the arrow.
+const swap = (ids: readonly string[], id: string, by: -1 | 1): string[] => {
+  const from = ids.indexOf(id)
+  const to = from + by
+  if (from < 0 || to < 0 || to >= ids.length) return [...ids]
+  const next = [...ids]
+  next[from] = ids[to] as string
+  next[to] = id
+  return next
+}
+
+const SocialComposer = ({
+  id,
+  canSend,
+  canConnect,
+  go,
+  toast,
+}: {
+  id: string | null
+  canSend: boolean
+  canConnect: boolean
+  go: (route: Route) => void
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [networks, setNetworks] = useState<SocialNetwork[]>([])
+  const [post, setPost] = useState<SocialPost | null>(null)
+  const [busy, setBusy] = useState(true)
+  const [saving, setSaving] = useState("")
+
+  const [title, setTitle] = useState("")
+  const [caption, setCaption] = useState("")
+  const [link, setLink] = useState("")
+  const [media, setMedia] = useState<string[]>([])
+  const [when, setWhen] = useState("")
+  const [selected, setSelected] = useState<Record<string, Chosen>>({})
+  const [picking, setPicking] = useState(false)
+  const [resolved, setResolved] = useState<Media[]>([])
+  const [dirty, setDirty] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useUnsavedWarning(dirty)
+
+  useEffect(() => {
+    setBusy(true)
+    Promise.all([api.socialNetworks(), id ? api.socialPost(id) : Promise.resolve(null)])
+      .then(([catalog, existing]) => {
+        setNetworks(catalog.networks)
+        setPost(existing)
+        if (!existing) return
+        setTitle(existing.title)
+        setCaption(existing.caption)
+        setLink(existing.link ?? "")
+        setMedia(existing.media)
+        setWhen(existing.scheduledAt ? localDateTime(new Date(existing.scheduledAt)) : "")
+        setSelected(
+          Object.fromEntries(
+            existing.targets
+              .filter(target => target.accountId !== null)
+              .map(target => [target.accountId as string, { caption: target.caption, options: target.options }]),
+          ),
+        )
+      })
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [id, toast])
+
+  useEffect(() => {
+    if (media.length === 0) {
+      setResolved([])
+      return
+    }
+    void Promise.all(media.map(mediaId => api.mediaItem(mediaId).catch(() => null))).then(items =>
+      setResolved(items.filter((item): item is Media => item !== null)),
+    )
+  }, [media])
+
+  const accounts = useMemo(
+    () => networks.flatMap(network => network.accounts.map(account => ({ account, network }))),
+    [networks],
+  )
+
+  const shape = useMemo(
+    () => ({
+      images: resolved.filter(item => item.mime.startsWith("image/")).length,
+      videos: resolved.filter(item => item.mime.startsWith("video/")).length,
+    }),
+    [resolved],
+  )
+
+  const touch =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setDirty(true)
+      setter(value)
+    }
+
+  const toggle = (accountId: string) => {
+    setDirty(true)
+    setSelected(current => {
+      if (current[accountId]) {
+        const { [accountId]: _dropped, ...rest } = current
+        return rest
+      }
+      return { ...current, [accountId]: { caption: null, options: {} } }
+    })
+  }
+
+  const chosen = accounts.filter(item => selected[item.account.id])
+
+  // Every reason a network would refuse this, worked out as it is typed. The
+  // send buttons stay live regardless — the server decides, and a client-side
+  // rule that disagreed would lock someone out of a post that is actually fine.
+  const problems = chosen.flatMap(item =>
+    socialProblems(item.network, selected[item.account.id]?.caption ?? caption, shape).map(message => ({
+      account: item.account.id,
+      message,
+    })),
+  )
+
+  const payload = (): SocialPostInput => ({
+    title,
+    caption,
+    link: link.trim() || null,
+    media,
+    scheduledAt: when ? new Date(when).toISOString() : null,
+    targets: chosen.map(item => ({
+      accountId: item.account.id,
+      caption: selected[item.account.id]?.caption ?? null,
+      options: selected[item.account.id]?.options ?? {},
+    })),
+  })
+
+  const persist = async (): Promise<SocialPost | null> => {
+    setErrors({})
+    try {
+      const saved = post ? await api.updateSocialPost(post.id, payload()) : await api.createSocialPost(payload())
+      setPost(saved)
+      setDirty(false)
+      return saved
+    } catch (error) {
+      setErrors(fieldErrors(error))
+      toast(errorOf(error), true)
+      return null
+    }
+  }
+
+  const act = async (kind: string, run: () => Promise<unknown>) => {
+    setSaving(kind)
+    try {
+      await run()
+    } finally {
+      setSaving("")
+    }
+  }
+
+  const save = () =>
+    act("save", async () => {
+      const saved = await persist()
+      if (!saved) return
+      toast("Saved")
+      // A new post has to become an existing one, or the next save creates a
+      // second copy of it.
+      if (!id) go({ name: "socialcompose", id: saved.id })
+    })
+
+  const schedule = () =>
+    act("schedule", async () => {
+      const saved = await persist()
+      if (!saved) return
+      try {
+        setPost(await api.scheduleSocialPost(saved.id, new Date(when).toISOString()))
+        toast("Scheduled")
+        if (!id) go({ name: "socialcompose", id: saved.id })
+      } catch (error) {
+        toast(errorOf(error), true)
+      }
+    })
+
+  const sendNow = () =>
+    act("send", async () => {
+      const saved = await persist()
+      if (!saved) return
+      if (
+        !confirm(`Send this to ${chosen.length} account${chosen.length === 1 ? "" : "s"} now? This cannot be undone.`)
+      )
+        return
+      try {
+        const result = await api.publishSocialPost(saved.id)
+        setPost(result.post)
+        const failed = result.data.targets.filter(target => target.status === "failed")
+        toast(
+          failed.length === 0
+            ? "Posted"
+            : `${result.data.targets.length - failed.length} of ${result.data.targets.length} went out`,
+          failed.length > 0,
+        )
+        if (!id) go({ name: "socialcompose", id: saved.id })
+      } catch (error) {
+        toast(errorOf(error), true)
+      }
+    })
+
+  if (busy) return <Spinner />
+
+  const sent = post?.targets.filter(target => target.status === "posted") ?? []
+  const failed = post?.targets.filter(target => target.status === "failed") ?? []
+  const locked = post?.status === "publishing"
+
+  return (
+    <>
+      <div className="cardhead" style={{ padding: 0, border: 0, marginBottom: 16 }}>
+        <button type="button" className="btn ghost sm" onClick={() => go({ name: "socialposts" })}>
+          <ChevronLeft size={14} /> Posts
+        </button>
+        <h2 style={{ marginLeft: 4 }}>{post ? post.title : "New post"}</h2>
+        {post ? <SocialStatus status={post.status} /> : null}
+        <div className="row rowend">
+          {post ? (
+            <button
+              type="button"
+              className="btn ghost sm danger"
+              onClick={async () => {
+                if (!confirm("Delete this post? What has already gone out stays on the networks.")) return
+                await api.deleteSocialPost(post.id).catch(error => toast(errorOf(error), true))
+                setDirty(false)
+                go({ name: "socialposts" })
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {locked ? (
+        <Note kind="info">This post is going out right now. It cannot be edited until it finishes.</Note>
+      ) : null}
+
+      {failed.length > 0 ? (
+        <Note kind="err">
+          <div className="notebody">
+            <b>
+              {failed.length} network{failed.length === 1 ? "" : "s"} refused this post
+            </b>
+            {failed.map(target => (
+              <p key={target.id}>
+                <b>{target.networkLabel}:</b> {target.error}
+              </p>
+            ))}
+            <p className="dim2">
+              Sending again retries only these — the {sent.length} that went out are not posted twice.
+            </p>
+          </div>
+        </Note>
+      ) : null}
+
+      <div className="socialgrid">
+        <div>
+          <div className="card">
+            <div className="cardbody">
+              <div className="f">
+                <label htmlFor="social-title">Internal title</label>
+                <input
+                  id="social-title"
+                  type="text"
+                  value={title}
+                  disabled={locked}
+                  placeholder="What this post is, for finding it later"
+                  onChange={event => touch(setTitle)(event.target.value)}
+                />
+              </div>
+
+              <div className="f">
+                <label htmlFor="social-caption">
+                  Caption
+                  <Hint text="What every selected network gets, unless you give one of them its own wording below." />
+                </label>
+                <textarea
+                  id="social-caption"
+                  rows={7}
+                  value={caption}
+                  disabled={locked}
+                  placeholder="Write the post…"
+                  onChange={event => touch(setCaption)(event.target.value)}
+                />
+                <div className="row socialcounts">
+                  {chosen.length === 0 ? (
+                    <span className="dim2">{caption.length} characters</span>
+                  ) : (
+                    chosen.map(item => {
+                      const text = selected[item.account.id]?.caption ?? caption
+                      return (
+                        <span
+                          key={item.account.id}
+                          className={cx("counter", text.length > item.network.limit && "over")}
+                        >
+                          {item.network.label} {text.length}/{item.network.limit.toLocaleString()}
+                        </span>
+                      )
+                    })
+                  )}
+                </div>
+                {errors.media ? <div className="fieldhelp req">{errors.media}</div> : null}
+              </div>
+
+              <div className="f">
+                <label htmlFor="social-link">Link</label>
+                <input
+                  id="social-link"
+                  type="url"
+                  value={link}
+                  disabled={locked}
+                  placeholder="https://…"
+                  onChange={event => touch(setLink)(event.target.value)}
+                />
+                <div className="fieldhelp">Appended to the caption on networks with no link field of their own.</div>
+              </div>
+
+              <div className="f">
+                <label htmlFor="social-media">Media</label>
+                <div className="socialmedia" id="social-media">
+                  {resolved.map((item, index) => (
+                    <div className="socialthumb" key={item.id}>
+                      {item.mime.startsWith("image/") ? (
+                        <img src={item.url} alt={item.alt ?? item.filename} />
+                      ) : (
+                        <div className="socialthumbicon">
+                          <Send size={18} />
+                          <span>{item.mime.split("/")[1]}</span>
+                        </div>
+                      )}
+                      <div className="socialthumbbar">
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          disabled={index === 0 || locked}
+                          aria-label="Move earlier"
+                          onClick={() => touch(setMedia)(swap(media, item.id, -1))}
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          disabled={index === resolved.length - 1 || locked}
+                          aria-label="Move later"
+                          onClick={() => touch(setMedia)(swap(media, item.id, 1))}
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          disabled={locked}
+                          aria-label="Remove"
+                          onClick={() => touch(setMedia)(media.filter(value => value !== item.id))}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" className="btn socialadd" disabled={locked} onClick={() => setPicking(true)}>
+                    <ImageIcon size={15} />
+                    <span>Add</span>
+                  </button>
+                </div>
+                <div className="fieldhelp">
+                  Order is the order they appear. TikTok and YouTube take one video; X takes four images or one video.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="card">
+            <div className="cardhead">
+              <h2>Where it goes</h2>
+            </div>
+            <div className="cardbody">
+              {accounts.length === 0 ? (
+                <Empty
+                  title="No accounts connected"
+                  hint="A post needs somewhere to go."
+                  action={
+                    canConnect ? (
+                      <button type="button" className="btn primary sm" onClick={() => go({ name: "socialaccounts" })}>
+                        Connect an account
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                <div className="netpick">
+                  {accounts.map(({ account, network }) => (
+                    <button
+                      type="button"
+                      key={account.id}
+                      className={cx("netchip", selected[account.id] && "on", account.error !== null && "bad")}
+                      disabled={locked}
+                      title={account.error ?? undefined}
+                      onClick={() => toggle(account.id)}
+                    >
+                      {selected[account.id] ? <Check size={12} /> : null}
+                      {network.label}
+                      <span className="netchipwho">{account.account ?? ""}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {errors.targets ? <div className="fieldhelp req">{errors.targets}</div> : null}
+
+              {problems.length > 0 ? (
+                <div className="socialproblems">
+                  {problems.map(problem => (
+                    <div key={`${problem.account}${problem.message}`}>
+                      <AlertTriangle size={12} /> {problem.message}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {chosen.map(item => {
+            const state = selected[item.account.id] as Chosen
+            const override = state.caption !== null
+            const set = (next: Partial<Chosen>) => {
+              setDirty(true)
+              setSelected(current => ({ ...current, [item.account.id]: { ...state, ...next } }))
+            }
+
+            if (item.network.options.length === 0 && !override) {
+              return (
+                <div className="card socialnetcard" key={item.account.id}>
+                  <div className="cardbody">
+                    <div className="row">
+                      <b>{item.network.label}</b>
+                      <button type="button" className="btn ghost sm rowend" onClick={() => set({ caption })}>
+                        Give it its own wording
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+
+            return (
+              <div className="card socialnetcard" key={item.account.id}>
+                <div className="cardhead">
+                  <h2>{item.network.label}</h2>
+                  <span className="dim2 rowend">{item.account.account ?? ""}</span>
+                </div>
+                <div className="cardbody">
+                  <div className="f">
+                    <div className="row">
+                      <label htmlFor={`cap-${item.account.id}`}>Caption</label>
+                      <button
+                        type="button"
+                        className="btn ghost sm rowend"
+                        onClick={() => set({ caption: override ? null : caption })}
+                      >
+                        {override ? "Follow the post" : "Give it its own wording"}
+                      </button>
+                    </div>
+                    {override ? (
+                      <textarea
+                        id={`cap-${item.account.id}`}
+                        rows={4}
+                        value={state.caption ?? ""}
+                        disabled={locked}
+                        onChange={event => set({ caption: event.target.value })}
+                      />
+                    ) : null}
+                  </div>
+
+                  {item.network.options.map(spec => {
+                    const value = state.options[spec.key]
+                    const write = (next: unknown) => set({ options: { ...state.options, [spec.key]: next } })
+                    const inputId = `${item.account.id}-${spec.key}`
+
+                    if (spec.type === "boolean") {
+                      return (
+                        <label className="check" key={spec.key} htmlFor={inputId}>
+                          <input
+                            id={inputId}
+                            type="checkbox"
+                            checked={value === undefined ? spec.fallback === true : value === true}
+                            disabled={locked}
+                            onChange={event => write(event.target.checked)}
+                          />
+                          <span>{spec.label}</span>
+                        </label>
+                      )
+                    }
+
+                    return (
+                      <div className="f" key={spec.key}>
+                        <label htmlFor={inputId}>{spec.label}</label>
+                        {spec.type === "select" ? (
+                          <select
+                            id={inputId}
+                            value={String(value ?? spec.fallback ?? "")}
+                            disabled={locked}
+                            onChange={event => write(event.target.value)}
+                          >
+                            {(spec.choices ?? []).map(choice => (
+                              <option key={choice.value} value={choice.value}>
+                                {choice.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            id={inputId}
+                            type="text"
+                            value={String(value ?? "")}
+                            disabled={locked}
+                            onChange={event => write(event.target.value)}
+                          />
+                        )}
+                        {spec.help ? <div className="fieldhelp">{spec.help}</div> : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          <div className="card">
+            <div className="cardbody">
+              {canSend ? (
+                <div className="f">
+                  <label htmlFor="social-when">Send at</label>
+                  <input
+                    id="social-when"
+                    type="datetime-local"
+                    value={when}
+                    disabled={locked}
+                    onChange={event => touch(setWhen)(event.target.value)}
+                  />
+                  <div className="fieldhelp">Your local time. Leave it empty to keep this a draft.</div>
+                </div>
+              ) : (
+                <div className="fieldhelp">An editor schedules and sends posts. Save it and it is ready for them.</div>
+              )}
+
+              <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
+                <button type="button" className="btn" disabled={saving !== "" || locked} onClick={save}>
+                  {saving === "save" ? "Saving…" : "Save"}
+                </button>
+                {canSend ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={saving !== "" || locked || !when || chosen.length === 0}
+                      onClick={schedule}
+                    >
+                      <Clock size={14} /> {saving === "schedule" ? "Scheduling…" : "Schedule"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      disabled={saving !== "" || locked || chosen.length === 0}
+                      onClick={sendNow}
+                    >
+                      <Send size={14} /> {saving === "send" ? "Sending…" : "Post now"}
+                    </button>
+                  </>
+                ) : null}
+                {canSend && post?.status === "scheduled" ? (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={saving !== ""}
+                    onClick={async () => {
+                      setPost(await api.cancelSocialPost(post.id).catch(() => post))
+                      setWhen("")
+                      toast("Called back to draft")
+                    }}
+                  >
+                    Call it back
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {sent.length > 0 ? (
+            <div className="card">
+              <div className="cardhead">
+                <h2>Live</h2>
+              </div>
+              <div className="cardbody">
+                {sent.map(target => (
+                  <div className="row socialsent" key={target.id}>
+                    <span className="pill published">{target.networkLabel}</span>
+                    <span className="dim2">{ago(target.postedAt)}</span>
+                    {target.url ? (
+                      <a className="rowend" href={target.url} target="_blank" rel="noreferrer noopener">
+                        Open <ExternalLink size={12} />
+                      </a>
+                    ) : (
+                      <span className="dim2 rowend">No public link</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {picking ? (
+        <MediaPicker
+          value={media}
+          multiple
+          accept="image/*,video/*"
+          onPick={value => touch(setMedia)(Array.isArray(value) ? value : value ? [value] : [])}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
+    </>
+  )
+}
+
+const SocialCalendar = ({
+  go,
+  toast,
+}: {
+  go: (route: Route) => void
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [month, setMonth] = useState(() => {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
+  const [posts, setPosts] = useState<SocialPost[]>([])
+  const [busy, setBusy] = useState(true)
+
+  // The grid starts on the Sunday on or before the first, so a month always
+  // draws as whole weeks. The server is asked for exactly that window, which is
+  // why it takes a `from` rather than a month — it does no timezone arithmetic
+  // and the browser is the only thing that knows where the operator is.
+  const start = useMemo(() => {
+    const first = new Date(month)
+    first.setDate(1 - first.getDay())
+    first.setHours(0, 0, 0, 0)
+    return first
+  }, [month])
+
+  useEffect(() => {
+    setBusy(true)
+    api
+      .socialCalendar(start.toISOString(), 42)
+      .then(setPosts)
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [start, toast])
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, SocialPost[]>()
+    for (const post of posts) {
+      if (!post.scheduledAt) continue
+      const key = new Date(post.scheduledAt).toDateString()
+      map.set(key, [...(map.get(key) ?? []), post])
+    }
+    return map
+  }, [posts])
+
+  const cells = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return date
+  })
+
+  const shift = (by: number) => setMonth(new Date(month.getFullYear(), month.getMonth() + by, 1))
+  const today = new Date().toDateString()
+
+  return (
+    <>
+      <div className="cardhead" style={{ padding: 0, border: 0, marginBottom: 16 }}>
+        <h2>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
+        <div className="row rowend">
+          <button type="button" className="btn sm" onClick={() => shift(-1)}>
+            Previous
+          </button>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => setMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+          >
+            Today
+          </button>
+          <button type="button" className="btn sm" onClick={() => shift(1)}>
+            Next
+          </button>
+          <button type="button" className="btn primary sm" onClick={() => go({ name: "socialcompose", id: null })}>
+            <Plus size={14} /> New post
+          </button>
+        </div>
+      </div>
+
+      {busy ? <Spinner /> : null}
+
+      <div className="card">
+        <div className="calhead">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+        <div className="calgrid">
+          {cells.map(date => {
+            const items = byDay.get(date.toDateString()) ?? []
+            return (
+              <div
+                className={cx(
+                  "calday",
+                  date.getMonth() !== month.getMonth() && "off",
+                  date.toDateString() === today && "now",
+                )}
+                key={date.toISOString()}
+              >
+                <div className="calnum">{date.getDate()}</div>
+                {items.map(post => (
+                  <button
+                    type="button"
+                    key={post.id}
+                    className={cx("calpost", SOCIAL_PILL[post.status] ?? "draft")}
+                    onClick={() => go({ name: "socialcompose", id: post.id })}
+                    title={post.caption}
+                  >
+                    <span className="caltime">
+                      {new Date(post.scheduledAt as string).toLocaleTimeString(undefined, {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {post.title}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </>
+  )
+}
+
+const SocialAccounts = ({
+  go,
+  toast,
+}: {
+  go: (route: Route) => void
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [payload, setPayload] = useState<Awaited<ReturnType<typeof api.socialAccounts>> | null>(null)
+  const [busy, setBusy] = useState(true)
+  const [working, setWorking] = useState("")
+
+  const load = useCallback(() => {
+    setBusy(true)
+    api
+      .socialAccounts()
+      .then(setPayload)
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [toast])
+
+  useEffect(load, [load])
+
+  // The network redirects the browser back here with the outcome on the query
+  // string, because a top-level navigation is the only thing it can do. Read it
+  // once, say it out loud, then strip it so a refresh does not re-announce a
+  // connection made ten minutes ago.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const outcome = params.get("connected")
+    if (!outcome) return
+    const reason = params.get("reason") ?? ""
+    toast(
+      outcome === "ok" ? `Connected${reason ? ` as ${reason}` : ""}` : reason || "That connection did not complete",
+      outcome !== "ok",
+    )
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [toast])
+
+  if (busy && !payload) return <Spinner />
+  if (!payload) return <Note kind="warn">Accounts could not be loaded.</Note>
+
+  const held = new Map(payload.accounts.map(account => [account.network, account]))
+  const anyConfigured = payload.networks.some(network => network.configured)
+
+  const connect = async (network: string) => {
+    setWorking(network)
+    try {
+      // A full-page navigation, not a popup: consent screens routinely refuse
+      // to render in one, and a blocked popup is indistinguishable from a
+      // button that does nothing.
+      window.location.href = (await api.connectSocial(network)).url
+    } catch (error) {
+      toast(errorOf(error), true)
+      setWorking("")
+    }
+  }
+
+  const disconnect = async (account: SocialAccount) => {
+    if (!confirm("Disconnect this account? Scheduled posts aimed at it will fail until it is reconnected.")) return
+    setWorking(account.id)
+    try {
+      await api.disconnectSocial(account.id)
+      toast("Disconnected")
+      load()
+    } catch (error) {
+      toast(errorOf(error), true)
+    } finally {
+      setWorking("")
+    }
+  }
+
+  return (
+    <>
+      <Note kind="info">
+        <div className="notebody">
+          <b>Redirect URI</b>
+          <p>
+            Register this exact value with every network below. A mismatch is the most common reason one of these
+            refuses, and it fails with a message about our request rather than yours.
+          </p>
+          <code className="copyable">{payload.redirectUri}</code>
+        </div>
+      </Note>
+
+      <div className="card">
+        <div className="cardhead">
+          <h2>Accounts</h2>
+          <span className="dim2">Tokens are sealed and renewed automatically.</span>
+          <button type="button" className="btn sm rowend" onClick={() => go({ name: "socialsettings" })}>
+            Social settings
+          </button>
+        </div>
+
+        <div className="conns">
+          {payload.networks.map(network => {
+            const live = held.get(network.value)
+            const stale = live?.error ?? null
+
+            return (
+              <div className="conn" key={network.value}>
+                <div className="conninfo">
+                  <div className="connname">
+                    {network.label}
+                    {live && !stale ? <span className="pill ok">Connected</span> : null}
+                    {stale ? <span className="pill bad">Needs attention</span> : null}
+                    {!network.configured ? <span className="pill">No app registered</span> : null}
+                  </div>
+
+                  <div className="connmeta">
+                    {stale ? (
+                      stale
+                    ) : live ? (
+                      <>
+                        {live.account ? `${live.account} · ` : ""}
+                        connected {ago(live.connectedAt)}
+                        {live.expiresAt ? ` · renews ${ago(live.expiresAt)}` : " · does not expire"}
+                      </>
+                    ) : network.configured ? (
+                      network.scopes.join(" · ")
+                    ) : (
+                      <>{network.help} Add its developer app under Social settings to offer this one.</>
+                    )}
+                  </div>
+                </div>
+
+                <div className="row">
+                  {network.configured ? (
+                    <button
+                      type="button"
+                      className={cx("btn sm", live ? "ghost" : "primary")}
+                      disabled={working === network.value}
+                      onClick={() => connect(network.value)}
+                    >
+                      {live ? "Reconnect" : "Connect"}
+                    </button>
+                  ) : null}
+                  {live ? (
+                    <button
+                      type="button"
+                      className="btn sm ghost danger"
+                      disabled={working === live.id}
+                      onClick={() => disconnect(live)}
+                    >
+                      Disconnect
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {!anyConfigured ? (
+        <Note kind="warn">
+          <div className="notebody">
+            <b>Nothing is connectable yet</b>
+            <p>
+              Each network needs a developer app registered with that network, against the redirect URI above. Social
+              settings walks you through each one — they are independent, so a network you have finished works while the
+              rest are still in review.
+            </p>
+            <button type="button" className="btn primary sm" onClick={() => go({ name: "socialsettings" })}>
+              Open Social settings
+            </button>
+          </div>
+        </Note>
+      ) : null}
+    </>
+  )
+}
+
+// The guides carry **bold** for the two or three words that name a real thing,
+// because a paragraph telling someone to find a button reads better when the
+// button's name looks like one. Nothing else is interpreted — this is a fixed
+// register we ship, not user content, and a general Markdown renderer here
+// would be a much larger surface for one effect.
+const emphasize = (text: string): React.ReactNode =>
+  text.split(/\*\*(.+?)\*\*/g).map((part, index) =>
+    // biome-ignore lint/suspicious/noArrayIndexKey: split output is positional and never reordered
+    index % 2 === 1 ? <b key={index}>{part}</b> : part,
+  )
+
+// What an operator is actually asked to do at the network's end. A tooltip is
+// the wrong shape for this — it is six steps and the traps matter more than the
+// steps — so it is a real dialog with room to read.
+const SocialGuideModal = ({
+  network,
+  preamble,
+  redirectUri,
+  onClose,
+}: {
+  network: SocialSetting
+  preamble: string
+  redirectUri: string
+  onClose: () => void
+}) => (
+  <Modal
+    wide
+    title={`Setting up ${network.label}`}
+    onClose={onClose}
+    footer={
+      <>
+        <a className="btn" href={network.console} target="_blank" rel="noreferrer noopener">
+          Open {network.label} console <ExternalLink size={13} />
+        </a>
+        <button type="button" className="btn primary" onClick={onClose}>
+          Got it
+        </button>
+      </>
+    }
+  >
+    {network.guide ? (
+      <div className="guide">
+        <p className="guidelead">{network.guide.summary}</p>
+        <div className="guidetime">
+          <Clock size={13} /> {network.guide.time}
+        </div>
+
+        <div className="guidepre">
+          {preamble.split("\n\n").map(paragraph => (
+            <p key={paragraph.slice(0, 24)}>{emphasize(paragraph)}</p>
+          ))}
+          <code className="copyable">{redirectUri}</code>
+        </div>
+
+        <h3>Step by step</h3>
+        <ol className="guidesteps">
+          {network.guide.steps.map(step => (
+            <li key={step.title}>
+              <b>{step.title}</b>
+              <p>{emphasize(step.body)}</p>
+            </li>
+          ))}
+        </ol>
+
+        {network.guide.gotchas.length > 0 ? (
+          <>
+            <h3>What usually goes wrong</h3>
+            <ul className="guidegotchas">
+              {network.guide.gotchas.map(gotcha => (
+                <li key={gotcha.slice(0, 32)}>
+                  <AlertTriangle size={13} />
+                  <span>{emphasize(gotcha)}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
+    ) : (
+      <Note kind="info">There is no walkthrough for this network yet.</Note>
+    )}
+  </Modal>
+)
+
+// One network's developer app. Collapsed to a row until someone opens it,
+// because nine of these open at once is a wall of identical forms and the
+// question this screen answers most often is "which of these is done".
+const SocialAppRow = ({
+  network,
+  redirectUri,
+  preamble,
+  onSaved,
+  toast,
+}: {
+  network: SocialSetting
+  redirectUri: string
+  preamble: string
+  onSaved: () => void
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [open, setOpen] = useState(false)
+  const [guiding, setGuiding] = useState(false)
+  const [advanced, setAdvanced] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [clientId, setClientId] = useState(network.app.clientId)
+  // Never prefilled, because it is never sent to us. Left empty on save it
+  // means "keep the stored one".
+  const [secret, setSecret] = useState("")
+  const [authorizeUrl, setAuthorizeUrl] = useState(network.app.authorizeUrl ?? "")
+  const [tokenUrl, setTokenUrl] = useState(network.app.tokenUrl ?? "")
+  const [scopes, setScopes] = useState(network.app.scopes ?? "")
+
+  const fromEnvironment = network.app.source === "environment"
+
+  const save = async (enabled: boolean) => {
+    setBusy(true)
+    try {
+      await api.saveSocialApp(network.value, {
+        enabled,
+        clientId: clientId.trim(),
+        ...(secret === "" ? {} : { clientSecret: secret }),
+        authorizeUrl: authorizeUrl.trim() || null,
+        tokenUrl: tokenUrl.trim() || null,
+        scopes: scopes.trim() || null,
+      })
+      setSecret("")
+      toast(enabled ? `${network.label} is set up` : `${network.label} switched off`)
+      onSaved()
+    } catch (error) {
+      toast(errorOf(error), true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="conn socialapp">
+      <div className="conninfo">
+        <div className="connname">
+          {network.label}
+          {/* Deliberately next to the name rather than inside the form: the
+              question "how do I even get these" comes before opening it. */}
+          <button
+            type="button"
+            className="hintdot"
+            aria-label={`How to set up ${network.label}`}
+            title={`How to set up ${network.label}`}
+            onClick={() => setGuiding(true)}
+          >
+            ?
+          </button>
+          {network.ready ? <span className="pill ok">Ready</span> : null}
+          {!network.ready && network.app.clientId ? <span className="pill off">Switched off</span> : null}
+          {!network.app.clientId ? <span className="pill">Not set up</span> : null}
+          {fromEnvironment ? <span className="pill">From environment</span> : null}
+        </div>
+        <div className="connmeta">{network.help}</div>
+
+        {open ? (
+          <div className="socialappform">
+            {fromEnvironment ? (
+              <Note kind="info">
+                This one is configured by <code>SOCIAL_OAUTH_{network.value.toUpperCase()}_CLIENT_ID</code> in your
+                environment. Saving here takes over from it; clearing what you save falls back to it again.
+              </Note>
+            ) : null}
+
+            <div className="f">
+              <label htmlFor={`${network.value}-id`}>Client ID</label>
+              <input
+                id={`${network.value}-id`}
+                type="text"
+                value={clientId}
+                autoComplete="off"
+                onChange={event => setClientId(event.target.value)}
+              />
+            </div>
+
+            <div className="f">
+              <label htmlFor={`${network.value}-secret`}>Client secret</label>
+              <input
+                id={`${network.value}-secret`}
+                type="password"
+                value={secret}
+                autoComplete="new-password"
+                placeholder={network.app.hasSecret ? `Stored — ${network.app.secretHint ?? "••••"}` : "Not set"}
+                onChange={event => setSecret(event.target.value)}
+              />
+              <div className="fieldhelp">
+                {network.app.hasSecret
+                  ? "Leave empty to keep the one already stored. It is sealed and never shown again."
+                  : "Sealed with your SECRET before it is stored, and never returned to this screen."}
+              </div>
+            </div>
+
+            <div className="f">
+              <label htmlFor={`${network.value}-redirect`}>Redirect URI</label>
+              <code className="copyable" id={`${network.value}-redirect`}>
+                {redirectUri}
+              </code>
+              <div className="fieldhelp">
+                Paste this into {network.label}'s console exactly. A mismatch is the most common reason one of these
+                refuses, and it fails with a message about our request rather than yours.
+              </div>
+            </div>
+
+            <div className="f">
+              <div className="socialscopes">
+                <b>Scopes this asks for</b>
+                <div>{(scopes.trim() ? scopes.split(/[\s,]+/).filter(Boolean) : network.scopes).join(" · ")}</div>
+              </div>
+            </div>
+
+            <button type="button" className="linkish" onClick={() => setAdvanced(value => !value)}>
+              {advanced ? "Hide" : "Show"} endpoint overrides
+            </button>
+
+            {advanced ? (
+              <>
+                <div className="f">
+                  <label htmlFor={`${network.value}-auth`}>Authorize URL</label>
+                  <input
+                    id={`${network.value}-auth`}
+                    type="url"
+                    value={authorizeUrl}
+                    placeholder={network.defaults.authorizeUrl}
+                    onChange={event => setAuthorizeUrl(event.target.value)}
+                  />
+                </div>
+                <div className="f">
+                  <label htmlFor={`${network.value}-token`}>Token URL</label>
+                  <input
+                    id={`${network.value}-token`}
+                    type="url"
+                    value={tokenUrl}
+                    placeholder={network.defaults.tokenUrl}
+                    onChange={event => setTokenUrl(event.target.value)}
+                  />
+                </div>
+                <div className="f">
+                  <label htmlFor={`${network.value}-scopes`}>Scopes</label>
+                  <input
+                    id={`${network.value}-scopes`}
+                    type="text"
+                    value={scopes}
+                    placeholder={network.scopes.join(", ")}
+                    onChange={event => setScopes(event.target.value)}
+                  />
+                  <div className="fieldhelp">
+                    Comma-separated. Leave empty for the defaults above — they are what the publisher needs, and
+                    trimming one usually shows up as a post that fails rather than a connection that refuses.
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => save(true)}>
+                {busy ? "Saving…" : network.ready ? "Save" : "Save and switch on"}
+              </button>
+              {network.ready ? (
+                <button type="button" className="btn" disabled={busy} onClick={() => save(false)}>
+                  Switch off
+                </button>
+              ) : null}
+              {network.app.source === "admin" ? (
+                <button
+                  type="button"
+                  className="btn ghost danger"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `Forget ${network.label}'s app? Accounts already connected keep working until their tokens lapse.`,
+                      )
+                    )
+                      return
+                    await api.forgetSocialApp(network.value).catch(error => toast(errorOf(error), true))
+                    setClientId("")
+                    setSecret("")
+                    toast(`${network.label} forgotten`)
+                    onSaved()
+                  }}
+                >
+                  Forget
+                </button>
+              ) : null}
+              <a className="btn ghost rowend" href={network.console} target="_blank" rel="noreferrer noopener">
+                {network.label} console <ExternalLink size={13} />
+              </a>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="row">
+        <button type="button" className="btn sm" onClick={() => setOpen(value => !value)}>
+          {open ? "Close" : network.app.clientId ? "Edit" : "Set up"}
+        </button>
+      </div>
+
+      {guiding ? (
+        <SocialGuideModal
+          network={network}
+          preamble={preamble}
+          redirectUri={redirectUri}
+          onClose={() => setGuiding(false)}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+const SocialSettings = ({
+  go,
+  toast,
+}: {
+  go: (route: Route) => void
+  toast: (message: string, bad?: boolean) => void
+}) => {
+  const [payload, setPayload] = useState<Awaited<ReturnType<typeof api.socialSettings>> | null>(null)
+  const [busy, setBusy] = useState(true)
+
+  const load = useCallback(() => {
+    setBusy(true)
+    api
+      .socialSettings()
+      .then(setPayload)
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [toast])
+
+  useEffect(load, [load])
+
+  if (busy && !payload) return <Spinner />
+  if (!payload) return <Note kind="warn">Social settings could not be loaded.</Note>
+
+  const ready = payload.networks.filter(network => network.ready)
+  // Five of the nine fetch media from this origin rather than being handed it,
+  // so a local PUBLIC_URL breaks them and only them — worth saying here rather
+  // than as five identical publish failures later.
+  const reachable = !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(payload.publicUrl)
+  const fetchers = payload.networks.filter(network => network.fetchesMedia)
+
+  return (
+    <>
+      <div className="cardhead" style={{ padding: 0, border: 0, marginBottom: 16 }}>
+        <h2>Social settings</h2>
+        <span className="dim2">
+          {ready.length} of {payload.networks.length} networks ready
+        </span>
+        <button type="button" className="btn rowend" onClick={() => go({ name: "socialaccounts" })}>
+          Accounts
+        </button>
+      </div>
+
+      <Note kind="info">
+        <div className="notebody">
+          <b>Every network needs its own developer app</b>
+          <p>
+            An OAuth client is registered <i>with the network</i>, against a redirect URI on your domain, so there is
+            nothing Inkling can ship instead. Set one up below, switch it on, then authorize the account itself under
+            Accounts. Most take a day or more to be approved, and they are independent — turn on the ones you have.
+          </p>
+          <code className="copyable">{payload.redirectUri}</code>
+        </div>
+      </Note>
+
+      {!reachable ? (
+        <Note kind="warn">
+          <div className="notebody">
+            <b>PUBLIC_URL is a local address</b>
+            <p>
+              {fetchers.map(network => network.label).join(", ")} download media from your site rather than being handed
+              it, so posts carrying images or video will fail from <code>{payload.publicUrl}</code>. Text-only posts and
+              the other networks are unaffected.
+            </p>
+          </div>
+        </Note>
+      ) : null}
+
+      <div className="card">
+        <div className="conns">
+          {payload.networks.map(network => (
+            <SocialAppRow
+              key={network.value}
+              network={network}
+              redirectUri={payload.redirectUri}
+              preamble={payload.preamble}
+              onSaved={load}
+              toast={toast}
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
 const App = () => {
   const [me, setMe] = useState<Identity | null>(null)
   const [booted, setBooted] = useState(false)
@@ -6797,6 +8528,32 @@ const App = () => {
       case "ai":
         if (!hasRole(me.role, "author")) return <Note kind="warn">Your role cannot use the assistant.</Note>
         return <AiScreen role={me.role} toast={toast} go={go} />
+      case "social":
+        if (!hasRole(me.role, "author")) return <Note kind="warn">Your role cannot write social posts.</Note>
+        return <SocialDashboard go={go} canConnect={hasRole(me.role, "admin")} toast={toast} />
+      case "socialposts":
+        if (!hasRole(me.role, "author")) return <Note kind="warn">Your role cannot write social posts.</Note>
+        return <SocialPosts go={go} toast={toast} />
+      case "socialcompose":
+        if (!hasRole(me.role, "author")) return <Note kind="warn">Your role cannot write social posts.</Note>
+        return (
+          <SocialComposer
+            id={route.id}
+            canSend={hasRole(me.role, "editor")}
+            canConnect={hasRole(me.role, "admin")}
+            go={go}
+            toast={toast}
+          />
+        )
+      case "socialcalendar":
+        if (!hasRole(me.role, "author")) return <Note kind="warn">Your role cannot write social posts.</Note>
+        return <SocialCalendar go={go} toast={toast} />
+      case "socialaccounts":
+        if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin connects social accounts.</Note>
+        return <SocialAccounts go={go} toast={toast} />
+      case "socialsettings":
+        if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin sets up social networks.</Note>
+        return <SocialSettings go={go} toast={toast} />
       default:
         return <Dashboard go={go} />
     }
@@ -6821,6 +8578,17 @@ const App = () => {
           <div className="navgroup">
             <div className="navlabel">Content</div>
             {collections.map(type => nav({ name: "collection", type: type.name }, type.pluralLabel, FileText))}
+          </div>
+        ) : null}
+
+        {hasRole(me.role, "author") ? (
+          <div className="navgroup">
+            <div className="navlabel">Social</div>
+            {nav({ name: "social" }, "Overview", Megaphone)}
+            {nav({ name: "socialposts" }, "Posts", Send)}
+            {nav({ name: "socialcalendar" }, "Calendar", CalendarDays)}
+            {hasRole(me.role, "admin") ? nav({ name: "socialaccounts" }, "Accounts", Link) : null}
+            {hasRole(me.role, "admin") ? nav({ name: "socialsettings" }, "Settings", Sliders) : null}
           </div>
         ) : null}
 

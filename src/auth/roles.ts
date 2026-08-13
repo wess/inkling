@@ -43,4 +43,12 @@ export const can = {
   // writeContent — an author drafting a post is the point of it.
   manageAi: (role: string) => atLeast(role, "admin"),
   useAi: (role: string) => atLeast(role, "author"),
+  // Social splits three ways rather than two, because sending is irreversible
+  // in a way publishing an entry is not — an entry can be unpublished, a tweet
+  // has been read. Writing a post is authoring; sending one is publishing; and
+  // connecting an account hands this install the right to speak as a brand,
+  // which sits with the other administrative acts.
+  writeSocial: (role: string) => atLeast(role, "author"),
+  publishSocial: (role: string) => atLeast(role, "editor"),
+  manageSocial: (role: string) => atLeast(role, "admin"),
 }

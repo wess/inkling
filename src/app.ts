@@ -26,6 +26,8 @@ import { createRealtime, type Realtime } from "./realtime/index.ts"
 import { searchRoutes } from "./search/index.ts"
 import { createRateLimit } from "./security/index.ts"
 import { settingsRoutes } from "./settings/index.ts"
+import { socialPublicRoutes, socialRoutes } from "./social/index.ts"
+import { publishDue as publishSocialDue } from "./social/publish.ts"
 import { storageFromConfig } from "./storage/index.ts"
 import { taxonomyRoutes } from "./taxonomy/index.ts"
 import { now } from "./time/index.ts"
@@ -183,6 +185,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...aiRoutes(db),
       ...assistantRoutes(db),
       ...agentRoutes(db),
+      ...socialRoutes(db, store, hooks),
       ...realtime.routes,
       ...pluginRoutes(db, hooks, registry, pluginDir),
     ]),
@@ -202,6 +205,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
     // here by top-level navigation, which carries no bearer token — the sealed
     // `state` is what stands in for a session.
     ...aiPublicRoutes(db, adminBase),
+    ...socialPublicRoutes(db, adminBase),
     ...realtime.publicRoutes,
     ...pluginDispatch(registry),
     ...deliveryRoutes(db, hooks),
@@ -219,6 +223,11 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
     )
 
   every(60, "scheduled-publish", () => publishDue(db, hooks))
+  // Sent on the same minute boundary as scheduled entries, and for the same
+  // reason it is a sweep rather than a timer per post: a process that restarts
+  // between the two would lose every timer it was holding, and the row already
+  // says when it is due.
+  every(60, "social-publish", () => publishSocialDue(db, store, hooks))
   every(3600, "rate-limit-sweep", () => limiter.sweep(86_400))
 
   await hooks.emit("server.ready", { at: now() })

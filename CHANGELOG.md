@@ -9,6 +9,148 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.3.0 — 2026-08-12
+
+Inkling posts to social networks. There is a **Social** section in the admin
+with a composer, a calendar, an accounts screen, and a settings screen, and
+posts actually go out — to **X, Facebook, Instagram, Threads, LinkedIn, TikTok,
+YouTube, Pinterest, and Google Business**.
+
+This is the half the `social` plugin never had. That plugin could authorize an
+account and then do nothing with it, which the docs called deliberate and which
+was really an admission: a plugin cannot own a background sweep, because its
+`setInterval` keeps firing after the plugin is disabled, and it cannot ship a
+composer, because the admin bundle is built before any plugin exists. Both of
+those are core's to own, so this is core.
+
+The other half of this release is the **S3 driver**, which has shipped since the
+first commit and was never exercised — `STORAGE_DRIVER=s3` type-checked, booted,
+and then failed in two ways that only a real bucket shows you.
+
+### Added
+
+- **Social → Overview, Posts, Calendar, Accounts.** Write a post once, give any
+  network its own wording if it needs it, attach media from the same library
+  everything else uses, and send it now or at a time. The month view draws what
+  is scheduled; the overview says what is going out next, what went out last,
+  and which connection needs attention.
+- **Nine publishers, one per network**, each with the upload dance that network
+  insists on: X's three-step chunked video upload and transcode poll, Facebook's
+  unpublished-photos-then-feed-post, Instagram's container-then-publish (twice
+  over for a carousel), Threads' same shape on a different host, LinkedIn's
+  register-slot-then-PUT-then-reference-the-urn, TikTok's `FILE_UPLOAD`
+  init/upload/status cycle, YouTube's resumable session, Pinterest's push to S3
+  with their policy fields, and Google Business's legacy v4 local post. Adding a
+  tenth is one file plus a catalog entry, and a test asserts the two lists
+  match — a network that can be connected but not posted to is the failure this
+  is built to prevent.
+- **Social → Settings**, where networks are set up. A row per network with a
+  client id, a secret sealed under `SECRET`, an on/off switch, endpoint
+  overrides, and the redirect URI to copy. Set up and switched on are separate
+  states, because an operator mid-way through a network's review wants the
+  credentials saved and the network not yet offered.
+- **A "?" on every settings row** opening a plain walkthrough of that network's
+  console: what a developer app even is, the actual names of the actual buttons,
+  how long it really takes including the waiting, and the one step everybody
+  gets wrong — which is never the step the docs emphasise. The guides ship in
+  the settings payload rather than in the admin bundle, so a console that moves
+  is a server-side correction rather than a release.
+- **A post's outcome is per network.** Sending records what each one did on its
+  own row, with that network's own error text next to it. A post where X took it
+  and TikTok did not reads as `part posted` rather than as a success or a
+  failure, and pressing send again retries only what failed — what already went
+  out is never posted twice.
+- **Scheduled posts go out on a 60s sweep**, beside the one that publishes
+  entries. A post left mid-send by a process that died is picked back up after
+  fifteen minutes.
+- **Three permissions rather than two.** An author writes a post; an editor
+  decides when it goes out; an admin sets networks up and connects the accounts.
+  Sending is
+  irreversible in a way publishing an entry is not, and the roles say so — a
+  save from an author cannot move the send time.
+- **Everything a network will refuse is checked when the post is saved**, not
+  when it is sent. Caption length, one video per post, images or a video but
+  never both — except Pinterest, where a video *needs* a still cover it will not
+  generate — and the networks that refuse a text-only post at all. The composer
+  counts characters per selected network as you type.
+- **`social.posted`** is a new `emit` hook, carrying the per-network outcome.
+  There is no `before` half and there will not be: by the time anything could
+  listen, the post is on someone else's servers.
+- **`S3_PREFIX`** confines an install to one folder inside a bucket, so several
+  sites can share one and you can still tell whose media is whose. The prefix is
+  bucket layout, not content — it never enters `storage_key` or a media URL — so
+  adding, changing, or removing it later is an environment change and a blob
+  copy, never a data migration.
+- **`S3_PUBLIC_URL` now also decides the ACL.** Objects are written
+  `public-read` when it is set, because a public base in front of private
+  objects is a CDN that 403s on every image. The two were separate settings that
+  had to agree, which is a thing to get wrong rather than a choice to make.
+
+### Fixed
+
+- **Typing in a modal no longer throws the caret out of the field.** Every
+  dialog in the admin — add a user, reset a password, and the rest — rebuilt its
+  focus trap on each render, because the trap depended on an `onClose` prop that
+  every caller passes as an inline arrow and therefore hands over new on every
+  render. Each keystroke tore the trap down and reinstalled it, and installing it
+  focuses the first control, which is the close button. A name with a space in it
+  closed the dialog: the first character moved focus to that button and the space
+  pressed it. Anyone adding a user hit this on the first field they typed into.
+- **An upload no longer stores a URL the browser cannot fetch.** `put` returned
+  the raw bucket URL, and buckets are private when created on every provider
+  worth naming, so a site rendered a page of images that all 403'd. Uploads now
+  return the same root-relative `/media/file/…` path the local driver does, and
+  reads go back through the media route — the guarded path the storage module
+  documents. An absolute URL is used only when `S3_PUBLIC_URL` says a CDN is
+  serving the bucket.
+- **A missing object is a 404 again, not a 500.** `get` was written to return
+  `null` for an absent key, which is what the media route turns into a 404, but
+  the underlying call throws on any non-2xx and the `null` branch was
+  unreachable. A credential or network failure still throws: the one thing this
+  must not do is report a broken bucket as an empty one.
+
+### Changed
+
+- **The `social` plugin's Accounts panel is gone**, and so are its OAuth routes.
+  Accounts live in the Social section now. The plugin keeps what it was always
+  best at — clients, campaigns, the client-facing queue, the calendar, and the
+  performance report — and its `socialpost` type stays what it is: a commitment
+  made to a client, which is a different thing from a post that gets sent.
+
+### Upgrading
+
+Existing connections are kept. `social_accounts` is now created by a core
+migration with the shape the plugin's migration used, so an install that had
+connected accounts keeps its rows and its sealed tokens.
+
+Two things need doing:
+
+1. **Register the new redirect URI** with each network. It moved from
+   `PUBLIC_URL/ext/social/oauth/callback` to `PUBLIC_URL/social/oauth/callback`.
+   It is printed on Social → Settings, on each network's row, for copying.
+2. **Reconnect Facebook**, if it was connected before. Facebook posts to a Page
+   and the Page's own token is what is now stored; a connection made under the
+   plugin holds the person's. It refuses to post and says so rather than failing
+   quietly.
+
+`SOCIAL_OAUTH_*` variables keep their names and still work: they are read for
+any network with no row in the admin, so nothing has to move at once. Setting a
+network up in Social → Settings takes over from its variables for that network
+only.
+
+Five of the nine — Facebook, Instagram, Threads, Pinterest, Google Business —
+*download* media from your site rather than being handed it, so posts carrying
+images or video need `PUBLIC_URL` to be an address they can reach. The settings
+screen says so when it is not, rather than letting five publishers fail with
+what reads as the network's fault.
+
+**If you set `S3_PUBLIC_URL`**, serving the bucket directly takes media reads out
+of `/media/file`, and two things follow. A soft-deleted item keeps answering on
+its old URL until it is purged — the delivery API stops listing it either way.
+And the URL becomes the whole of the access control, exactly as it already is on
+the local driver, which is why keys carry 8 bytes of randomness. Grant the bucket
+anonymous `GetObject` and never `ListBucket`.
+
 ## 1.1.1 — 2026-08-06
 
 The documentation moved to its own home at **inkling.wess.dev**, alongside a new

@@ -222,6 +222,155 @@ export type MenuItem = {
 
 export type Menu = { id: string; name: string; label: string; items: MenuItem[] }
 
+// ---------------------------------------------------------------- social
+
+export type SocialAccount = {
+  id: string
+  network: string
+  account: string | null
+  accountId: string | null
+  scope: string | null
+  expiresAt: string | null
+  // The network's own words when a renewal failed. Its presence is what turns
+  // a row amber; ours would be a summary of the sentence needed to fix it.
+  error: string | null
+  connectedAt: string
+  meta: Record<string, unknown>
+}
+
+export type SocialNetworkOption = {
+  key: string
+  label: string
+  type: "text" | "textarea" | "select" | "boolean"
+  choices?: { value: string; label: string }[]
+  fallback?: string | boolean
+  help?: string
+}
+
+export type SocialNetwork = {
+  value: string
+  label: string
+  limit: number
+  media: { images: number; video: boolean; requiresMedia: false | "video" | "image" | "any"; coverImage?: true }
+  options: SocialNetworkOption[]
+  help: string
+  // Whether this install has a developer app set up and switched on, not
+  // whether the network has an OAuth flow — no app means no button.
+  configured: boolean
+  accounts: SocialAccount[]
+}
+
+// The developer app for one network. The secret never crosses this boundary —
+// `secretHint` is its last four characters, which is enough to recognise
+// against a developer console and useless to anyone else.
+export type SocialApp = {
+  network: string
+  enabled: boolean
+  clientId: string
+  secretHint: string | null
+  hasSecret: boolean
+  authorizeUrl: string | null
+  tokenUrl: string | null
+  scopes: string | null
+  updatedAt: string
+  // Where the credentials came from. "environment" is read-only here, and the
+  // screen says so rather than letting a save silently shadow it.
+  source: "admin" | "environment" | "none"
+}
+
+// The step-by-step for getting a network's two values out of its own console.
+// Sent with the payload rather than built into the bundle, so a console that
+// moves is a server-side correction rather than a release of the admin.
+export type SocialGuide = {
+  summary: string
+  time: string
+  steps: { title: string; body: string }[]
+  gotchas: string[]
+}
+
+export type SocialSetting = {
+  value: string
+  label: string
+  help: string
+  console: string
+  scopes: string[]
+  defaults: { authorizeUrl: string; tokenUrl: string }
+  // Networks that fetch media from your site rather than being handed it, and
+  // therefore need PUBLIC_URL to be reachable.
+  fetchesMedia: boolean
+  ready: boolean
+  app: SocialApp
+  guide: SocialGuide | null
+}
+
+export type SocialAppInput = {
+  enabled: boolean
+  clientId: string
+  // Omitted means "keep the stored one" — the form never echoes it back, so
+  // sending an empty string on every save would wipe it.
+  clientSecret?: string
+  authorizeUrl: string | null
+  tokenUrl: string | null
+  scopes: string | null
+}
+
+export type SocialTarget = {
+  id: string
+  accountId: string | null
+  network: string
+  networkLabel: string
+  account: string | null
+  connected: boolean
+  // null means "follow the post's caption"; "" means this network gets none.
+  caption: string | null
+  options: Record<string, unknown>
+  status: "pending" | "publishing" | "posted" | "failed" | "skipped"
+  remoteId: string | null
+  url: string | null
+  error: string | null
+  attempts: number
+  postedAt: string | null
+}
+
+export type SocialPost = {
+  id: string
+  title: string
+  caption: string
+  link: string | null
+  media: string[]
+  status: "draft" | "scheduled" | "publishing" | "posted" | "partial" | "failed" | "canceled"
+  scheduledAt: string | null
+  publishedAt: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  targets: SocialTarget[]
+}
+
+export type SocialPostInput = {
+  title: string
+  caption: string
+  link: string | null
+  media: string[]
+  scheduledAt: string | null
+  targets: { accountId: string; caption: string | null; options: Record<string, unknown> }[]
+}
+
+export type SocialOverview = {
+  counts: { drafts: number; scheduled: number; posted: number; partial: number; failed: number }
+  upcoming: SocialPost[]
+  recent: SocialPost[]
+  accounts: SocialAccount[]
+  connectable: { value: string; label: string }[]
+  unconfigured: number
+}
+
+export type SocialOutcome = {
+  postId: string
+  status: string
+  targets: { id: string; network: string; status: string; error: string | null }[]
+}
+
 export type Webhook = {
   id: string
   name: string
@@ -584,6 +733,48 @@ export const api = {
         mayApply: boolean
       }>
     >("/ai/agent/status", { method: "POST" }).then(r => r.data),
+
+  socialOverview: () => request<Wrapped<SocialOverview>>("/social/overview").then(r => r.data),
+  socialNetworks: () =>
+    request<Wrapped<{ redirectUri: string; networks: SocialNetwork[] }>>("/social/networks").then(r => r.data),
+  socialPosts: (query: Record<string, string | number | undefined> = {}) =>
+    request<Paged<SocialPost>>("/social/posts", { query }),
+  socialPost: (id: string) => request<SocialPost>(`/social/posts/${id}`),
+  createSocialPost: (input: SocialPostInput) => request<SocialPost>("/social/posts", { body: input }),
+  updateSocialPost: (id: string, input: SocialPostInput) =>
+    request<SocialPost>(`/social/posts/${id}`, { method: "PUT", body: input }),
+  deleteSocialPost: (id: string) => request<{ deleted: boolean }>(`/social/posts/${id}`, { method: "DELETE" }),
+  scheduleSocialPost: (id: string, at: string) =>
+    request<SocialPost>(`/social/posts/${id}/schedule`, { method: "POST", body: { at } }),
+  // Also the retry: the server skips every target that already posted, so
+  // pressing this twice does not post twice.
+  publishSocialPost: (id: string) =>
+    request<{ data: SocialOutcome; post: SocialPost }>(`/social/posts/${id}/publish`, { method: "POST" }),
+  cancelSocialPost: (id: string) => request<SocialPost>(`/social/posts/${id}/cancel`, { method: "POST" }),
+  socialCalendar: (from: string, days: number) =>
+    request<Wrapped<SocialPost[]>>("/social/calendar", { query: { from, days } }).then(r => r.data),
+  socialAccounts: () =>
+    request<
+      Wrapped<{
+        redirectUri: string
+        networks: { value: string; label: string; help: string; scopes: string[]; configured: boolean }[]
+        accounts: SocialAccount[]
+      }>
+    >("/social/accounts").then(r => r.data),
+  socialSettings: () =>
+    request<Wrapped<{ redirectUri: string; publicUrl: string; preamble: string; networks: SocialSetting[] }>>(
+      "/social/settings",
+    ).then(r => r.data),
+  saveSocialApp: (network: string, input: SocialAppInput) =>
+    request<Wrapped<SocialApp>>(`/social/settings/${network}`, { method: "PUT", body: input }).then(r => r.data),
+  forgetSocialApp: (network: string) =>
+    request<Wrapped<SocialApp>>(`/social/settings/${network}`, { method: "DELETE" }).then(r => r.data),
+
+  connectSocial: (network: string) =>
+    request<Wrapped<{ url: string; expiresAt: string }>>(`/social/accounts/${network}/start`, { method: "POST" }).then(
+      r => r.data,
+    ),
+  disconnectSocial: (id: string) => request<Wrapped<{ id: string }>>(`/social/accounts/${id}`, { method: "DELETE" }),
 
   webhooks: () => request<{ data: Webhook[]; events: string[] }>("/webhooks"),
   createWebhook: (input: { name: string; url: string; events: string[]; active: boolean }) =>

@@ -177,20 +177,82 @@ plugin owns every word on a row. `ctx.adminBase` exists solely so a plugin's
 OAuth return leg — a top-level navigation — can land back in the admin.
 
 Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`,
-`social` (four content types, an `entry.beforeSave` filter, two `stats` panels,
-a `connections` panel, and its own `social_results` and `social_accounts`
-tables). Social accounts are OAuth'd per network with clients from
-`SOCIAL_OAUTH_<NETWORK>_CLIENT_ID`; tokens are sealed with the same AES-GCM
-helper as AI credentials, and `accounts.ts#accessToken` is the only door that
-opens one — it refreshes inside a five-minute window, records the provider's own
-error when that fails, and returns null rather than throwing. **It still posts
-to no network**: a connection is half of publishing, and the per-network call is
-deliberately not built until it can be built one network at a time.
+`social` (client-side planning — four content types, an `entry.beforeSave`
+filter, two `stats` panels, and its own `social_results` table). Posting is not
+a plugin; see Social below.
 
 The generic authorization-code + PKCE machinery is `src/oauth/index.ts` — sealed
 `state` rather than a pending-flows table, ten-minute expiry, form-encoded token
 request with a JSON retry, Basic auth for the providers that demand it.
-`src/ai/oauth.ts` and `plugins/social/oauth.ts` are both thin adapters over it.
+`src/ai/oauth.ts` and `src/social/oauth.ts` are both thin adapters over it.
+Three optional fields on `OAuthClient` exist for TikTok alone — `clientParam`
+(`client_key`), `scopeSeparator` (`,`), and `basicAuth: false` — so the module
+still knows nothing about what is being authorized.
+
+## Social
+
+`src/social` connects accounts and posts to **X, Facebook, Instagram, Threads,
+LinkedIn, TikTok, YouTube, Pinterest, Google Business**. Core rather than a
+plugin for two reasons: a plugin's `setInterval` outlives its own disable switch
+(so it cannot own the 60s send sweep), and the admin bundle is built before any
+plugin exists (so it cannot ship a composer). A network is in
+`src/social/networks.ts` only if it has a publisher in `src/social/publishers/`;
+a test asserts the two lists match.
+
+Networks are set up in the admin (Social → Settings), not in the environment:
+`social_apps` holds a client id, a sealed secret, and an `enabled` switch per
+network, with `SOCIAL_OAUTH_<NETWORK>_*` read as a fallback for any network with
+no row. `apps.ts#clientFor` is the only thing that knows there are two sources.
+Set up and switched on are separate states, because an operator mid-review wants
+credentials saved and the network not yet offered. Each row's "?" opens the
+walkthrough in `src/social/guides.ts`, shipped in the payload rather than the
+bundle so a moved console is a server-side fix.
+
+Four tables, four lifetimes. `social_apps` holds the developer app.
+`social_accounts` holds sealed OAuth tokens (same
+AES-GCM helper as AI credentials; `accounts.ts#accessToken` is the only door that
+opens one — it renews inside a ten-minute window, records the network's own error
+when that fails, and returns null rather than throwing). `social_posts` is the
+copy. `social_targets` is one row per (post, account): the wording that network
+got, what it did with it, and where it landed.
+
+That split is the design. A post's `status` is a *roll-up* of its targets, and
+`partial` exists because "X took it, TikTok did not" is the common real outcome
+and neither success nor failure describes it. `publish.ts#send` runs each target
+independently, skips any already `posted` (so a retry never double-posts), and
+records the network's own error text verbatim — that sentence is the whole
+diagnosis and a summary of ours would be strictly worse. `network` is
+denormalized onto the target so a disconnected account cannot take the record of
+where a post went with it.
+
+`publishDue` runs every 60s: scheduled posts whose time has come, plus anything
+stuck in `publishing` for 15 minutes by a process that died. `claim` is the lock
+— an UPDATE matching on the status it expects to replace.
+
+Per-network in `src/social/publishers/`: X chunks and polls a video transcode
+(`media.write` scope, or every attachment fails); Facebook posts to a *Page*
+(the Page token is traded for at connect time); Instagram needs a Business
+account on that Page and is container-then-publish, a carousel being that per
+child plus once for the album; Threads is the same shape on a different host
+from a separately registered app; LinkedIn registers an upload slot per
+attachment and 426s without `x-restli-protocol-version`; TikTok uses
+`FILE_UPLOAD` (pulling needs a domain verified in their console) and answers
+`error.code === "ok"` on success; YouTube uses a resumable session and wants its
+own title; Pinterest pushes video bytes to S3 with Pinterest's policy fields and
+needs a cover still it will not generate — the only network where an image
+beside a video means anything (`coverImage` on the media rule); Google Business
+posts to one *location* on the legacy v4 host while discovery runs on the modern
+ones.
+
+Five of the nine *fetch* media rather than being handed it — Facebook,
+Instagram, Threads, Pinterest, Google Business — so they are the publishers a
+localhost `PUBLIC_URL` breaks, checked explicitly rather than left to read as
+the network's fault.
+
+Three permissions rather than two, because sending is irreversible in a way
+publishing an entry is not: `writeSocial` (author) writes, `publishSocial`
+(editor) sends, `manageSocial` (admin) connects. Everything a network will
+refuse is checked at *save* time, not send time.
 
 ## Gotchas that cost real bugs
 

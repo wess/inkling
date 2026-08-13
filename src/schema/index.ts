@@ -217,6 +217,83 @@ export const aiCredentials = defineSchema("ai_credentials", {
   account: column.text().nullable(),
 })
 
+// An authorized account on one network. Same sealing as ai_credentials, and
+// for the same reason it is not a content type: every content type is readable
+// through an editor screen, a revision, the search index, and the delivery API,
+// and a refresh token belongs in none of those.
+export const socialAccounts = defineSchema("social_accounts", {
+  id: column.text().primaryKey(),
+  network: column.text(),
+  client_id: column.text().default(""),
+  account_name: column.text().nullable(),
+  account_id: column.text().nullable(),
+  scope: column.text().nullable(),
+  access_ct: column.text(),
+  access_iv: column.text(),
+  refresh_ct: column.text().nullable(),
+  refresh_iv: column.text().nullable(),
+  expires_at: column.text().nullable(),
+  error: column.text().nullable(),
+  connected_by: column.text().nullable(),
+  connected_at: column.text(),
+  updated_at: column.text(),
+  // Per-network detail with no cross-network meaning: a Facebook page id, a
+  // YouTube channel, an avatar. JSON, so adding a network adds no column.
+  meta: column.text().nullable(),
+})
+
+// The developer app registered with one network. The secret is sealed under
+// SECRET like every other credential here — deliberately not a `settings` row,
+// which is read wholesale and handed to plugin panels.
+export const socialApps = defineSchema("social_apps", {
+  network: column.text().primaryKey(),
+  enabled: column.integer().default(1),
+  client_id: column.text().default(""),
+  secret_ct: column.text().nullable(),
+  secret_iv: column.text().nullable(),
+  secret_hint: column.text().nullable(),
+  authorize_url: column.text().nullable(),
+  token_url: column.text().nullable(),
+  scopes: column.text().nullable(),
+  updated_by: column.text().nullable(),
+  updated_at: column.text(),
+})
+
+// A composed post, before it belongs to any one network.
+export const socialPosts = defineSchema("social_posts", {
+  id: column.text().primaryKey(),
+  title: column.text().default(""),
+  caption: column.text().default(""),
+  link: column.text().nullable(),
+  media: column.text().default("[]"),
+  status: column.text().default("draft"),
+  scheduled_at: column.text().nullable(),
+  published_at: column.text().nullable(),
+  created_by: column.text().nullable(),
+  created_at: column.text(),
+  updated_at: column.text(),
+  deleted_at: column.text().nullable(),
+})
+
+// One row per (post, account). `network` is denormalized so a disconnected
+// account cannot take the record of where a post went out with it.
+export const socialTargets = defineSchema("social_targets", {
+  id: column.text().primaryKey(),
+  post_id: column.text(),
+  account_id: column.text().nullable(),
+  network: column.text(),
+  caption: column.text().nullable(),
+  options: column.text().default("{}"),
+  status: column.text().default("pending"),
+  remote_id: column.text().nullable(),
+  remote_url: column.text().nullable(),
+  error: column.text().nullable(),
+  attempts: column.integer().default(0),
+  posted_at: column.text().nullable(),
+  created_at: column.text(),
+  updated_at: column.text(),
+})
+
 export const schemas = [
   users,
   sessions,
@@ -235,4 +312,8 @@ export const schemas = [
   auditEvents,
   rateLimits,
   aiCredentials,
+  socialApps,
+  socialAccounts,
+  socialPosts,
+  socialTargets,
 ]

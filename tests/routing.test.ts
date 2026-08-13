@@ -104,3 +104,42 @@ test("an unmatched API path is a missing route, not the admin", async () => {
   const plugin = await handle(new Request("http://localhost/ext/social/performance"))
   expect(plugin.status).toBe(200)
 })
+
+test("the social OAuth callback claims one path and leaves the rest to the admin", async () => {
+  // `/social` is an admin section with four screens *and* the root-mounted
+  // return leg an OAuth network navigates the browser to — the leg cannot live
+  // under /api, because a top-level navigation carries no bearer token. So they
+  // share a prefix, and the split only works because router matching is
+  // exact-first. Getting this wrong replaces the whole Social section with a
+  // redirect, which is the failure CLAUDE.md warns about for every other
+  // root-mounted route.
+  const handle = router(
+    ...prefixed("/api", [ok("social/overview")]),
+    get(
+      "/social/oauth/callback",
+      pipe(c => json(c, 200, { hit: "callback" })),
+    ),
+  )
+
+  const callback = await handle(new Request("http://localhost/social/oauth/callback"))
+  expect(callback.status).toBe(200)
+  expect(((await callback.json()) as { hit: string }).hit).toBe("callback")
+
+  const api = await handle(new Request("http://localhost/api/social/overview"))
+  expect(api.status).toBe(200)
+
+  // Every admin screen under /social has to reach the SPA untouched.
+  const screens = [
+    "/social",
+    "/social/posts",
+    "/social/accounts",
+    "/social/settings",
+    "/social/calendar",
+    "/social/compose/new",
+  ]
+  for (const screen of screens) {
+    const response = await handle(new Request(`http://localhost${screen}`))
+    expect(response.status).toBe(404)
+    expect(response.headers.get("content-type") ?? "").toStartWith("text/plain")
+  }
+})

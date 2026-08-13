@@ -556,9 +556,12 @@ taxonomy + settings + route), `analytics` (own table + public write route +
 `social` (four types, an `entry.beforeSave` filter, two `stats` panels, and a
 `connections` panel).
 
-### Social
+### Social (the plugin)
 
-`social` is social media management on top of the pieces that already exist.
+`social` is the agency layer *above* posting: what was sold to a client, and
+whether it happened. Connecting accounts and sending to a network are core (see
+"Social" below), and moved there when they needed a composer and a background
+sweep — a plugin can ship neither.
 Clients, channels, campaigns, and posts are ordinary content types, so the
 composer, revisions, search, and trash come for free; the plugin's own code is
 almost entirely *readings* of those entries — `plugins/social/queue.ts` (what is
@@ -581,26 +584,10 @@ hook, so a failure there leaves the editor's own values instead of failing the
 save. It runs after validation, so everything it writes has to already be legal
 for its field.
 
-**Accounts.** A `connections` panel authorizes one account per network.
-`oauth.ts` holds each network's authorize/token URLs and default scopes; the
-client id and secret come from `SOCIAL_OAUTH_<NETWORK>_CLIENT_ID` and friends,
-because an OAuth app is registered *with the network* against a redirect URI on
-your domain. A network with no id set renders as "no app registered" rather than
-offering a button that dead-ends. Tokens are sealed into `social_accounts` with
-the same AES-GCM helper the AI credentials use — not a content type, because
-every content type is readable through an editor screen, a revision, the search
-index, and the delivery API, and a refresh token belongs in none of those.
-`accounts.ts#accessToken` is the only way to get a usable token: it renews one
-that is within five minutes of expiring, records the provider's own words when
-that fails, and returns `null` rather than throwing, because a stale connection
-is something to show in a panel.
-
-**Nothing is posted to any network yet, and that is deliberate.** The connection
-is half of publishing; the other half is a per-network call with its own payload
-shape, its own media upload dance, and its own failures. A plugin that quietly
-stopped posting would be worse than no plugin, so the workflow remains: stage a
-post `posted` when it goes out and paste the link. Publishers get built one
-network at a time on top of `accessToken`.
+A `socialpost` here is a *commitment* — approved on a date, counted against a
+contract — and its `stage` records what happened to it. A post in the Social
+section is a thing that gets sent. An agency uses both; a solo operator only
+ever needs the second.
 
 ### Analytics
 
@@ -623,6 +610,166 @@ Rows carry a denormalized `day`, since extracting a date from a timestamp is
 spelled differently per dialect and every report here groups by it. Retention
 runs from the first beacon of each new day rather than a timer — a plugin that
 installs its own `setInterval` keeps running after it is disabled.
+
+## Social
+
+`src/social` is the marketing half of the product: connect an account, write a
+post, aim it at one network or four, and send it now or at a time. It is core
+rather than a plugin, and the two reasons are the two things it needs.
+
+The first is a **background sweep**. A plugin's `setInterval` keeps firing after
+the plugin is disabled, so "stop posting" would not stop posting. The second is
+a **composer** — media, per-network wording, per-network options — and the admin
+bundle is built before any plugin exists, so a plugin can only describe panels
+the SPA already knows how to draw. The `social` plugin remains, as the agency
+planning layer above this one.
+
+Nine networks: **X, Facebook, Instagram, Threads, LinkedIn, TikTok, YouTube,
+Pinterest, Google Business**. A network belongs in `src/social/networks.ts` when
+it can be *published* to, not when it can be authorized — a connect button
+leading to a screen where nothing sends is the failure the plugin version of
+this spent a release apologizing for, and `tests/social.test.ts` asserts the
+catalog and the publisher register hold the same nine names. That file is also
+everything that differs between them and is not code: caption limits, what media
+is allowed, OAuth endpoints and scopes, and the handful of fields each one has
+that no other does.
+
+### Setting a network up
+
+An OAuth client is registered *with the network*, against a redirect URI on your
+domain, so there is nothing self-hosted software can ship instead. That is a fact
+about where the value comes from, not about where it is typed — and requiring a
+redeploy to turn a network on is the wrong answer for an operator with nine of
+these to work through, approved one at a time over a fortnight.
+
+So **Social → Settings** is a row per network: client id, sealed secret, an
+enabled switch, endpoint overrides, and the redirect URI to copy. The secret goes
+in `social_apps` under the same AES-GCM helper AI credentials use, emphatically
+*not* in `settings` — `readScope()` reads that table wholesale and hands it to
+plugin panels, which is the wrong shape for a secret. Only the last four
+characters are ever returned.
+
+`SOCIAL_OAUTH_<NETWORK>_*` still works and is read for any network with no row,
+so an install configured before that screen existed keeps running and can move
+one network at a time. `apps.ts#clientFor` is the only thing that knows there are
+two sources; everything else asks it.
+
+**Set up and switched on are different states.** An operator mid-way through a
+network's review wants the credentials saved and the network not yet offered, so
+`enabled` is its own column rather than being inferred from a client id.
+
+Each row carries a **"?"** opening the walkthrough in `src/social/guides.ts`:
+what a developer app is, the actual names of the actual buttons in that
+network's console, how long it really takes including the waiting, and the one
+step everybody gets wrong. The guides ship in the settings payload rather than in
+the admin bundle, so a console that moves is a server-side correction rather than
+a release.
+
+### Four tables, four lifetimes
+
+| | |
+|---|---|
+| `social_apps` | The developer app per network: client id, sealed secret, and whether it is switched on |
+| `social_accounts` | An authorized account. Sealed tokens, AES-GCM under `SECRET`, the same helper AI credentials use. Not a content type, because every content type is readable through an editor screen, a revision, the search index, and the delivery API, and a refresh token belongs in none of those |
+| `social_posts` | The copy. Written once and then *sent* |
+| `social_targets` | One row per (post, account): the wording that network got, what it did with it, and where it landed |
+
+The split between the last two is the design. A post to four networks has
+sixteen interesting outcomes and only one is "it worked"; a single `status`
+cannot hold that, so the post's status is a *roll-up* of its targets —
+`partial` exists because it is the common real case and neither "posted" nor
+"failed" is honest about it. `network` is denormalized onto the target so a
+disconnected account cannot take the record of where a post went out with it.
+
+### Sending
+
+`publish.ts#send` runs every target independently and records each outcome
+against its own row. Nothing about one network's failure reaches another's, and
+a target already `posted` is skipped — so pressing "post now" again after
+fixing the one network that refused retries only that one.
+
+Failure is an exception thrown by the publisher, carrying **the network's own
+words**. Every one of these fails for reasons only the network can explain
+("the video is 63 minutes and the limit is 15"), that text is what an operator
+acts on, and a summary of ours would be strictly worse.
+
+`publishDue` runs every 60s beside the entry sweep. It picks up scheduled posts
+whose time has come *and* anything left in `publishing` for over fifteen minutes
+by a process that died mid-send — a post nobody will ever finish is worse than
+one attempted twice, and every target already knows whether it went out.
+`claim` is the lock: an UPDATE matching on the status it expects to replace, so
+two sweeps racing means one changes no rows and stops.
+
+### Per-network, and what it cost
+
+Each publisher is one file under `src/social/publishers/`, and the differences
+between them are not incidental:
+
+- **X** — media is a separate service. An image goes up in one request; a video
+  goes up in three plus a poll, because X transcodes and the tweet cannot
+  reference the media until that finishes. `media.write` is in the default
+  scopes for exactly this reason.
+- **Facebook** — posts to a **Page**, not a profile: `oauth.ts` trades the
+  person's token for the Page's at connect time, which is also what makes the
+  connection long-lived.
+- **Instagram** — the same Facebook app and the same Page, plus a Business
+  account linked to it; a personal account has no posting API at all. Nothing
+  posts in one call: every shape is *container then publish*, a carousel is
+  that once per child and once for the album, and a video container has to
+  finish transcoding before it can be published. A single video is a Reel
+  because Instagram removed every other kind.
+- **Threads** — the same container-then-publish shape on a different host, from
+  a separately registered Threads app. Text-only skips the wait; there is
+  nothing to transcode.
+- **LinkedIn** — three steps per attachment: register an upload slot, PUT the
+  bytes where it points, reference the returned *asset urn* in the post. The
+  API is Rest.li, so a request missing `x-restli-protocol-version` is answered
+  with a 426 rather than a hint.
+- **TikTok** — `FILE_UPLOAD` rather than `PULL_FROM_URL`, because pulling needs
+  a domain verified in TikTok's console, which an operator cannot do from
+  inside Inkling. Every response carries an `error` object even on success
+  (`code === "ok"`), and an unaudited app may only post privately — which is
+  why the composer defaults that network's visibility to "Only me".
+- **YouTube** — resumable upload, because a video is the whole payload and a
+  connection that drops at 90% of a simple upload has nothing to resume from. A
+  YouTube title is a separate mandatory field, not the caption.
+- **Pinterest** — an image pin is one call; a video pin is four, and the bytes
+  go to *Amazon* with policy fields Pinterest hands back, which is why that one
+  request carries no bearer token. A video pin also needs a still cover
+  Pinterest will not generate, and it is the only network where an image
+  alongside a video means something — `coverImage` on the media rule exists for
+  it alone.
+- **Google Business** — split across four hosts, and the posting half never
+  moved to v1. Discovery runs on the modern hosts and the post itself goes to
+  `mybusiness.googleapis.com/v4`. A post attaches to one *location*, so the
+  connection stores both halves of that path together.
+
+**Five of the nine fetch media rather than being handed it** — Facebook,
+Instagram, Threads, Pinterest, Google Business — which makes them the only
+publishers that can fail because of where Inkling is running. A localhost
+`PUBLIC_URL` is checked explicitly and says so, because each network's own error
+is about a URL it could not download and reads as their fault.
+
+Three spellings leaked into `src/oauth`: TikTok calls the client id
+`client_key`, separates scopes with commas, and rejects the request when client
+credentials also ride in an `Authorization` header (X requires it). All three
+are named options on `OAuthClient` with spec-conforming defaults, so that module
+still knows nothing about what is being authorized.
+
+### Permissions, and validation timing
+
+Social splits three ways rather than two, because sending is irreversible in a
+way publishing an entry is not — an entry can be unpublished, a tweet has been
+read. `writeSocial` (author) writes the post, `publishSocial` (editor) decides
+it goes out, `manageSocial` (admin) connects the accounts. A save from an author
+cannot move the send time; it keeps whatever an editor set.
+
+Everything a network will refuse is checked **at save time**, not at publish
+time. A scheduled post that turns out to be unpostable at 6am on Saturday is a
+notification nobody reads, and every one of these — caption length, one video
+per post, images or a video but not both — is knowable when it is typed. The
+admin repeats the same rules client-side so the composer can say so while it is
+being written; the server stays the authority.
 
 ## Auth and permissions
 

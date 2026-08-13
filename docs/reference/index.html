@@ -39,6 +39,7 @@
       <li><a href="#fields">Field types</a></li>
       <li><a href="#roles">Roles</a></li>
       <li><a href="#ai">AI and agent tools</a></li>
+      <li><a href="#social">Social</a></li>
       <li><a href="#env">Configuration</a></li>
       <li><a href="#commands">Commands</a></li>
       <li><a href="#errors">Errors</a></li>
@@ -251,31 +252,71 @@
       </tbody>
     </table>
 
-    <h3>Social accounts</h3>
+    <h2 id="social">Social</h2>
 
     <p>
-      The <code>social</code> plugin's <b>Accounts</b> panel, which authorizes one
-      account per network. Tokens are sealed the same way AI credentials are, and
-      renewed before they lapse.
+      Setting networks up, connecting accounts, and sending posts to them. Nine
+      networks — X, Facebook, Instagram, Threads, LinkedIn, TikTok, YouTube,
+      Pinterest, Google Business — each with a publisher behind it. Session-gated
+      like the rest of the admin API, with three permissions rather than two: an
+      author writes a post, an editor decides when it goes out, an admin sets up
+      networks and connects the accounts.
     </p>
 
     <table class="table">
-      <thead><tr><th>Route</th><th>Returns</th></tr></thead>
+      <thead><tr><th>Route</th><th>Needs</th><th>Returns</th></tr></thead>
       <tbody>
-        <tr><td><code>GET /ext/social/accounts</code></td><td>Every connectable network, whether an app is registered, and what is held.</td></tr>
-        <tr><td><code>POST /ext/social/accounts/:network/start</code></td><td>A consent URL, not a redirect — the caller is a fetch, and a 302 to a third party would be followed by the fetch rather than the address bar.</td></tr>
-        <tr><td><code>GET /ext/social/oauth/callback</code></td><td>The return leg. Public, because the browser arrives by top-level navigation with no session.</td></tr>
-        <tr><td><code>DELETE /ext/social/accounts/:id</code></td><td>Disconnect.</td></tr>
+        <tr><td><code>GET /api/social/overview</code></td><td>author</td><td>Counts by status, what goes out next, what went out last, and every connection wanting attention.</td></tr>
+        <tr><td><code>GET /api/social/networks</code></td><td>author</td><td>Every network Inkling can post to, its limits and options, and the accounts live on it. What the composer draws itself from.</td></tr>
+        <tr><td><code>GET /api/social/posts</code></td><td>author</td><td>Paged, filtered by <code>?status=</code>.</td></tr>
+        <tr><td><code>POST /api/social/posts</code></td><td>author</td><td>Creates a post and one target per account. Refuses anything a selected network would — see below.</td></tr>
+        <tr><td><code>PUT /api/social/posts/:id</code></td><td>author</td><td>A target that already posted keeps its copy and its link; the rest are rewritten.</td></tr>
+        <tr><td><code>DELETE /api/social/posts/:id</code></td><td>author</td><td>Soft delete. What has already gone out stays on the networks.</td></tr>
+        <tr><td><code>POST /api/social/posts/:id/schedule</code></td><td>editor</td><td>Takes <code>{ at }</code>. Refuses a time that has passed.</td></tr>
+        <tr><td><code>POST /api/social/posts/:id/publish</code></td><td>editor</td><td>Sends now, and is also the retry — targets that already posted are skipped, so calling it twice does not post twice.</td></tr>
+        <tr><td><code>POST /api/social/posts/:id/cancel</code></td><td>editor</td><td>Calls a scheduled post back to draft.</td></tr>
+        <tr><td><code>GET /api/social/calendar</code></td><td>author</td><td>Everything scheduled in a window, from <code>?from=</code> for <code>?days=</code>.</td></tr>
+        <tr><td><code>GET /api/social/settings</code></td><td>admin</td><td>Every network's developer app, where its credentials came from, and the walkthrough for its console. The secret is never in this payload — only its last four characters.</td></tr>
+        <tr><td><code>PUT /api/social/settings/:network</code></td><td>admin</td><td>Client id, secret, enabled switch, and endpoint overrides. An absent <code>clientSecret</code> keeps the stored one; an empty string clears it.</td></tr>
+        <tr><td><code>DELETE /api/social/settings/:network</code></td><td>admin</td><td>Forgets the app. Accounts already connected with it keep working until their tokens lapse.</td></tr>
+        <tr><td><code>GET /api/social/accounts</code></td><td>admin</td><td>Every network, whether an app is set up for it, and what is connected.</td></tr>
+        <tr><td><code>POST /api/social/accounts/:network/start</code></td><td>admin</td><td>A consent URL, not a redirect — the caller is a fetch, and a 302 to a third party would be followed by the fetch rather than the address bar.</td></tr>
+        <tr><td><code>DELETE /api/social/accounts/:id</code></td><td>admin</td><td>Disconnect.</td></tr>
+        <tr><td><code>GET /social/oauth/callback</code></td><td>—</td><td>The return leg. Public and root-mounted, because the browser arrives by top-level navigation carrying no bearer token.</td></tr>
       </tbody>
     </table>
 
-    <div class="note warn">
-      <b>Connecting is not posting</b>
+    <p>
+      A post refused for a network's own rules comes back as
+      <code>400</code> with <code>{ code: "SOCIAL_INVALID", details: { fields } }</code>,
+      the same shape the entry editor already marks inputs from. This is checked
+      when the post is <em>saved</em>, not when it is sent: a scheduled post that
+      turns out to be unpostable at 6am on a Saturday is a notification nobody
+      reads, and caption length, one-video-per-post, and images-or-a-video are
+      all knowable when it is written.
+    </p>
+
+    <div class="note">
+      <b>Networks are set up in the admin</b>
       <p>
-        These hold accounts; nothing publishes to a network yet. Each network
-        wants a different call, a different media upload, and a different set of
-        failures, so publishers get built one at a time — meanwhile, stage a post
-        <b>Posted</b> and paste the link.
+        An OAuth client is registered <i>with the network</i>, against a redirect
+        URI on your domain, so nothing can be shipped in its place — but it does
+        not have to be an environment variable. <code>social_apps</code> holds a
+        client id, a sealed secret, and an <code>enabled</code> switch per
+        network; <code>SOCIAL_OAUTH_&lt;NETWORK&gt;_*</code> is read as a
+        fallback for any network with no row, so an install configured before
+        that screen existed keeps working.
+      </p>
+    </div>
+
+    <div class="note">
+      <b>An outcome is per network, not per post</b>
+      <p>
+        Sending runs every target independently and records what each network did
+        on its own row, with that network's own error text next to it. A post X
+        took and TikTok refused is <code>partial</code> — neither a success nor a
+        failure, and the most common real result. The post's <code>status</code>
+        is a roll-up of its targets rather than something that is set.
       </p>
     </div>
 
@@ -329,7 +370,7 @@
         <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_AUTHORIZE_URL</code></td><td>Overrides the shipped default, and is how you wire up a provider with no default at all.</td></tr>
         <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_TOKEN_URL</code></td><td>As above.</td></tr>
         <tr><td><code>AI_OAUTH_&lt;PROVIDER&gt;_SCOPES</code></td><td>Comma-separated.</td></tr>
-        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_ID</code></td><td>Read only when the <code>social</code> plugin is on. Same shape, same reason — a network's OAuth app is registered against a redirect URI on your domain. Callback: <code>PUBLIC_URL + /ext/social/oauth/callback</code>.</td></tr>
+        <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_ID</code></td><td>Same shape, same reason as the AI block — a network's OAuth app is registered against a redirect URI on your domain. <code>X</code>, <code>FACEBOOK</code>, <code>TIKTOK</code>, <code>YOUTUBE</code>. Callback: <code>PUBLIC_URL + /social/oauth/callback</code>.</td></tr>
         <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_CLIENT_SECRET</code></td><td>Paired with the id.</td></tr>
         <tr><td><code>SOCIAL_OAUTH_&lt;NETWORK&gt;_AUTHORIZE_URL</code>, <code>_TOKEN_URL</code>, <code>_SCOPES</code></td><td>Override the shipped defaults for that network.</td></tr>
       </tbody>

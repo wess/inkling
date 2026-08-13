@@ -26,6 +26,7 @@ export type StorageConfig =
       readonly accessKey: string
       readonly secretKey: string
       readonly publicUrl: string
+      readonly prefix: string
     }
 
 export const createStorage = (settings: StorageConfig): StorageDriver => {
@@ -51,6 +52,7 @@ export const storageFromConfig = (): StorageDriver =>
         accessKey: config.storage.accessKey,
         secretKey: config.storage.secretKey,
         publicUrl: config.storage.publicUrl,
+        prefix: config.storage.prefix,
       })
     : createStorage({ driver: "local", dir: config.storage.localDir })
 

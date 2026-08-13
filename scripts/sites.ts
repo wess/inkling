@@ -50,6 +50,13 @@ const SITES: readonly Site[] = [
     host: "gohan",
     container: "inkling",
   },
+  {
+    name: "warren",
+    url: "https://warren.wess.dev",
+    admin: "/admin",
+    host: "gohan",
+    container: "warren",
+  },
 ]
 
 const TIMEOUT_MS = 15_000

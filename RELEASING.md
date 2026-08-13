@@ -10,6 +10,7 @@ a redeploy. Nothing is published to npm.
 | apothecary | https://apothecary.wess.dev | `/admin` | `wess/apothecary` (private) | gohan |
 | 803media | https://803media.wess.dev | `/studio` | `wess/803media` (private) | gohan |
 | inkling | https://inkling.wess.dev | `/admin` | `inkling-site` (local) | gohan |
+| warren | https://warren.wess.dev | `/admin` | `warrenpublishing` (local) | gohan |
 
 `inkling.wess.dev` is the School — this project's own documentation, running on
 this project. Its lessons are content in its Inkling, so a deploy that changes
@@ -23,8 +24,8 @@ The seed is idempotent and deliberately *not* part of boot: it rewrites every
 lesson, and doing that automatically would overwrite anything edited in the
 admin since.
 
-Both mount Inkling in-process with `createInkling()` and pin it by tag. Both run
-on the `gohan` droplet behind Caddy, deployed from the **devops** repo
+Each mounts Inkling in-process with `createInkling()` and pins it by tag. They
+all run on the `gohan` droplet behind Caddy, deployed from the **devops** repo
 (`~/Desktop/Dev/devops`), which is where the host and service runbooks live.
 
 ```sh

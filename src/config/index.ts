@@ -43,6 +43,7 @@ export const config = defineConfig({
     accessKey: env("S3_ACCESS_KEY", { default: "" }),
     secretKey: env("S3_SECRET_KEY", { default: "" }),
     publicUrl: env("S3_PUBLIC_URL", { default: "" }),
+    prefix: env("S3_PREFIX", { default: "" }),
   },
 
   maxUploadBytes: env("MAX_UPLOAD_BYTES", { parse: Number, default: "26214400" }),

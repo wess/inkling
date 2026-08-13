@@ -24,6 +24,15 @@ export type EmitMap = {
   "entry.afterDelete": { entry: EntryRow; identity: Identity | null }
   "media.afterUpload": { media: MediaRow; identity: Identity | null }
   "media.afterDelete": { media: MediaRow; identity: Identity | null }
+  // After a social post has been attempted on every network it names. There is
+  // no `before` half and there will not be: by the time anything could listen,
+  // the post is on someone else's servers and no listener can take it back.
+  "social.posted": {
+    id: string
+    title: string
+    status: string
+    targets: { id: string; network: string; status: string; error: string | null }[]
+  }
   "server.ready": { at: string }
 }
 

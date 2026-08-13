@@ -15,7 +15,20 @@ export type OAuthClient = {
   readonly authorizeUrl: string
   readonly tokenUrl: string
   readonly scopes: readonly string[]
+  // Two places where a provider disagrees with RFC 6749 about spelling rather
+  // than about meaning. TikTok calls the client id `client_key` and separates
+  // scopes with commas; a provider that says nothing gets the spec's answer.
+  // Both are named rather than branched on the provider, so this file still
+  // knows nothing about what is being authorized.
+  readonly clientParam?: string
+  readonly scopeSeparator?: string
+  // Whether the client credentials may also ride in an Authorization header.
+  // X requires it; TikTok rejects the request when it is present. Defaults to
+  // sending it, which is what every provider before TikTok wanted.
+  readonly basicAuth?: boolean
 }
+
+const clientKey = (client: OAuthClient): string => client.clientParam ?? "client_id"
 
 export type OAuthTokens = {
   readonly accessToken: string
@@ -107,12 +120,12 @@ export const consentUrl = async <T extends object>(
 
   const url = new URL(client.authorizeUrl)
   url.searchParams.set("response_type", "code")
-  url.searchParams.set("client_id", client.clientId)
+  url.searchParams.set(clientKey(client), client.clientId)
   url.searchParams.set("redirect_uri", redirectUri)
   url.searchParams.set("state", state)
   url.searchParams.set("code_challenge", await challengeFor(codeVerifier))
   url.searchParams.set("code_challenge_method", "S256")
-  if (client.scopes.length > 0) url.searchParams.set("scope", client.scopes.join(" "))
+  if (client.scopes.length > 0) url.searchParams.set("scope", client.scopes.join(client.scopeSeparator ?? " "))
   for (const [key, value] of Object.entries(extra)) url.searchParams.set(key, value)
 
   return { url: url.toString(), expiresAt: new Date(expires).toISOString() }
@@ -168,7 +181,9 @@ const readOrThrow = async (response: Response): Promise<Record<string, unknown>>
 // Some providers (X, notably) want the client credentials in a Basic header
 // rather than the body, and reject the request outright without it.
 const basicAuth = (client: OAuthClient): Record<string, string> =>
-  client.clientSecret ? { authorization: `Basic ${btoa(`${client.clientId}:${client.clientSecret}`)}` } : {}
+  client.clientSecret && client.basicAuth !== false
+    ? { authorization: `Basic ${btoa(`${client.clientId}:${client.clientSecret}`)}` }
+    : {}
 
 export const exchange = async (
   client: OAuthClient,
@@ -180,7 +195,7 @@ export const exchange = async (
     grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri,
-    client_id: client.clientId,
+    [clientKey(client)]: client.clientId,
     code_verifier: codeVerifier,
   }
   if (client.clientSecret) fields.client_secret = client.clientSecret
@@ -191,7 +206,7 @@ export const refresh = async (client: OAuthClient, refreshToken: string): Promis
   const fields: Record<string, string> = {
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    client_id: client.clientId,
+    [clientKey(client)]: client.clientId,
   }
   if (client.clientSecret) fields.client_secret = client.clientSecret
 

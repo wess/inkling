@@ -150,6 +150,46 @@ answer is not there. With no origins listed it answers nobody, which is the
 default. If you would rather draw your own, `POST /ext/assistant/public-ask`
 returns the same answer as JSON.
 
+## Social
+
+Inkling posts to **X, Facebook, Instagram, Threads, LinkedIn, TikTok, YouTube,
+Pinterest, and Google Business**. Set a network up under Social → Settings,
+connect an account under Social → Accounts, write a post, aim it at one network
+or all nine, and send it now or at a time.
+
+Each network gets the same caption unless you give it its own — X's 280
+characters and a YouTube description are not the same piece of writing, and the
+composer counts both as you type. Media comes from the library everything else
+uses. Everything a network will refuse is checked when you save rather than when
+it sends, because a scheduled post that turns out to be unpostable at 6am on a
+Saturday is a notification nobody reads.
+
+**A post's outcome is per network.** Sending records what each one did on its own
+row, with that network's own error next to it — so a post X took and TikTok
+refused reads as *part posted*, not as a success or a failure. Press send again
+and only the failures are retried; what already went out is never posted twice.
+
+Three roles, because sending is irreversible in a way publishing a page is not:
+an author writes a post, an editor decides when it goes out, an admin connects
+the accounts.
+
+Each network needs a developer app registered with *that network* against a
+redirect URI on your domain — there is nothing self-hosted software can ship
+instead. **Social → Settings** is where that goes: a row per network with a
+client id, a sealed secret, an on/off switch, and a **"?"** that opens a plain
+walkthrough of that network's console — what the buttons are actually called,
+how long it really takes including the waiting, and the one step everybody gets
+wrong. Networks are independent, so the ones you have finished work while the
+rest are still in review.
+
+`SOCIAL_OAUTH_<NETWORK>_CLIENT_ID` and `_CLIENT_SECRET` still work and are read
+for any network you have not set up in the admin.
+
+Five of the nine — Facebook, Instagram, Threads, Pinterest, Google Business —
+download media from your site rather than being handed it, so posts carrying
+images or video need `PUBLIC_URL` to be an address they can reach. The settings
+screen says so if it is not.
+
 ## Plugins
 
 Drop a directory into `plugins/` and enable it in the admin. Seven ship with it:
@@ -162,7 +202,7 @@ Drop a directory into `plugins/` and enable it in the admin. Seven ship with it:
 | `commerce` | Content type + taxonomy + settings + a convenience route |
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
 | `assistant` | A public, page-aware assistant answering from published content only |
-| `social` | Social media management — a queue, a calendar, a performance report, and OAuth account connections, built out of four content types and two of its own tables |
+| `social` | Client-side social planning — a queue, a calendar, and a performance report, built out of four content types and one of its own tables. Posting itself is core; see below |
 
 ```ts
 import { definePlugin } from "../../src/plugins/define.ts"
