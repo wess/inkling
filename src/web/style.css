@@ -2256,16 +2256,16 @@ code.copyable {
 /* ---------------------------------------------------------------- hints
    The "?" beside a label. Deliberately quiet: it should be findable when
    someone is stuck and invisible when they are not, so it carries no colour
-   until it is hovered or focused. */
-.hint {
-  position: relative;
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: 5px;
-}
+   until it is hovered or focused.
+
+   It opens a modal rather than a tooltip. That costs a click and buys the two
+   things the tooltip could not give: it works on a touch screen, where there is
+   no hover at all, and it has room for an example — which is what a reader who
+   is not technical actually needs. See the Hint component. */
 .hintdot {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
+  margin-left: 5px;
   padding: 0;
   border: 1px solid var(--line2);
   border-radius: 50%;
@@ -2274,9 +2274,11 @@ code.copyable {
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
-  cursor: help;
-  display: grid;
+  cursor: pointer;
+  vertical-align: middle;
+  display: inline-grid;
   place-items: center;
+  flex: none;
   transition:
     color 0.12s,
     border-color 0.12s;
@@ -2286,78 +2288,47 @@ code.copyable {
   color: var(--accent);
   border-color: var(--accent);
 }
-.hinttip {
-  position: absolute;
-  bottom: calc(100% + 7px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: 260px;
-  padding: 7px 10px;
-  border-radius: var(--radius2);
-  background: var(--ink);
-  color: #fff;
-  /* --ink is not re-picked for dark mode, where it lands within a few points
-     of --paper. The border is what keeps the tooltip a distinct object there. */
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.45;
-  letter-spacing: 0;
-  text-transform: none;
-  text-align: left;
-  white-space: normal;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.12s,
-    visibility 0.12s;
-  z-index: 60;
-}
-.hinttip.wide {
-  max-width: 340px;
-}
-.hinttip.on,
-.hint:hover .hinttip {
-  opacity: 1;
-  visibility: visible;
-}
-.hinttip code {
-  background: rgba(255, 255, 255, 0.16);
-  color: inherit;
-}
-/* Near the left edge a centred tooltip is clipped by the panel; anchoring it
-   to the trigger keeps the whole sentence on screen. */
-.hint:first-child .hinttip,
-.fl .hinttip {
-  left: -8px;
-  transform: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .hinttip {
-    transition: none;
-  }
-}
-/* In a heading the dot must not scale with the title, and its tooltip must not
-   inherit the heading's weight or tracking. */
-h1 > .hint,
-h2 > .hint,
-legend > .hint {
+/* In a heading the dot must not scale with the title. */
+h1 > .hintdot,
+h2 > .hintdot,
+legend > .hintdot {
   margin-left: 8px;
   transform: translateY(-1px);
 }
-/* And it opens downward. A heading is the first thing on its screen, so there
-   is nothing above it to open into — the default upward tooltip is clipped by
-   the top of the viewport every single time. Below it there is a whole page. */
-h1 > .hint .hinttip,
-h2 > .hint .hinttip,
-legend > .hint .hinttip {
-  top: calc(100% + 7px);
-  bottom: auto;
-  left: -8px;
-  transform: none;
+
+/* The modal's contents. Wider measure than the old tooltip and a real reading
+   size, because someone is now reading a paragraph rather than glancing at a
+   caption. */
+.helpbody {
+  display: grid;
+  gap: 12px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text);
 }
+.helpbody p {
+  margin: 0;
+}
+.helpbody code {
+  font-size: 0.92em;
+}
+/* The example and the caveat are the two parts a reader skips to, so they are
+   findable without being loud. */
+.helpeg,
+.helpcare {
+  padding: 10px 12px;
+  border-radius: var(--radius2);
+  background: var(--paper3);
+}
+.helpcare {
+  border-left: 2px solid var(--accent);
+}
+.helpeg b,
+.helpcare b {
+  color: var(--text2);
+  font-weight: 600;
+}
+
 /* .note lays its children out in a row, which is right for the one-sentence
    case it was built for. A note with a heading, a paragraph, and a value to
    copy needs them stacked, so it passes one child and stacks inside it. */

@@ -48,6 +48,7 @@ import {
   X,
 } from "lucide-react"
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { createRoot } from "react-dom/client"
 import type {
   AgentKey,
@@ -77,6 +78,8 @@ import type {
   Webhook,
 } from "./api.ts"
 import { api, clearToken, getToken, runAgent, setToken } from "./api.ts"
+import type { HelpId } from "./help.ts"
+import { HELP, helpFor } from "./help.ts"
 
 // Single-file admin SPA, following the same convention as the rest of the
 // stack: hooks only, no component classes, no router dependency. Routing is a
@@ -315,42 +318,82 @@ const Pill = ({ status }: { status: string }) => <span className={`pill ${status
 // A "?" next to a label that most people will never press, and that the one
 // person who needs it can find without leaving the screen.
 //
-// The tooltip is always in the DOM and always referenced by aria-describedby,
-// so assistive technology reads it on focus whether or not it is visible —
-// only sighted reveal is conditional. Hover shows it, focus shows it, and a
-// press toggles it, because on a touch screen there is no hover and a hint you
-// cannot open is decoration. Escape closes it, like every other transient
-// layer in this admin.
-const Hint = ({ text, wide }: { text: React.ReactNode; wide?: boolean }) => {
-  const id = useId()
+// The `?` next to a control, and what happens when somebody presses it.
+//
+// It opens a modal rather than showing a tooltip, which is a deliberate step
+// back from where this started. A tooltip has to be short, appears on hover,
+// and vanishes when the pointer moves — three properties that between them mean
+// a person on a phone cannot read it at all, and a person who needs more than a
+// sentence never gets it. The reader here is often not technical, and the
+// question behind the press is rarely "remind me": it is "what is this, and
+// what happens to everything else if I touch it".
+//
+// So: press, read as long as you like, close. One interaction, the same on a
+// desktop and a phone, and room for an example.
+//
+// The text comes from `./help.ts` by id rather than being written at the call
+// site, so the writing has one place to live and one voice — see that file.
+const Hint = ({ id, text, wide }: { id?: HelpId; text?: React.ReactNode; wide?: boolean }) => {
   const [open, setOpen] = useState(false)
+  const entry = id ? HELP[id] : null
 
-  // Hover is CSS, not state: a handler on the wrapping span would make a static
-  // element interactive for a behaviour :hover already does, and the pointer
-  // never needs React to know where it is.
+  // A hint with neither an id nor text is a mistake at the call site, and an
+  // empty modal is a worse way to find out than nothing rendering.
+  if (!entry && !text) return null
+
   return (
-    <span className="hint">
+    <>
       <button
         type="button"
         className="hintdot"
-        aria-label="What is this?"
-        aria-describedby={id}
-        aria-expanded={open}
-        onClick={() => setOpen(value => !value)}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onKeyDown={event => {
-          if (event.key !== "Escape" || !open) return
+        aria-label={entry ? `What is "${entry.title}"?` : "What is this?"}
+        aria-haspopup="dialog"
+        onClick={event => {
+          // Hints sit inside <label>, and a press on a label focuses the field
+          // it labels — which on a select is enough to open it behind the
+          // modal.
+          event.preventDefault()
           event.stopPropagation()
-          setOpen(false)
+          setOpen(true)
         }}
       >
         ?
       </button>
-      <span role="tooltip" id={id} className={cx("hinttip", open && "on", wide && "wide")}>
-        {text}
-      </span>
-    </span>
+      {open
+        ? // Through a portal, because a `?` sits wherever its field sits — and
+          // some of those fields live inside a collapsed <details>. Rendered in
+          // place, the modal is a descendant of that element and is hidden with
+          // it: the press appears to do nothing. The same goes for any ancestor
+          // with overflow or a transform, which a fixed-position scrim escapes
+          // only if it is not nested inside one.
+          createPortal(
+            <Modal title={entry?.title ?? "About this"} onClose={() => setOpen(false)} wide={wide}>
+              {entry ? (
+                <div className="helpbody">
+                  <p>{entry.what}</p>
+                  {entry.example ? (
+                    <p className="helpeg">
+                      <b>For example: </b>
+                      {entry.example}
+                    </p>
+                  ) : null}
+                  {entry.careful ? (
+                    <p className="helpcare">
+                      <b>Worth knowing: </b>
+                      {entry.careful}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="helpbody">
+                  <p>{text}</p>
+                </div>
+              )}
+            </Modal>,
+            document.body,
+          )
+        : null}
+    </>
   )
 }
 
@@ -1154,11 +1197,18 @@ const FieldInput = ({
   value,
   error,
   onChange,
+  helpId,
 }: {
   field: Field
   value: unknown
   error?: string
   onChange: (value: unknown) => void
+  // Built-in help for a field this admin ships itself, like a site setting. A
+  // field somebody defined for their own content type has no entry here — its
+  // help is whatever they wrote in `field.help`, which renders as a caption
+  // under the control rather than behind the `?`, because help an author wrote
+  // for their colleagues should be read without having to go looking for it.
+  helpId?: HelpId
 }) => {
   const common = { id: `f-${field.key}`, "aria-label": field.label }
 
@@ -1304,6 +1354,7 @@ const FieldInput = ({
       <legend className="fl">
         {field.label}
         {field.required ? <span className="req">*</span> : null}
+        {helpId ? <Hint id={helpId} /> : null}
       </legend>
       {input}
       {error ? (
@@ -1867,11 +1918,13 @@ const Editor = ({
                 <input
                   value={slug}
                   placeholder="slug"
+                  aria-label="Web address"
                   onChange={event => {
                     setSlug(event.target.value)
                     setDirty(true)
                   }}
                 />
+                <Hint id="entry.slug" />
               </div>
             </div>
           </div>
@@ -1898,7 +1951,10 @@ const Editor = ({
         <div className="rail">
           <div className="card">
             <div className="cardhead">
-              <h3>Publishing</h3>
+              <h3>
+                Publishing
+                <Hint id="entry.status" />
+              </h3>
             </div>
             <div className="cardbody stack">
               {entry ? (
@@ -1918,7 +1974,7 @@ const Editor = ({
                     <label className="field">
                       <span className="fl">
                         Credited to
-                        <Hint text="Who the site shows as the author. Separate from who last edited it — the history records that, and it does not change the byline." />
+                        <Hint id="entry.author" />
                       </span>
                       <select
                         value={entry.authorId ?? ""}
@@ -1964,7 +2020,7 @@ const Editor = ({
                           <label className="f">
                             <span className="fl">
                               Publish at
-                              <Hint text="It goes live on its own at this time. Anything that no longer fits its content type when the moment arrives comes back to review rather than going out broken." />
+                              <Hint id="entry.schedule" />
                             </span>
                             <input
                               type="datetime-local"
@@ -2043,7 +2099,7 @@ const Editor = ({
               <label className="f">
                 <span className="fl">
                   Language
-                  <Hint text="Which language version this is. Two entries can share a slug if their language differs, which is how a translated page keeps the same URL shape." />
+                  <Hint id="entry.locale" />
                 </span>
                 <input
                   type="text"
@@ -2058,7 +2114,10 @@ const Editor = ({
                 <span className="fh">A language code such as en or es-MX.</span>
               </label>
               <label className="f" style={{ marginBottom: 0 }}>
-                <span className="fl">Display order</span>
+                <span className="fl">
+                  Display order
+                  <Hint id="entry.sortOrder" />
+                </span>
                 <input
                   type="number"
                   value={sortOrder}
@@ -2423,7 +2482,7 @@ const MediaDetail = ({
       <label className="f">
         <span className="fl">
           Alt text
-          <Hint text="What the image says, for someone who cannot see it. Describe the content, not the file — &quot;a potter trimming a bowl&quot;, not &quot;IMG_4021&quot;." />
+          <Hint id="media.alt" />
         </span>
         <input
           disabled={!canManage}
@@ -2435,18 +2494,27 @@ const MediaDetail = ({
       </label>
 
       <label className="f">
-        <span className="fl">Caption</span>
+        <span className="fl">
+          Caption
+          <Hint id="media.caption" />
+        </span>
         <input disabled={!canManage} value={caption} onChange={event => setCaption(event.target.value)} />
       </label>
 
       <label className="f">
-        <span className="fl">Folder</span>
+        <span className="fl">
+          Folder
+          <Hint id="media.folder" />
+        </span>
         <input disabled={!canManage} value={folder} onChange={event => setFolder(event.target.value)} />
         <span className="fh">An optional label for keeping a large library organized.</span>
       </label>
 
       <label className="f">
-        <span className="fl">URL</span>
+        <span className="fl">
+          URL
+          <Hint id="media.url" />
+        </span>
         <input className="mono" readOnly value={item.url} onFocus={event => event.target.select()} />
       </label>
     </Modal>
@@ -2490,10 +2558,7 @@ const Plugins = ({ go, toast }: { go: (route: Route) => void; toast: (message: s
         <div>
           <h1>
             Plugins
-            <Hint
-              wide
-              text="Self-contained additions — extra content shapes, screens, routes, and settings. Enabling one takes effect immediately; nothing restarts and nothing rebuilds."
-            />
+            <Hint wide id="plugins.what" />
           </h1>
           <p className="dim2">Extensions loaded from the plugins directory.</p>
         </div>
@@ -3058,10 +3123,7 @@ const TaxonomiesScreen = ({ toast }: { toast: (message: string, bad?: boolean) =
         <div>
           <h1>
             Categories
-            <Hint
-              wide
-              text="Ways of grouping content that are not the content itself — topics, collections, seasons. You define a grouping once and attach entries to it from the editor; your site can then ask for everything in one."
-            />
+            <Hint wide id="taxonomy.what" />
           </h1>
           <p className="dim2">Organize content into groups visitors can browse and filter.</p>
         </div>
@@ -3233,7 +3295,10 @@ const TaxonomiesScreen = ({ toast }: { toast: (message: string, bad?: boolean) =
                 </label>
                 {selected.hierarchical && !termForm.id ? (
                   <label className="f">
-                    <span className="fl">Parent choice</span>
+                    <span className="fl">
+                      Parent choice
+                      <Hint id="term.parent" />
+                    </span>
                     <select
                       value={termForm.parentId}
                       onChange={event => setTermForm(current => ({ ...current, parentId: event.target.value }))}
@@ -3312,6 +3377,7 @@ const TaxonomiesScreen = ({ toast }: { toast: (message: string, bad?: boolean) =
             />
             <span>Allow choices inside other choices</span>
           </label>
+          <Hint id="taxonomy.hierarchical" />
         </Modal>
       ) : null}
     </>
@@ -3361,7 +3427,10 @@ const MenuItemEditor = ({
           <input value={item.label} onChange={event => onChange({ ...item, label: event.target.value })} />
         </label>
         <label className="f">
-          <span className="fl">Link</span>
+          <span className="fl">
+            Link
+            <Hint id="menu.link" />
+          </span>
           <input
             type="text"
             value={item.url ?? ""}
@@ -3492,7 +3561,7 @@ const MenusScreen = ({ toast }: { toast: (message: string, bad?: boolean) => voi
         <div>
           <h1>
             Menus
-            <Hint text="Your site's navigation, edited here rather than in code. A menu is a named tree of links your site asks for by name." />
+            <Hint id="menus.what" />
           </h1>
           <p className="dim2">Build navigation your website can place in its header, footer, or anywhere else.</p>
         </div>
@@ -3703,7 +3772,7 @@ const TrashScreen = ({
       <div style={{ marginBottom: 18 }}>
         <h1>
           Trash
-          <Hint text="Deleted entries are kept here rather than removed, so a mistake is one click back. Restoring returns an entry exactly as it was, including its history." />
+          <Hint id="trash.what" />
         </h1>
         <p className="dim2">Restore something deleted by mistake, or remove it permanently.</p>
       </div>
@@ -3892,10 +3961,7 @@ const WebhooksScreen = ({ toast }: { toast: (message: string, bad?: boolean) => 
         <div>
           <h1>
             Webhooks
-            <Hint
-              wide
-              text="Tell another system when something happens here. We POST to a URL you own on the events you pick, signed so the receiver can prove it came from this install."
-            />
+            <Hint wide id="webhooks.what" />
           </h1>
           <p className="dim2">Notify another service when content or media changes.</p>
         </div>
@@ -4040,7 +4106,7 @@ const WebhooksScreen = ({ toast }: { toast: (message: string, bad?: boolean) => 
           <label className="f">
             <span className="fl">
               Endpoint URL
-              <Hint text="Where we POST when the events you pick happen. Every delivery is signed, so the receiver can prove it came from here and not from someone who guessed the URL." />
+              <Hint id="webhooks.endpoint" />
             </span>
             <input
               type="url"
@@ -4050,7 +4116,10 @@ const WebhooksScreen = ({ toast }: { toast: (message: string, bad?: boolean) => 
             />
           </label>
           <fieldset className="webhookevents">
-            <legend>Send when</legend>
+            <legend>
+              Send when
+              <Hint id="webhooks.events" />
+            </legend>
             {events.map(event => (
               <label className="check" key={event}>
                 <input
@@ -4158,7 +4227,7 @@ const ActivityScreen = () => {
         <div>
           <h1>
             Activity
-            <Hint text="Who did what, and when. Sign-ins, edits, publishing, and media changes, kept whether or not the thing they touched still exists." />
+            <Hint id="activity.what" />
           </h1>
           <p className="dim2">A record of sign-ins, publishing, edits, and media changes.</p>
         </div>
@@ -4262,6 +4331,7 @@ const SettingsScreen = ({ toast }: { toast: (message: string, bad?: boolean) => 
               key={item.key}
               field={{ key: item.key, type: item.type, label: item.label }}
               value={values[item.key]}
+              helpId={helpFor(`settings.${item.key}`)}
               onChange={value => {
                 setValues(current => ({ ...current, [item.key]: value }))
                 setDirty(true)
@@ -4312,10 +4382,7 @@ const Keys = ({ types, toast }: { types: ContentType[]; toast: (message: string,
         <div>
           <h1>
             API keys
-            <Hint
-              wide
-              text="How your websites read this content. A key sees published content and nothing else — never a draft, never a user's email. The full key is shown once, when you mint it, and only its hash is kept."
-            />
+            <Hint wide id="keys.what" />
           </h1>
           <p className="dim2">Keys authenticate the delivery API that your website reads from.</p>
         </div>
@@ -4423,10 +4490,7 @@ const Keys = ({ types, toast }: { types: ContentType[]; toast: (message: string,
           <fieldset className="keyscopes">
             <legend>
               Content access
-              <Hint
-                wide
-                text="A key only ever sees published content. This narrows it further, to the types one site actually renders — so a key on your marketing site cannot read your internal notes even if someone finds it."
-              />
+              <Hint wide id="keys.scope" />
             </legend>
             <p className="dim2">
               Leave every box clear to allow all published content, or choose only what this site needs.
@@ -4529,10 +4593,7 @@ const AgentKeys = ({ toast }: { toast: (message: string, bad?: boolean) => void 
         <div>
           <h1>
             Agent keys
-            <Hint
-              wide
-              text="How a program signs in — an MCP server, a build script, an automation. It acts as you, but only for what you tick below, only until it expires, and you can cut it off on its own without changing your password."
-            />
+            <Hint wide id="agentkeys.what" />
           </h1>
           <p className="dim2">
             A key can never do more than you can, and never anything administrative — it cannot add a user, mint an API
@@ -4659,10 +4720,7 @@ const AgentKeys = ({ toast }: { toast: (message: string, bad?: boolean) => void 
           <fieldset className="keyscopes">
             <legend>
               What it may do
-              <Hint
-                wide
-                text="Tick the least that gets the job done. A key that only reads cannot be talked into deleting a page, whatever ends up in the content it reads."
-              />
+              <Hint wide id="agentkeys.grants" />
             </legend>
             <p className="dim2">Nothing is granted by default — a key with no boxes ticked cannot be created.</p>
             {grantable.map(item => (
@@ -4686,7 +4744,10 @@ const AgentKeys = ({ toast }: { toast: (message: string, bad?: boolean) => void 
           </fieldset>
 
           <label className="f" style={{ marginTop: 16 }}>
-            <span className="fl">Expires</span>
+            <span className="fl">
+              Expires
+              <Hint id="agentkeys.expires" />
+            </span>
             <input
               type="datetime-local"
               min={localDateTime()}
@@ -4897,7 +4958,10 @@ const UsersScreen = ({ me, toast }: { me: Identity; toast: (message: string, bad
             />
           </label>
           <label className="f">
-            <span className="fl">Temporary password</span>
+            <span className="fl">
+              Temporary password
+              <Hint id="users.password" />
+            </span>
             <input
               type="password"
               autoComplete="new-password"
@@ -4917,10 +4981,7 @@ const UsersScreen = ({ me, toast }: { me: Identity; toast: (message: string, bad
           <label className="f">
             <span className="fl">
               Role
-              <Hint
-                wide
-                text="Author writes and edits their own drafts. Editor publishes anyone's. Admin also shapes the content model, keys, and users. Owner is all of that and cannot be removed."
-              />
+              <Hint wide id="users.role" />
             </span>
             <select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>
               {roles.map(role => (
@@ -5113,6 +5174,7 @@ const FieldDefinitionEditor = ({
             </option>
           ))}
         </select>
+        <Hint wide id="field.type" />
         <div className="fieldactions">
           <button
             type="button"
@@ -5140,7 +5202,10 @@ const FieldDefinitionEditor = ({
 
       <div className="fielddefinitionbody">
         <label className="f fieldhelp">
-          <span className="fl">Help text</span>
+          <span className="fl">
+            Help text
+            <Hint id="field.helptext" />
+          </span>
           <input
             type="text"
             value={field.help ?? ""}
@@ -5157,10 +5222,14 @@ const FieldDefinitionEditor = ({
           />
           <span>Required</span>
         </label>
+        <Hint id="field.required" />
 
         {field.type === "select" || field.type === "multiselect" ? (
           <div className="fieldchoices">
-            <div className="definitionlabel">Choices</div>
+            <div className="definitionlabel">
+              Choices
+              <Hint id="field.options" />
+            </div>
             {options.map((option, optionIndex) => (
               // Choice rows carry no stored id and can be reordered only by replacing the whole field definition.
               // biome-ignore lint/suspicious/noArrayIndexKey: definition choices have no stable id
@@ -5224,7 +5293,10 @@ const FieldDefinitionEditor = ({
         {field.type === "reference" ? (
           <div className="fieldconfig">
             <label className="f">
-              <span className="fl">Content to link to</span>
+              <span className="fl">
+                Content to link to
+                <Hint id="field.reference" />
+              </span>
               <select value={field.of ?? ""} onChange={event => onChange({ ...field, of: event.target.value })}>
                 <option value="">Choose a content type</option>
                 {types.map(type => (
@@ -5249,7 +5321,10 @@ const FieldDefinitionEditor = ({
           <div className="nestedfields">
             <div className="nestedfieldshead">
               <div>
-                <div className="definitionlabel">Fields in each item</div>
+                <div className="definitionlabel">
+                  Fields in each item
+                  <Hint id="field.list" />
+                </div>
                 <div className="dim2">For example, a label and link for each social profile.</div>
               </div>
               <button
@@ -5292,6 +5367,7 @@ const FieldDefinitionEditor = ({
             <label className="f">
               <span className="fl">
                 Minimum {field.type === "number" ? "value" : field.type === "list" ? "items" : "length"}
+                <Hint id="field.min" />
               </span>
               <input
                 type="number"
@@ -5305,6 +5381,7 @@ const FieldDefinitionEditor = ({
             <label className="f">
               <span className="fl">
                 Maximum {field.type === "number" ? "value" : field.type === "list" ? "items" : "length"}
+                <Hint id="field.max" />
               </span>
               <input
                 type="number"
@@ -5323,7 +5400,7 @@ const FieldDefinitionEditor = ({
           <label className="f">
             <span className="fl">
               API field name
-              <Hint text="The key your website reads this value under. camelCase — heroImage, not hero_image. Renaming it after entries exist orphans what they already hold." />
+              <Hint id="field.key" />
             </span>
             <input
               type="text"
@@ -5337,7 +5414,7 @@ const FieldDefinitionEditor = ({
             <label className="f">
               <span className="fl">
                 Validation pattern
-                <Hint text="A regular expression the value must match before it saves. Leave it empty unless you have a format in mind, like a postcode or a product code." />
+                <Hint id="field.pattern" />
               </span>
               <input
                 type="text"
@@ -5526,7 +5603,10 @@ const TypeBuilder = ({
                 <span className="fh">Singular, as editors will see it.</span>
               </label>
               <label className="f">
-                <span className="fl">Plural name</span>
+                <span className="fl">
+                  Plural name
+                  <Hint id="type.plural" />
+                </span>
                 <input
                   type="text"
                   value={form.pluralLabel}
@@ -5536,7 +5616,10 @@ const TypeBuilder = ({
               </label>
             </div>
             <label className="f">
-              <span className="fl">Description</span>
+              <span className="fl">
+                Description
+                <Hint id="type.description" />
+              </span>
               <textarea
                 rows={2}
                 value={form.description}
@@ -5545,7 +5628,10 @@ const TypeBuilder = ({
               />
             </label>
             <fieldset className="kindchoice" disabled={existing !== null}>
-              <legend>How many can there be?</legend>
+              <legend>
+                How many can there be?
+                <Hint id="type.kind" />
+              </legend>
               <label className={cx("kindoption", form.kind === "collection" && "selected")}>
                 <input
                   type="radio"
@@ -5576,7 +5662,7 @@ const TypeBuilder = ({
               <label className="f">
                 <span className="fl">
                   API name
-                  <Hint text="What your website asks for. It appears in the delivery URL — /content/post — and cannot be changed once entries exist, because every site reading it would break." />
+                  <Hint id="type.name" />
                 </span>
                 <input
                   type="text"
@@ -5593,7 +5679,7 @@ const TypeBuilder = ({
               <label className="f">
                 <span className="fl">
                   Live page URL
-                  <Hint text="Where this content appears on your real site. Fill it in and the &quot;view&quot; button opens the actual page instead of guessing." />
+                  <Hint id="type.previewUrl" />
                 </span>
                 <input
                   type="text"
@@ -5709,10 +5795,7 @@ const TypesScreen = ({
         <div>
           <h1>
             Content types
-            <Hint
-              wide
-              text="The shapes your content can take — what a post, a product, or a landing page is made of. Everything follows from these: the editor screens, what the delivery API returns, and what is checked on save."
-            />
+            <Hint wide id="types.what" />
           </h1>
           <p className="dim2">Decide what your team can create and which fields they fill in.</p>
         </div>
@@ -6760,10 +6843,7 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
           <label className="f">
             <span className="fl">
               Provider
-              <Hint
-                wide
-                text="Whose model answers, and whose bill it lands on. Every AI surface in Inkling — the writing tools, Inky, and the visitor bubble — runs on the one you connect here."
-              />
+              <Hint wide id="ai.provider" />
             </span>
             <select
               value={choice}
@@ -6809,7 +6889,10 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
 
           {selected?.needsKey ? (
             <label className="f">
-              <span className="fl">API key</span>
+              <span className="fl">
+                API key
+                <Hint id="ai.key" />
+              </span>
               <input
                 type="password"
                 value={key}
@@ -6828,7 +6911,7 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
             <label className="f">
               <span className="fl">
                 Base URL
-                <Hint text="Only for an instance that is not where this provider normally lives. Leave it alone unless you are running the model yourself and know the address." />
+                <Hint id="ai.baseUrl" />
               </span>
               <input
                 value={baseUrl}
@@ -6841,10 +6924,7 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
           <label className="f">
             <span className="fl">
               Model
-              <Hint
-                wide
-                text="Typed, not chosen — the suggestions are a starting point, not a limit. Inky needs one that can call tools; the writing tools do not."
-              />
+              <Hint wide id="ai.model" />
             </span>
             <input
               value={model}
@@ -7586,7 +7666,7 @@ const SocialComposer = ({
               <div className="f">
                 <label htmlFor="social-caption">
                   Caption
-                  <Hint text="What every selected network gets, unless you give one of them its own wording below." />
+                  <Hint id="social.caption" />
                 </label>
                 <textarea
                   id="social-caption"
