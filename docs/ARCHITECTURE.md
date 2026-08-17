@@ -886,6 +886,18 @@ formatting surface that stores portable, cleaned HTML; entry history can be
 inspected before restore. Content and media lists paginate rather than silently
 stopping at a fixed first page.
 
+`src/web/help.ts` is the prose behind every `?` in that SPA, keyed by id and
+checked at build time, so a control pointing at help that does not exist is a
+type error rather than an empty modal. It is a separate file because help text is
+writing: it needs one voice, one place to review it, and somewhere to translate
+it from, none of which survive being scattered through an eight-thousand-line
+component file. The `?` opens a modal rather than a tooltip — a hover reveals
+nothing on a touch screen, and the question behind the press is usually "what
+happens to everything else if I change this", which does not fit in a caption.
+The modal renders through a portal: a `?` sits wherever its field sits, and some
+of those fields are inside a collapsed `<details>` that would otherwise hide the
+dialog along with itself.
+
 `src/web/serve.ts` bundles it with `Bun.build` and hands back a *handler*, not a
 server. `src/server.ts` calls it once at boot and falls through to it for
 anything the router doesn't claim, so there is no second process and no proxy —

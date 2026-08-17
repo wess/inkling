@@ -11,6 +11,32 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.7.0 — 2026-08-17
+
+### Added
+
+- **The admin explains itself.** Every control that is not self-evident now
+  carries a `?`, and pressing it opens a plain explanation: what the thing is,
+  one concrete example, and — the part nobody writes down — what it affects
+  elsewhere or what cannot be undone. Written for the person who did not build
+  the site, which is most of the people using one. Coverage went from 25 fields
+  to 50, across the editor, media, the content-type and field builders, site
+  settings, people and roles, keys, webhooks, menus, categories, and AI.
+- It is a **modal rather than a hover tooltip**, which is the point: a hover
+  reveals nothing at all on a phone, and a tooltip has room for a caption rather
+  than an explanation.
+- Help a site builder writes into a field's own **Help text** is unchanged — it
+  still appears in full under the control rather than behind a mark, because
+  guidance written for your own colleagues should not have to be gone looking
+  for.
+
+### Fixed
+
+- A `?` inside the collapsed **Advanced** section of the field builder opened a
+  dialog that was hidden along with the section, so pressing it appeared to do
+  nothing. Help now renders through a portal, which also covers any ancestor
+  with overflow or a transform.
+
 ## 1.6.0 — 2026-08-17
 
 The public assistant — the chat bubble a site's own visitors talk to — gets the

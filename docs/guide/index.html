@@ -37,6 +37,7 @@
       <li><a href="#origin">One origin</a></li>
       <li><a href="#model">The content model</a></li>
       <li><a href="#entries">Entries and history</a></li>
+      <li><a href="#help">Explaining itself</a></li>
       <li><a href="#delivery">The delivery API</a></li>
       <li><a href="#realtime">Live updates</a></li>
       <li><a href="#previews">Previews</a></li>
@@ -152,6 +153,52 @@
       deleted rows, and the admin has a trash screen for putting them back. Slug
       uniqueness ignores deleted rows, so restoring from trash never collides with
       something written in the meantime.
+    </p>
+
+    <h2 id="help">Explaining itself</h2>
+
+    <p>
+      The person filling in your content usually did not build the site. They
+      were handed a login and a job, and the field in front of them says
+      <b>API field name</b>. So every control that is not self-evident carries a
+      <b>?</b>, and pressing it opens a plain-language explanation rather than a
+      tooltip that vanishes when the pointer moves.
+    </p>
+
+    <p>Each one answers the three questions that actually come up:</p>
+
+    <table class="table">
+      <thead><tr><th>Part</th><th>What it says</th></tr></thead>
+      <tbody>
+        <tr><td>What it is</td><td>A sentence somebody would say out loud, without CMS vocabulary.</td></tr>
+        <tr><td>For example</td><td>One concrete case, because an example teaches faster than a rule.</td></tr>
+        <tr><td>Worth knowing</td><td>What it affects elsewhere, or what cannot be undone. This is the part nobody writes down and the reason most of these exist.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      It is a modal rather than a hover tooltip on purpose: a hover reveals
+      nothing on a phone, and a tooltip has room for a caption rather than an
+      explanation. The text lives in one file — <code>src/web/help.ts</code> —
+      keyed by id and checked at build time, so a control pointing at help that
+      does not exist fails the build instead of opening an empty box.
+    </p>
+
+    <div class="note">
+      <b>Not everything has one</b>
+      <p>
+        Email, Password, and Confirm password do not, and will not. A
+        <b>?</b> beside a field whose label already says everything teaches
+        people that the mark is decoration, and then they stop pressing the ones
+        that matter.
+      </p>
+    </div>
+
+    <p>
+      Fields you define yourself are covered separately: whatever you type into a
+      field's <b>Help text</b> appears under the control while somebody is
+      filling it in, in full rather than behind a mark, because help written for
+      your own colleagues should be read without going looking for it.
     </p>
 
     <h2 id="delivery">The delivery API</h2>
