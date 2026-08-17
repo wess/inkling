@@ -2,7 +2,8 @@ import type { Connection } from "atlas/db"
 import { from } from "atlas/db"
 import type { Route } from "atlas/server"
 import { get, json, pipeline } from "atlas/server"
-import { requireAuth } from "../auth/guard.ts"
+import { requireAuth, requireCan } from "../auth/guard.ts"
+import { can } from "../auth/roles.ts"
 import { contains, countRows, paging, rows } from "../db/dialect.ts"
 
 // Admin-side search across entries and media. Deliberately a LIKE scan rather
@@ -10,7 +11,7 @@ import { contains, countRows, paging, rows } from "../db/dialect.ts"
 // admin searching its own content is a low-cardinality, low-frequency query.
 // If a site outgrows this, the honest fix is a real index, not a cleverer LIKE.
 export const searchRoutes = (db: Connection): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
 
   return [
     get(

@@ -87,7 +87,7 @@ const normalize = (input: unknown, depth = 0): MenuItem[] => {
 }
 
 export const menuRoutes = (db: Connection): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageMenus, "manage menus"), parseJson)
   const act = pipeline(requireAuth(db), requireCan(can.manageMenus, "manage menus"))
 

@@ -160,6 +160,13 @@ test("an unsigned or expired preview link gets nothing", async () => {
 
   expect((await call("/preview/not-a-token")).status).toBe(401)
 
+  // Both halves are base64url, and `atob` raises on anything outside that
+  // alphabet — which made a token nobody could mistake for real answer 500
+  // instead of "this link is invalid".
+  for (const junk of ["@@@.@@@", "a.@", `${"x".repeat(40)}.!!!`]) {
+    expect((await call(`/preview/${encodeURIComponent(junk)}`)).status).toBe(401)
+  }
+
   const expired = await mintPreviewToken(draftId, -1)
   expect((await call(`/preview/${expired.token}`)).status).toBe(401)
 

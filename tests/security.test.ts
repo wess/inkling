@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test"
 import { withSecurityHeaders } from "atlas/security"
 import { get, json, pipe, putHeader, router } from "atlas/server"
-import { clientIp } from "../src/security/index.ts"
+import { storedMime } from "../src/media/index.ts"
+import { checkOutboundUrl, clientIp, isPrivateHost } from "../src/security/index.ts"
 
 // The security wrapper is load-bearing for something its name does not suggest:
 // it stashes the real socket peer on the request, and `clientIp` reads only that
@@ -83,4 +84,46 @@ test("responses carry the default headers, and a route's own still wins", async 
 
   const blob = await handle(new Request("http://localhost/media/file/2026/07/abc/x.png"))
   expect(blob.headers.get("cross-origin-resource-policy")).toBe("cross-origin")
+})
+
+test("private and loopback addresses are refused as outbound targets", async () => {
+  for (const host of [
+    "http://localhost/hook",
+    "http://127.0.0.1:5432/hook",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://10.0.0.5/hook",
+    "http://192.168.1.10/hook",
+    "http://172.16.0.1/hook",
+    "http://[::1]/hook",
+  ]) {
+    const verdict = await checkOutboundUrl(host)
+    expect(verdict.ok).toBe(false)
+  }
+
+  expect(isPrivateHost("example.com")).toBe(false)
+  expect(isPrivateHost("::ffff:127.0.0.1")).toBe(true)
+  // 172.32 is outside the private block; the regex has to stop at 172.31.
+  expect(isPrivateHost("172.32.0.1")).toBe(false)
+  expect(isPrivateHost("172.16.0.1")).toBe(true)
+})
+
+test("a scheme other than http(s) is refused outright", async () => {
+  for (const value of ["file:///etc/passwd", "gopher://host/", "not a url"]) {
+    expect((await checkOutboundUrl(value)).ok).toBe(false)
+  }
+})
+
+test("an upload's content-type is checked against its bytes", () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+  const markup = new TextEncoder().encode("<!DOCTYPE html><script>fetch('/api/users')</script>")
+  const text = new TextEncoder().encode("just some notes")
+
+  // What the bytes are beats what the upload claimed, in both directions.
+  expect(storedMime("application/octet-stream", png)).toBe("image/png")
+  expect(storedMime("image/png", markup)).toBe("application/octet-stream")
+  // A file claiming an inline-safe type we cannot confirm keeps it, unless it
+  // opens like a document.
+  expect(storedMime("text/plain", text)).toBe("text/plain")
+  // Nothing inline-safe was claimed, so there is nothing to demote.
+  expect(storedMime("application/zip", markup)).toBe("application/zip")
 })

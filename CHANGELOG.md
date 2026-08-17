@@ -9,6 +9,93 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.5.0 — 2026-08-17
+
+The MCP server no longer holds your password, because it never should have.
+
+1.4.0 shipped `scripts/mcp.ts` configured with `INKLING_EMAIL` and
+`INKLING_PASSWORD`. It signed in and got an ordinary session — which meant the
+credential in that environment file was not "the twenty-two tools listed in the
+README", it was **the account**. Anything that could read it could mint delivery
+keys, register webhooks, connect a social account, change the AI provider, or
+create a second owner, whatever the tool list in front of it happened to say.
+`INKLING_MCP_READONLY` filtered that list in the same process that held the
+secret, so it was a convenience, not a boundary. And cutting an agent off meant
+changing the password, which signs every person out.
+
+That is replaced by a real credential with a real boundary, and the rest of this
+release is the security work that went in alongside it.
+
+**Read this if you run `bun run mcp`.** `INKLING_EMAIL` and `INKLING_PASSWORD`
+are gone and the script refuses to start with them. Mint an agent key under
+**Agent keys** in the admin and set `INKLING_KEY` instead. Nothing else changes:
+the delivery API, `createInkling()`, the plugin interface, and the shape of a
+content type are all untouched, and an install that does not run the MCP server
+needs no action beyond deploying.
+
+### Added
+
+- **Agent keys** (`src/agents`, `/api/agents`) — how a program signs in. An MCP
+  server, a build script, an automation. A key acts as the account that minted
+  it, but only for the capabilities granted to it, and the effective permission
+  is that grant list intersected with the account's *live* role on every
+  request. Demote the account and every key it minted narrows with it.
+- **The administrative surface is not grantable at all.** Managing users, delivery
+  keys, webhooks, plugins, AI providers, and social connections are excluded from
+  the grantable set, so there is no key that reaches them — not "off by default",
+  *absent*. Every one of them is either an escalation (create an owner, mint a
+  longer-lived credential) or a way to reach outside the install (a webhook URL,
+  a connected account). Using the assistant is out too: a machine looping through
+  it is the operator's bill.
+- **Expiry required** — 90 days by default, 365 at most — and revocation is one
+  row rather than a password change. `last_used_at` and `last_ip` are recorded,
+  so a key used from somewhere new is visible without reading the audit table.
+- **Minting is human-only and re-asks for the password.** A key that could mint a
+  key would be its own renewal; and without the password step a stolen session
+  token could be traded for a credential that outlives it and does not appear in
+  "sign out everywhere". Anyone may mint one for themselves — it can never exceed
+  them, and making an admin do it for every editor is the friction that sends
+  people back to sharing a password.
+- **The three credentials cannot be swapped.** A delivery key is refused on
+  `/api` and an agent key is refused on `/content`, so a website key that ends up
+  in a repository is still only a website key.
+- **`GET /api/agents/me`** reports what the calling credential may actually do.
+  The MCP server reads it at startup and publishes only the tools its grants
+  cover, so the model does not plan around a call that would 403 — but that is
+  presentation. The refusal happens at the route.
+- **Audited content changes record which key acted.** "Wess published this" and
+  "a program holding Wess's key published this" are different facts, and the
+  morning something unexpected goes live is when you want them apart.
+
+### Fixed
+
+- **The admin now sends a Content-Security-Policy.** It keeps a fourteen-day
+  bearer token in `localStorage`, which made any script on that origin a session
+  thief, and the policy had been left off because the bundle's one inline line
+  would have needed `'unsafe-inline'` to allow. It is pinned by sha256 hash
+  instead. Set on the admin document rather than globally, so media stays
+  embeddable on a consuming site.
+- **Webhooks can no longer be pointed at your own network.** They were the one
+  place an operator hands Inkling a URL and tells it to make a request, and the
+  receiver's status came back in the response — a port scanner with a signature
+  attached, reaching the database port, sibling containers, and the cloud
+  metadata service that hands out credentials. Private, loopback, and link-local
+  targets are refused when saved and again when fired, hostnames are resolved
+  rather than only pattern-matched, and redirects are no longer followed. Set
+  `WEBHOOK_ALLOW_PRIVATE=true` if your receiver really is internal.
+- **An upload's `Content-Type` is checked against its bytes.** It is a claim, and
+  it decided whether a file was served inline on the same origin as the admin.
+  A file whose header says PNG and whose body is a document is now stored as a
+  download.
+- **A malformed preview token answers 401 rather than 500.** Both halves are
+  base64url and `atob` raises outside that alphabet, so `/preview/@@@.@@@` was an
+  unhandled error where the honest answer is "this link is invalid".
+- **Capabilities that a route checked by reading the role directly** — publishing,
+  editing someone else's entry, sharing a preview — now go through `allows()`, so
+  an agent key cannot inherit them past its grants. Read routes name
+  `content.read`, which every role already passes; the point is that the scope
+  becomes checkable.
+
 ## 1.4.0 — 2026-08-13
 
 An agent can now work a site from outside it. `scripts/mcp.ts` serves Inkling's

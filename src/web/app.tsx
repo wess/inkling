@@ -5,6 +5,7 @@ import {
   ArrowUp,
   Blocks,
   Bold,
+  Bot,
   CalendarDays,
   Check,
   ChevronLeft,
@@ -49,6 +50,7 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
 import type {
+  AgentKey,
   AgentProposal,
   AiCredential,
   AiProvider,
@@ -196,6 +198,7 @@ type Route =
   | { name: "plugin"; plugin: string; panel: string }
   | { name: "settings" }
   | { name: "keys" }
+  | { name: "agents" }
   | { name: "users" }
   | { name: "ai" }
   // Social is five screens rather than one because they are five jobs: see what
@@ -229,6 +232,7 @@ const parse = (path: string): Route => {
   if (head === "plugins") return a && b ? { name: "plugin", plugin: a, panel: b } : { name: "plugins" }
   if (head === "settings") return { name: "settings" }
   if (head === "keys") return { name: "keys" }
+  if (head === "agents") return { name: "agents" }
   if (head === "users") return { name: "users" }
   if (head === "ai") return { name: "ai" }
   if (head === "social") {
@@ -4481,6 +4485,261 @@ const Keys = ({ types, toast }: { types: ContentType[]; toast: (message: string,
   )
 }
 
+// Agent keys. The screen a person uses to hand a machine a way in, and the
+// reason nobody has to paste an owner password into an MCP config any more.
+//
+// The grants come from the server rather than a list in this bundle, and are
+// already filtered to what the signed-in role could confer — so the checkboxes
+// cannot offer something the mint would refuse, and a capability added to the
+// core shows up here without an admin release.
+const AgentKeys = ({ toast }: { toast: (message: string, bad?: boolean) => void }) => {
+  const [items, setItems] = useState<AgentKey[]>([])
+  const [grantable, setGrantable] = useState<{ scope: string; label: string }[]>([])
+  const [maxDays, setMaxDays] = useState(365)
+  const [creating, setCreating] = useState(false)
+  const [name, setName] = useState("")
+  const [password, setPassword] = useState("")
+  const [grants, setGrants] = useState<string[]>([])
+  const [expiresAt, setExpiresAt] = useState("")
+  const [fresh, setFresh] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    api
+      .agentKeys()
+      .then(result => {
+        setItems(result.data)
+        setGrantable(result.grantable)
+        setMaxDays(result.maxDays)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(load, [load])
+
+  const reset = () => {
+    setName("")
+    setPassword("")
+    setGrants([])
+    setExpiresAt("")
+  }
+
+  return (
+    <>
+      <div className="row" style={{ marginBottom: 18 }}>
+        <div>
+          <h1>
+            Agent keys
+            <Hint
+              wide
+              text="How a program signs in — an MCP server, a build script, an automation. It acts as you, but only for what you tick below, only until it expires, and you can cut it off on its own without changing your password."
+            />
+          </h1>
+          <p className="dim2">
+            A key can never do more than you can, and never anything administrative — it cannot add a user, mint an API
+            key, connect an account, or install a plugin, whatever you tick.
+          </p>
+        </div>
+        <button type="button" className="btn primary rowend" onClick={() => setCreating(true)}>
+          <Plus size={14} /> New agent key
+        </button>
+      </div>
+
+      <div className="card">
+        {items.length === 0 ? (
+          <Empty
+            title="No agent keys yet"
+            hint="Create one so a program can work on this site without your password."
+          />
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Can do</th>
+                <th>Last used</th>
+                <th>Expires</th>
+                <th style={{ width: 90 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id}>
+                  <td style={{ fontWeight: 550 }}>
+                    {item.name}
+                    {item.active ? null : (
+                      <span className="pill archived" style={{ marginLeft: 8 }}>
+                        {item.revokedAt ? "revoked" : "expired"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="mono dim">{item.prefix}…</td>
+                  <td className="dim2">{item.grants.join(", ")}</td>
+                  <td className="dim2">
+                    {ago(item.lastUsedAt)}
+                    {item.lastIp ? <span className="dim"> · {item.lastIp}</span> : null}
+                  </td>
+                  <td className="dim2">{new Date(item.expiresAt).toLocaleDateString()}</td>
+                  <td>
+                    {item.revokedAt ? null : (
+                      <button
+                        type="button"
+                        className="btn danger sm"
+                        onClick={async () => {
+                          if (!confirm(`Revoke "${item.name}"? Anything using it stops working immediately.`)) return
+                          try {
+                            await api.revokeAgentKey(item.id)
+                            load()
+                          } catch (error) {
+                            toast(errorOf(error), true)
+                          }
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {creating ? (
+        <Modal
+          title="New agent key"
+          onClose={() => {
+            setCreating(false)
+            reset()
+          }}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setCreating(false)
+                  reset()
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={async () => {
+                  try {
+                    const created = await api.createAgentKey({
+                      name,
+                      password,
+                      grants,
+                      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+                    })
+                    setFresh(created.key)
+                    setCreating(false)
+                    reset()
+                    load()
+                  } catch (error) {
+                    toast(errorOf(error), true)
+                  }
+                }}
+              >
+                Create
+              </button>
+            </>
+          }
+        >
+          <label className="f">
+            <span className="fl">Name</span>
+            <input value={name} onChange={event => setName(event.target.value)} placeholder="Claude on my laptop" />
+            <span className="fh">Which program holds it, so you know what you are cutting off later.</span>
+          </label>
+
+          <fieldset className="keyscopes">
+            <legend>
+              What it may do
+              <Hint
+                wide
+                text="Tick the least that gets the job done. A key that only reads cannot be talked into deleting a page, whatever ends up in the content it reads."
+              />
+            </legend>
+            <p className="dim2">Nothing is granted by default — a key with no boxes ticked cannot be created.</p>
+            {grantable.map(item => (
+              <label className="check" key={item.scope}>
+                <input
+                  type="checkbox"
+                  checked={grants.includes(item.scope)}
+                  onChange={() =>
+                    setGrants(current =>
+                      current.includes(item.scope)
+                        ? current.filter(scope => scope !== item.scope)
+                        : [...current, item.scope],
+                    )
+                  }
+                />
+                <span>
+                  {item.label} <span className="mono dim">{item.scope}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <label className="f" style={{ marginTop: 16 }}>
+            <span className="fl">Expires</span>
+            <input
+              type="datetime-local"
+              min={localDateTime()}
+              value={expiresAt}
+              onChange={event => setExpiresAt(event.target.value)}
+            />
+            <span className="fh">Leave blank for 90 days. {maxDays} is the most a key can last.</span>
+          </label>
+
+          <label className="f" style={{ marginTop: 16 }}>
+            <span className="fl">Your password</span>
+            <input
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={event => setPassword(event.target.value)}
+            />
+            <span className="fh">
+              Asked again because this creates a credential that outlives your session — so a borrowed browser cannot
+              quietly make one.
+            </span>
+          </label>
+        </Modal>
+      ) : null}
+
+      {fresh ? (
+        <Modal
+          title="Copy your agent key"
+          onClose={() => setFresh(null)}
+          footer={
+            <button type="button" className="btn primary" onClick={() => setFresh(null)}>
+              Done
+            </button>
+          }
+        >
+          <Note kind="warn">This is the only time the key is shown. Store it somewhere safe now.</Note>
+          <input
+            className="mono"
+            readOnly
+            value={fresh}
+            style={{ marginTop: 14 }}
+            onFocus={event => event.target.select()}
+          />
+          <p className="dim2" style={{ marginTop: 14 }}>
+            For the MCP server, set <span className="mono">INKLING_KEY</span> to this value alongside{" "}
+            <span className="mono">INKLING_URL</span>.
+          </p>
+        </Modal>
+      ) : null}
+    </>
+  )
+}
+
 const UsersScreen = ({ me, toast }: { me: Identity; toast: (message: string, bad?: boolean) => void }) => {
   const [items, setItems] = useState<Identity[]>([])
   const [roles, setRoles] = useState<{ value: string; label: string }[]>([])
@@ -8535,6 +8794,12 @@ const App = () => {
       case "keys":
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin manages API keys.</Note>
         return <Keys types={types} toast={toast} />
+      // No role gate. An agent key can never exceed the account that mints it,
+      // so anyone may mint one for themselves — and making an admin do it for
+      // every editor is the friction that sends people back to sharing a
+      // password, which is the thing this screen exists to replace.
+      case "agents":
+        return <AgentKeys toast={toast} />
       case "users":
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin manages users.</Note>
         return <UsersScreen me={me} toast={toast} />
@@ -8632,6 +8897,7 @@ const App = () => {
             ? nav({ name: "plugins" }, "Plugins", Blocks, plugins.filter(p => p.enabled).length)
             : null}
           {hasRole(me.role, "admin") ? nav({ name: "keys" }, "API keys", Key) : null}
+          {nav({ name: "agents" }, "Agent keys", Bot)}
           {hasRole(me.role, "admin") ? nav({ name: "webhooks" }, "Webhooks", WebhookIcon) : null}
           {hasRole(me.role, "admin") ? nav({ name: "activity" }, "Activity", Activity) : null}
           {hasRole(me.role, "admin") ? nav({ name: "users" }, "Users", Users) : null}

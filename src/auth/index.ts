@@ -22,7 +22,7 @@ import { sessions, users } from "../schema/index.ts"
 import { clientIp, createAudit, createRateLimit, userAgent } from "../security/index.ts"
 import { now } from "../time/index.ts"
 import { createUser } from "../users/index.ts"
-import { auth, requireAuth } from "./guard.ts"
+import { auth, requireAuth, requireHuman } from "./guard.ts"
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14
 
@@ -74,7 +74,11 @@ export const authRoutes = (db: Connection): Route[] => {
   const limiter = createRateLimit(db)
   const audit = createAudit(db)
   const guard = pipeline(requireAuth(db))
-  const guardJson = pipeline(requireAuth(db), parseJson)
+  // An agent key may say who it is, and nothing else here: ending sessions or
+  // changing a password is a person managing their own credentials, and a
+  // machine doing it on their behalf is never what was meant.
+  const own = pipeline(requireAuth(db), requireHuman)
+  const ownJson = pipeline(requireAuth(db), requireHuman, parseJson)
 
   return [
     get(
@@ -207,7 +211,7 @@ export const authRoutes = (db: Connection): Route[] => {
 
     post(
       "/auth/logout",
-      guard(async c => {
+      own(async c => {
         const me = auth(c)
         await db.execute(
           from(sessions)
@@ -221,7 +225,7 @@ export const authRoutes = (db: Connection): Route[] => {
 
     get(
       "/auth/sessions",
-      guard(async c => {
+      own(async c => {
         const me = auth(c)
         const rows = await db.all<{
           id: string
@@ -256,7 +260,7 @@ export const authRoutes = (db: Connection): Route[] => {
     // Sign out everywhere except the session making the request.
     del(
       "/auth/sessions",
-      guard(async c => {
+      own(async c => {
         const me = auth(c)
         await db.execute(
           from(sessions)
@@ -272,7 +276,7 @@ export const authRoutes = (db: Connection): Route[] => {
 
     post(
       "/auth/password",
-      guardJson(async c => {
+      ownJson(async c => {
         const me = auth(c)
         const current = requireText(body(c), "currentPassword", "Current password")
         const next = requireText(body(c), "newPassword", "New password")

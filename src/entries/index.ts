@@ -16,7 +16,7 @@ import {
   put,
 } from "atlas/server"
 import type { Identity } from "../auth/guard.ts"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { allows, auth, granted, requireAuth, requireCan, requireGrant } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import type { ContentTypeRow } from "../contenttypes/index.ts"
 import { byId as typeById, byName as typeByName } from "../contenttypes/index.ts"
@@ -122,7 +122,7 @@ const snapshot = async (db: Connection, entry: EntryRow, authorId: string | null
 
 // An author may only touch their own entries; editor and above may touch any.
 const assertMayEdit = (identity: Identity, row: EntryRow): void => {
-  if (can.publishContent(identity.role)) return
+  if (allows(identity, can.publishContent)) return
   if (row.author_id !== identity.id) throw forbidden("You can only change entries you authored", { code: "NOT_YOURS" })
 }
 
@@ -136,7 +136,7 @@ const resolveAuthor = async (
 ): Promise<string | null> => {
   if (input.authorId === undefined) return existing.author_id
 
-  if (!can.publishContent(identity.role)) {
+  if (!allows(identity, can.publishContent)) {
     throw forbidden("Only an editor can change who an entry is credited to", { code: "NOT_YOURS" })
   }
 
@@ -417,10 +417,18 @@ const transitionOne = async (
 }
 
 export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.writeContent, "edit content"), parseJson)
   const act = pipeline(requireAuth(db), requireCan(can.writeContent, "edit content"))
   const trashRead = pipeline(requireAuth(db), requireCan(can.writeContent, "view deleted content"))
+  // Binning an entry stays an author's own privilege — the role rule is
+  // writeContent plus ownership — but it is a different *grant* from writing,
+  // so a key allowed to draft cannot also empty the site.
+  const bin = pipeline(
+    requireAuth(db),
+    requireCan(can.writeContent, "edit content"),
+    requireGrant("content.delete", "delete content"),
+  )
 
   const loadType = async (c: Conn): Promise<ContentTypeRow> => {
     const name = c.params.type ?? ""
@@ -610,7 +618,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
       act(async c => {
         const existing = await loadEntry(c.params.id ?? "")
         const identity = auth(c)
-        if (!can.publishContent(identity.role)) {
+        if (!allows(identity, can.publishContent)) {
           throw forbidden("Publishing needs the editor role or higher", { code: "DENIED" })
         }
 
@@ -635,7 +643,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
       act(async c => {
         const existing = await loadEntry(c.params.id ?? "")
         const identity = auth(c)
-        if (!can.publishContent(identity.role)) {
+        if (!allows(identity, can.publishContent)) {
           throw forbidden("Unpublishing needs the editor role or higher", { code: "DENIED" })
         }
 
@@ -774,7 +782,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
             // too. Bulk is a convenience over the same permissions, not a way
             // around them.
             if (action === "publish" || action === "unpublish") {
-              if (!can.publishContent(identity.role)) {
+              if (!allows(identity, can.publishContent)) {
                 throw forbidden("Publishing needs the editor role or higher", { code: "DENIED" })
               }
             } else {
@@ -790,6 +798,9 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
             }
 
             if (action === "delete") {
+              if (!granted(identity, "content.delete")) {
+                throw forbidden('This agent key was not granted "content.delete"', { code: "OUT_OF_GRANT" })
+              }
               await assertEntryUnused(db, existing, false)
               await db.execute(
                 from(entries)
@@ -832,7 +843,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
     // Soft delete — the row keeps its slug so a restore is lossless.
     del(
       "/entries/:id",
-      act(async c => {
+      bin(async c => {
         const existing = await loadEntry(c.params.id ?? "")
         const identity = auth(c)
         assertMayEdit(identity, existing)
@@ -855,7 +866,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         const { limit, offset } = paging(c.query)
         const identity = auth(c)
         const deleted = from(entries).where(q => q("deleted_at").isNotNull())
-        const visible = can.publishContent(identity.role)
+        const visible = allows(identity, can.publishContent)
           ? deleted
           : deleted.where(q => q("author_id").equals(identity.id))
         const rows = await db.all<EntryRow>(visible.orderBy("deleted_at", "DESC").limit(limit).offset(offset))

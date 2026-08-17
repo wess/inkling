@@ -4,11 +4,13 @@ import type { Route } from "atlas/server"
 import { badRequest, del, get, json, notFound, parseJson, pipeline, post, put } from "atlas/server"
 import { requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
+import { config } from "../config/index.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { id, secretToken } from "../ids/index.ts"
 import { decodeArray, encode, fromBit } from "../json/index.ts"
 import type { Hooks } from "../plugins/hooks.ts"
 import { webhooks } from "../schema/index.ts"
+import { checkOutboundUrl, isPrivateHost } from "../security/index.ts"
 import { now } from "../time/index.ts"
 
 export const WEBHOOK_EVENTS = [
@@ -58,6 +60,24 @@ const sign = async (payload: string, secret: string): Promise<string> => {
     .join("")
 }
 
+// One place every outbound delivery goes through, so the guards cannot be on the
+// test route and missing from the real one.
+//
+// `redirect: "manual"` is the load-bearing half: a URL that passes the check at
+// creation is free to answer with a 302 to 169.254.169.254, and a followed
+// redirect would make the whole check theatre. A receiver that wants to move
+// should say so to whoever configured it.
+const deliver = async (url: string, payload: string, headers: Record<string, string>): Promise<Response | null> => {
+  if (!config.allowPrivateNetwork && isPrivateHost(new URL(url).hostname)) return null
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: payload,
+    redirect: "manual",
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => null)
+}
+
 // Deliveries are best-effort and never block the request that triggered them.
 // A receiver that is slow or down must not turn a successful publish into a 500.
 export const dispatch = async (db: Connection, event: string, data: unknown): Promise<void> => {
@@ -71,16 +91,10 @@ export const dispatch = async (db: Connection, event: string, data: unknown): Pr
       .filter(hook => decodeArray<string>(hook.events).includes(event))
       .map(async hook => {
         const signature = await sign(payload, hook.secret)
-        const response = await fetch(hook.url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-inkling-event": event,
-            "x-inkling-signature": `sha256=${signature}`,
-          },
-          body: payload,
-          signal: AbortSignal.timeout(10_000),
-        }).catch(() => null)
+        const response = await deliver(hook.url, payload, {
+          "x-inkling-event": event,
+          "x-inkling-signature": `sha256=${signature}`,
+        })
 
         await db
           .execute(
@@ -132,17 +146,10 @@ export const webhookRoutes = (db: Connection): Route[] => {
     return raw as string[]
   }
 
-  const parseUrl = (value: string): string => {
-    let parsed: URL
-    try {
-      parsed = new URL(value)
-    } catch {
-      throw badRequest("url must be an absolute http(s) URL", { code: "BAD_URL" })
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      throw badRequest("url must use http or https", { code: "BAD_URL" })
-    }
-    return parsed.toString()
+  const parseUrl = async (value: string): Promise<string> => {
+    const verdict = await checkOutboundUrl(value)
+    if (!verdict.ok) throw badRequest(`url ${verdict.reason}`, { code: "BAD_URL" })
+    return verdict.url.toString()
   }
 
   return [
@@ -161,7 +168,7 @@ export const webhookRoutes = (db: Connection): Route[] => {
         const row: WebhookRow = {
           id: id(),
           name: requireText(input, "name", "Name"),
-          url: parseUrl(requireText(input, "url", "URL")),
+          url: await parseUrl(requireText(input, "url", "URL")),
           events: encode(parseEvents(input.events ?? [])),
           secret: secretToken("whsec"),
           active: input.active === false ? 0 : 1,
@@ -185,7 +192,7 @@ export const webhookRoutes = (db: Connection): Route[] => {
         const input = body(c)
         const changes: Record<string, unknown> = {}
         if (input.name !== undefined) changes.name = optionalText(input, "name") ?? row.name
-        if (input.url !== undefined) changes.url = parseUrl(requireText(input, "url", "URL"))
+        if (input.url !== undefined) changes.url = await parseUrl(requireText(input, "url", "URL"))
         if (input.events !== undefined) changes.events = encode(parseEvents(input.events))
         if (input.active !== undefined) changes.active = input.active ? 1 : 0
 
@@ -222,16 +229,10 @@ export const webhookRoutes = (db: Connection): Route[] => {
 
         const payload = JSON.stringify({ event: "ping", data: { webhookId: row.id }, timestamp: now() })
         const signature = await sign(payload, row.secret)
-        const response = await fetch(row.url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-inkling-event": "ping",
-            "x-inkling-signature": `sha256=${signature}`,
-          },
-          body: payload,
-          signal: AbortSignal.timeout(10_000),
-        }).catch(() => null)
+        const response = await deliver(row.url, payload, {
+          "x-inkling-event": "ping",
+          "x-inkling-signature": `sha256=${signature}`,
+        })
 
         await db.execute(
           from(webhooks)

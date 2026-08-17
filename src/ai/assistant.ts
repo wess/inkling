@@ -2,7 +2,7 @@ import type { Connection } from "atlas/db"
 import { from } from "atlas/db"
 import type { Route } from "atlas/server"
 import { badRequest, conflict, json, parseJson, pipeline, post, putHeader, stream, tooManyRequests } from "atlas/server"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { byId as typeById, byName as typeByName } from "../contenttypes/index.ts"
 import type { EntryRow } from "../entries/index.ts"
@@ -240,7 +240,7 @@ export const assistantRoutes = (db: Connection): Route[] => {
             provider: credential?.provider ?? null,
             model: credential?.model ?? null,
             intents: INTENTS,
-            mayUse: can.useAi(auth(c).role),
+            mayUse: allows(auth(c), can.useAi),
           },
         })
       }),

@@ -156,20 +156,32 @@ Inky is for the person at the admin. For a coding agent in a terminal somewhere
 else, `bun run mcp` serves the admin API as MCP tools over stdio — entries,
 content types, media, menus, settings, taxonomy, search, and revisions.
 
+It signs in with an **agent key**, not your password. Mint one under **Agent
+keys** in the admin, ticking only what that agent needs:
+
 ```sh
 claude mcp add mysite -s user \
   -e INKLING_URL=https://cms.yoursite.com \
-  -e INKLING_EMAIL=you@yoursite.com \
-  -e INKLING_PASSWORD=… \
+  -e INKLING_KEY=inkagt_… \
   -- bun run /path/to/inkling/scripts/mcp.ts
 ```
 
-One process per site, because credentials are per-site. Every write goes through
-the same `/api` route the admin calls, so revisions, validation, hooks, and the
-audit trail keep working, and the history shows the account that made the change.
-Set `INKLING_MCP_READONLY=1` to expose only the tools that read — the write ones
-are hidden rather than merely refused, so the agent never plans around a call it
-cannot make.
+A key acts as the account that minted it, but only for the boxes you ticked,
+only until it expires, and you can revoke it on its own without changing your
+password or signing anyone out. It can never do anything administrative —
+adding a user, minting an API key, connecting a social account, installing a
+plugin — whatever you tick and whatever role you hold. Demote the account and
+every key it minted narrows with it, immediately.
+
+That is enforced by Inkling, not by the tool list. The MCP server reads its own
+grants at startup and offers only the tools they cover, so the model does not
+plan around a call that would be refused — but the refusal happens at the site.
+
+One process per site, because keys are per-site. Every write goes through the
+same `/api` route the admin calls, so revisions, validation, hooks, and the audit
+trail keep working; the history shows the account, and records which key acted.
+`INKLING_MCP_READONLY=1` narrows further than the key does, for pointing an agent
+at production to look rather than touch without minting a second key.
 
 ## Social
 

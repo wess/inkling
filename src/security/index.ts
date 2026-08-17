@@ -153,3 +153,74 @@ export const clientIp = (req: Request & { peerIp?: string }): string => {
 }
 
 export const userAgent = (req: Request): string => (req.headers.get("user-agent") ?? "").slice(0, 512)
+
+// ─── outbound requests ──────────────────────────────────────────────────────
+
+// Anywhere Inkling fetches a URL somebody else chose, it is a request made from
+// inside the network Inkling runs in. On a box like ours that reaches the
+// Postgres port, the other containers, and — on every cloud host — a metadata
+// service that hands out credentials to whoever asks from the right address.
+// The receiver's response is reported back (a webhook test returns its status),
+// so without this the feature is a port scanner with a signature attached.
+//
+// An operator with a genuinely internal receiver sets WEBHOOK_ALLOW_PRIVATE.
+// That is a decision worth making explicitly rather than a default worth having.
+
+const PRIVATE_V4 = [
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^0\./,
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+]
+
+export const isPrivateHost = (hostname: string): boolean => {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1" || host === "::") return true
+  if (PRIVATE_V4.some(pattern => pattern.test(host))) return true
+  // Unique-local and link-local IPv6, plus the v4-mapped forms of the above.
+  if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)) return true
+  if (host.startsWith("::ffff:")) return isPrivateHost(host.slice(7))
+  return false
+}
+
+// Resolves the name too, because "internal.example.com" pointing at 10.0.0.5 is
+// the same request as typing the address. It is not airtight — a name can
+// resolve differently between this check and the fetch — but it turns the
+// obvious version of the attack into an error an operator reads at the moment
+// they paste the URL.
+export const resolvesPrivate = async (hostname: string): Promise<boolean> => {
+  if (isPrivateHost(hostname)) return true
+  try {
+    const { lookup } = await import("node:dns/promises")
+    const addresses = await lookup(hostname, { all: true })
+    return addresses.some(entry => isPrivateHost(entry.address))
+  } catch {
+    // A name that does not resolve cannot be reached either; let the fetch
+    // report that in its own words rather than refusing here for the wrong
+    // reason.
+    return false
+  }
+}
+
+export type UrlVerdict = { readonly ok: true; readonly url: URL } | { readonly ok: false; readonly reason: string }
+
+export const checkOutboundUrl = async (value: string): Promise<UrlVerdict> => {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return { ok: false, reason: "must be an absolute http(s) URL" }
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false, reason: "must use http or https" }
+  if (config.allowPrivateNetwork) return { ok: true, url }
+  if (await resolvesPrivate(url.hostname)) {
+    return {
+      ok: false,
+      reason: `${url.hostname} is on a private or loopback network. Set WEBHOOK_ALLOW_PRIVATE=true if that is deliberate.`,
+    }
+  }
+  return { ok: true, url }
+}

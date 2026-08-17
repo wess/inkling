@@ -2,7 +2,7 @@ import type { Connection } from "atlas/db"
 import { from } from "atlas/db"
 import type { Route } from "atlas/server"
 import { badRequest, conflict, del, forbidden, get, json, notFound, parseJson, pipeline, post, put } from "atlas/server"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { rows } from "../db/dialect.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
@@ -85,7 +85,7 @@ export const termsForEntries = async (
 }
 
 export const taxonomyRoutes = (db: Connection): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageTaxonomy, "manage taxonomies"), parseJson)
   const act = pipeline(requireAuth(db), requireCan(can.manageTaxonomy, "manage taxonomies"))
   const assign = pipeline(requireAuth(db), requireCan(can.writeContent, "categorize content"), parseJson)
@@ -270,7 +270,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
         )
         if (!entry) throw notFound("Entry not found")
         const identity = auth(c)
-        if (!can.publishContent(identity.role) && entry.author_id !== identity.id) {
+        if (!allows(identity, can.publishContent) && entry.author_id !== identity.id) {
           throw forbidden("You can only categorize entries you authored", { code: "NOT_YOURS" })
         }
 

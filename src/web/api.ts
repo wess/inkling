@@ -114,6 +114,22 @@ export type Entry = {
   deletedAt: string | null
 }
 
+// A machine's credential for this API — an MCP server, a build script. Narrower
+// than the account that minted it and revocable on its own; see src/agents.
+export type AgentKey = {
+  id: string
+  name: string
+  prefix: string
+  grants: string[]
+  userId: string
+  createdAt: string
+  lastUsedAt: string | null
+  lastIp: string | null
+  expiresAt: string
+  revokedAt: string | null
+  active: boolean
+}
+
 export type Media = {
   id: string
   filename: string
@@ -679,6 +695,18 @@ export const api = {
   createKey: (name: string, scopes: string[], expiresAt?: string) =>
     request<{ id: string; key: string; prefix: string }>("/keys", { body: { name, scopes, expiresAt } }),
   revokeKey: (id: string) => request<{ revoked: boolean }>(`/keys/${id}`, { method: "DELETE" }),
+
+  agentKeys: () =>
+    request<{
+      data: AgentKey[]
+      grantable: { scope: string; label: string }[]
+      maxDays: number
+    }>("/agents"),
+  // The password is asked for again on purpose — see src/agents. It is sent,
+  // never stored, and the plaintext key comes back exactly once.
+  createAgentKey: (input: { name: string; password: string; grants: string[]; expiresAt?: string }) =>
+    request<AgentKey & { key: string }>("/agents", { body: input }),
+  revokeAgentKey: (id: string) => request<{ revoked: boolean }>(`/agents/${id}`, { method: "DELETE" }),
 
   users: () => request<{ data: Identity[]; roles: FieldOption[] }>("/users", { query: { limit: 200 } }),
   createUser: (input: { email: string; name: string; password: string; role: string }) =>

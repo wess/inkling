@@ -71,7 +71,7 @@ export const siteSettings = async (db: Connection): Promise<Record<string, unkno
 }
 
 export const settingsRoutes = (db: Connection): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageSettings, "change site settings"), parseJson)
 
   const validateSetting = async (key: SiteSettingKey, value: unknown): Promise<unknown> => {

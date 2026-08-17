@@ -4,7 +4,7 @@ import { get, json, pipeline, post } from "atlas/server"
 import type { WsConn } from "atlas/server/ws"
 import { createRooms, ws as createWs } from "atlas/server/ws"
 import type { Server, ServerWebSocket } from "bun"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { auth, requireAuth, requireCan, requireHuman } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { corsAll, noStore } from "../http/index.ts"
 import { keyIdentity, requireApiKey } from "../keys/index.ts"
@@ -181,9 +181,17 @@ export const createRealtime = (db: Connection): Realtime => {
   const ticketRoutes: Route[] = [
     // Session holders: the admin. Mounted under /api, so the admin reaches this
     // at /api/realtime/ticket like every other call it makes.
+    //
+    // People only. A session-audience socket receives every frame unshaped —
+    // drafts moving, bylines changing, who is looking at what — and that is a
+    // strictly wider view than any grant a machine credential can hold, so an
+    // agent key here would be a way around its own scopes.
     post(
       "/realtime/ticket",
-      pipeline(requireAuth(db))(async c => {
+      pipeline(
+        requireAuth(db),
+        requireHuman,
+      )(async c => {
         const ticket = tickets.issue({ kind: "session", identity: auth(c) })
         return json(noStore(c), 201, { ticket: ticket.value, expiresAt: ticket.expiresAt, url: "/realtime" })
       }),

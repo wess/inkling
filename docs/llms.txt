@@ -25,6 +25,10 @@ read whole, and it links to the long documents rather than repeating them.
   `previewPublicRoutes`, `realtime.routes` / `realtime.publicRoutes`).
 - Two surfaces. **Admin API**: session bearer token, role-gated, everything.
   **Delivery API**: `X-Api-Key`, read-only, published content only.
+- Three credentials, told apart by prefix in `requireAuth` and never
+  interchangeable: a session JWT (a person), an **agent key** `inkagt_…` (a
+  program, `src/agents`), and a delivery key `ink_…` (a website). An agent key
+  is refused on `/content`; a delivery key is refused on `/api`.
 - A delivery key can never see a draft, a user's email, or a deleted row.
   Reference expansion re-checks publication status *and* the key's type scopes,
   so a reference cannot leak content the key could not have fetched directly.
@@ -77,8 +81,8 @@ All under `/api`: `/api/auth/*`, `/api/users`, `/api/types`,
 `/api/types/:type/entries`, `/api/entries/:id`,
 `/api/entries/:id/{publish,unpublish,status,duplicate,preview,revisions}`,
 `/api/entries/bulk`, `/api/media`, `/api/taxonomies`, `/api/menus`,
-`/api/settings`, `/api/keys`, `/api/webhooks`, `/api/search`, `/api/stats`,
-`/api/audit`, `/api/plugins`, `/api/ai/*`, `/api/realtime/ticket`.
+`/api/settings`, `/api/keys`, `/api/agents`, `/api/webhooks`, `/api/search`,
+`/api/stats`, `/api/audit`, `/api/plugins`, `/api/ai/*`, `/api/realtime/ticket`.
 
 A new session-gated route goes inside the `prefixed("/api", […])` block in
 `src/server.ts`. At the root it would shadow an admin screen — `/settings`,
@@ -87,7 +91,32 @@ all admin URLs.
 
 Roles are a ladder: `viewer < author < editor < admin < owner`. Capabilities are
 predicates in `src/auth/roles.ts` — routes guard with `requireCan(can.x, "…")`
-rather than comparing role strings.
+rather than comparing role strings. Each predicate also carries a **scope name**
+(`content.publish`, `settings.manage`), which is the vocabulary agent-key grants
+are written in; `requireCan` reads it off the predicate, so route code is
+unchanged and cannot forget.
+
+**Agent keys** (`src/agents`) are how a program signs in — an MCP server, a build
+script — instead of holding somebody's password. Four rules:
+
+- Effective permission is the grant list ∩ the account's *live* role, re-read per
+  request. Demote the account and every key it minted narrows with it.
+- `GRANTABLE_SCOPES` is content only. `users.manage`, `keys.manage`,
+  `webhooks.manage`, `plugins.manage`, `ai.manage`, `ai.use`, and `social.manage`
+  are **not grantable** — no key exists that reaches them, so neither escalation
+  nor reaching outside the install is available from a token.
+- Revocable on its own; expiry required, 90 days by default and 365 at most.
+- Minting is human-only and re-asks for the password, so a stolen session cannot
+  be traded for a longer-lived credential and a key cannot renew itself.
+
+When adding a route, do not read `can.x(identity.role)` directly — call
+`allows(identity, can.x)`, or the grant is silently bypassed. `requireGrant(scope)`
+covers the case where a route's role bar is enforced some other way (an
+ownership rule), as in soft-deleting an entry.
+
+`GET /api/agents/me` reports what the calling credential may do; `scripts/mcp.ts`
+uses it to publish only the tools its grants cover. That is presentation — the
+refusal happens at the route.
 
 ## AI
 

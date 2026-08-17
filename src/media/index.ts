@@ -87,6 +87,41 @@ const INLINE_SAFE = new Set([
   "audio/wav",
 ])
 
+// The uploader's `Content-Type` is a claim, and `dispositionFor` below decides
+// whether to serve a file inline on this origin — the same origin the admin and
+// its session token live on. So the claim is checked against the bytes rather
+// than believed.
+//
+// `x-content-type-options: nosniff` (set by withSecurityHeaders) already stops a
+// browser reinterpreting a response, and is the real defence. This is the second
+// one, and it is cheap: a file whose header says PNG and whose body is a
+// document should not be stored as an image whatever any single header does.
+const MAGIC: readonly { readonly mime: string; readonly test: (b: Uint8Array) => boolean }[] = [
+  { mime: "image/png", test: b => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  { mime: "image/jpeg", test: b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mime: "image/gif", test: b => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38 },
+  {
+    mime: "image/webp",
+    test: b => b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45,
+  },
+  { mime: "application/pdf", test: b => b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 },
+]
+
+const MARKUP = /^\s*(<!doctype|<html|<head|<body|<script|<svg|<\?xml|<!\[cdata)/i
+
+export const storedMime = (declared: string, bytes: Uint8Array): string => {
+  const recognized = MAGIC.find(entry => entry.test(bytes))
+  // Recognized wins outright: what the bytes are beats what the upload said.
+  if (recognized) return recognized.mime
+  if (!INLINE_SAFE.has(declared)) return declared
+
+  // Claims an inline-safe type we could not confirm. Serving a document inline
+  // under a borrowed content type is the whole attack, so anything that opens
+  // like markup is demoted to a download.
+  const head = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, 512))
+  return MARKUP.test(head) ? "application/octet-stream" : declared
+}
+
 const dispositionFor = (mime: string, filename: string): { contentType: string; disposition: string } =>
   INLINE_SAFE.has(mime)
     ? { contentType: mime, disposition: `inline; filename="${filename.replace(/"/g, "")}"` }
@@ -188,7 +223,7 @@ const assertMediaUnused = async (db: Connection, mediaId: string): Promise<void>
 }
 
 export const mediaRoutes = (db: Connection, store: StorageDriver, hooks: Hooks): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageMedia, "manage media"), parseJson)
   const uploads = pipeline(requireAuth(db), requireCan(can.manageMedia, "manage media"), parseMultipart)
   const act = pipeline(requireAuth(db), requireCan(can.manageMedia, "manage media"))
@@ -248,12 +283,12 @@ export const mediaRoutes = (db: Connection, store: StorageDriver, hooks: Hooks):
         }
 
         const identity = auth(c)
-        const mime = file.type || "application/octet-stream"
         // Bun hands back File instances for file parts, but the parser types
         // them as Blob — read the name defensively rather than casting.
         const filename = (file as File).name || "upload"
         const key = makeKey(filename)
         const bytes = new Uint8Array(await file.arrayBuffer())
+        const mime = storedMime(file.type || "application/octet-stream", bytes)
         const dimensions = mime.startsWith("image/") ? readDimensions(bytes, mime) : null
 
         const { url } = await putObject(store, key, bytes, mime)

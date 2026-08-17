@@ -38,6 +38,7 @@
       <li><a href="#socket">Socket frames</a></li>
       <li><a href="#fields">Field types</a></li>
       <li><a href="#roles">Roles</a></li>
+      <li><a href="#agentkeys">Agent keys</a></li>
       <li><a href="#ai">AI and agent tools</a></li>
       <li><a href="#social">Social</a></li>
       <li><a href="#env">Configuration</a></li>
@@ -188,6 +189,41 @@
     <p>
       Admins cannot create, edit, or promote above their own rank. API keys are
       stored only as SHA-256 and the plaintext is shown exactly once.
+    </p>
+
+    <h2 id="agentkeys">Agent keys</h2>
+
+    <p>
+      How a program signs in — an MCP server, a build script, an automation —
+      instead of holding somebody's password. Mint one under <b>Agent keys</b>,
+      ticking what it may do. Anyone can mint one for themselves; it can never
+      exceed them.
+    </p>
+
+    <table class="table">
+      <thead><tr><th>Credential</th><th>Held by</th><th>Reaches</th></tr></thead>
+      <tbody>
+        <tr><td>Session token</td><td>A person, in a browser</td><td>Everything their role allows.</td></tr>
+        <tr><td><code>inkagt_…</code></td><td>A program</td><td>Its grants, capped by its account's role.</td></tr>
+        <tr><td><code>ink_…</code></td><td>A website</td><td>Published content, read-only.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      The three are never interchangeable: an agent key is refused on the
+      delivery API and a delivery key is refused on the admin API, so a website
+      key that ends up in a repository is not a way in.
+    </p>
+
+    <p>
+      An agent key can do nothing administrative — no adding a user, minting an
+      API key, connecting a social account, installing a plugin, or spending the
+      AI provider's budget — whatever you tick and whatever role you hold. Those
+      capabilities are not merely off by default; there is no key that can hold
+      them. It expires (90 days by default, 365 at most), it is revocable on its
+      own without changing a password or signing anyone out, and demoting the
+      account narrows every key it minted on the next request. Minting asks for
+      the password again, so a borrowed browser cannot quietly make one.
     </p>
 
     <h2 id="ai">AI providers and agent tools</h2>
@@ -341,7 +377,8 @@
         <tr><td><code>SECRET</code></td><td>—</td><td>Signs sessions, seals credentials. 32+ characters, or production refuses to boot.</td></tr>
         <tr><td><code>NODE_ENV</code></td><td><code>development</code></td><td>Must not be <code>development</code> in production.</td></tr>
         <tr><td><code>DELIVERY_ORIGINS</code></td><td>—</td><td>Browser origins allowed to call delivery. Server-to-server does not need it.</td></tr>
-        <tr><td><code>TRUSTED_PROXIES</code></td><td>—</td><td>CIDRs whose <code>X-Forwarded-For</code> is believed. Set it behind a load balancer.</td></tr>
+        <tr><td><code>TRUSTED_PROXIES</code></td><td>—</td><td>CIDRs whose <code>X-Forwarded-For</code> is believed. <b>Set it behind a proxy</b> — unset, every request looks like it came from the proxy, and the per-IP login limit becomes one global bucket a single client can exhaust for everybody.</td></tr>
+        <tr><td><code>WEBHOOK_ALLOW_PRIVATE</code></td><td><code>false</code></td><td>Webhook targets on private, loopback, and link-local addresses are refused, and redirects are not followed. Turn it on only if your receiver really is internal.</td></tr>
       </tbody>
     </table>
 

@@ -4,7 +4,7 @@ import { createProvider, toolMessage } from "atlas/ai"
 import type { Connection } from "atlas/db"
 import type { Route } from "atlas/server"
 import { badRequest, conflict, json, parseJson, pipeline, post, putHeader, stream, tooManyRequests } from "atlas/server"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
@@ -500,8 +500,8 @@ export const agentRoutes = (db: Connection): Route[] => {
             supported: credential !== null && supports(credential),
             provider: credential?.provider ?? null,
             model: credential?.model ?? null,
-            mayUse: can.useAi(auth(c).role),
-            mayApply: can.writeContent(auth(c).role),
+            mayUse: allows(auth(c), can.useAi),
+            mayApply: allows(auth(c), can.writeContent),
           },
         })
       }),

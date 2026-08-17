@@ -1,8 +1,8 @@
 import type { Connection } from "atlas/db"
 import { from } from "atlas/db"
-import type { Route } from "atlas/server"
+import type { Conn, Route } from "atlas/server"
 import { badRequest, del, get, json, notFound, parseJson, pipeline, post, put, redirect } from "atlas/server"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { config } from "../config/index.ts"
 import { countRows, rows as query } from "../db/dialect.ts"
@@ -81,8 +81,8 @@ const days = (value: unknown, fallback: number, ceiling: number): number =>
 // an author cannot move the send time — it keeps whatever an editor set, or
 // none. Enforced here rather than in `posts.ts` because it is a question about
 // who is asking, and that is a property of the request.
-const schedulable = (c: { assigns: Record<string, unknown> }, input: PostInput, current: string | null): PostInput =>
-  can.publishSocial((c.assigns.auth as { role: string }).role) ? input : { ...input, scheduledAt: current }
+const schedulable = (c: Conn, input: PostInput, current: string | null): PostInput =>
+  allows(auth(c), can.publishSocial) ? input : { ...input, scheduledAt: current }
 
 export const socialRoutes = (db: Connection, store: StorageDriver, hooks: Hooks): Route[] => {
   const write = requireCan(can.writeSocial, "write social posts")

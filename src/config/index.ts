@@ -33,6 +33,11 @@ export const config = defineConfig({
 
   secret: env("SECRET", { default: "inkling-dev-secret-change-me" }),
   trustedProxies: env("TRUSTED_PROXIES", { parse: list, default: "" }),
+  // Webhooks are the one place an operator hands this process a URL and asks it
+  // to make a request. Refusing private and loopback addresses stops that being
+  // a way to reach a database port or a cloud metadata service from outside; an
+  // install whose receiver genuinely is internal turns it back on here.
+  allowPrivateNetwork: env("WEBHOOK_ALLOW_PRIVATE", { parse: raw => /^(1|true|yes)$/i.test(raw), default: "false" }),
 
   storage: {
     driver: env("STORAGE_DRIVER", { default: "local" }),

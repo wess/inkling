@@ -153,6 +153,24 @@ export const apiKeys = defineSchema("api_keys", {
   revoked_at: column.text().nullable(),
 })
 
+// A machine's credential for the admin API, narrower than the account behind
+// it. `grants` is a JSON array of capability names from src/auth/roles.ts, and
+// the effective permission is always that list intersected with the live role of
+// `user_id` — see src/auth/guard.ts#allows.
+export const agentKeys = defineSchema("agent_keys", {
+  id: column.text().primaryKey(),
+  name: column.text(),
+  hashed_key: column.text().unique(),
+  prefix: column.text(),
+  grants: column.text(),
+  user_id: column.text().ref("users", "id"),
+  created_at: column.text(),
+  last_used_at: column.text().nullable(),
+  last_ip: column.text().nullable(),
+  expires_at: column.text(),
+  revoked_at: column.text().nullable(),
+})
+
 export const webhooks = defineSchema("webhooks", {
   id: column.text().primaryKey(),
   name: column.text(),
@@ -307,6 +325,7 @@ export const schemas = [
   menus,
   settings,
   apiKeys,
+  agentKeys,
   webhooks,
   plugins,
   auditEvents,

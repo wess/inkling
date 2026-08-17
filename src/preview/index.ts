@@ -2,7 +2,7 @@ import type { Connection } from "atlas/db"
 import { from } from "atlas/db"
 import type { Route } from "atlas/server"
 import { badRequest, get, json, notFound, pipeline, post, putHeader, unauthorized } from "atlas/server"
-import { auth, requireAuth, requireCan } from "../auth/guard.ts"
+import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { config } from "../config/index.ts"
 import { byId as typeById } from "../contenttypes/index.ts"
@@ -36,9 +36,19 @@ const encode = (bytes: Uint8Array): string =>
 
 // Return type is pinned to a plain ArrayBuffer because WebCrypto's BufferSource
 // rejects the possibly-shared buffer type a bare Uint8Array infers.
-const decode = (value: string): Uint8Array<ArrayBuffer> => {
+//
+// Null rather than a throw: the input is a path segment anyone can type, and
+// `atob` raises on a character outside the alphabet. Letting that escape turned
+// `/preview/@@@.@@@` into a 500 — an unhandled error where the honest answer is
+// the same "this link is invalid" every other bad token gets.
+const decode = (value: string): Uint8Array<ArrayBuffer> | null => {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/")
-  const binary = atob(padded.padEnd(padded.length + ((4 - (padded.length % 4)) % 4), "="))
+  let binary: string
+  try {
+    binary = atob(padded.padEnd(padded.length + ((4 - (padded.length % 4)) % 4), "="))
+  } catch {
+    return null
+  }
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
   return bytes
@@ -68,14 +78,18 @@ export const readPreviewToken = async (token: string): Promise<Claim | null> => 
   const [payload, signature] = token.split(".")
   if (!payload || !signature) return null
 
+  const mac = decode(signature)
+  const body = decode(payload)
+  if (!mac || !body) return null
+
   // Verified before parsing, so a forged payload is never interpreted.
   const ok = await crypto.subtle
-    .verify("HMAC", await signingKey(), decode(signature), new TextEncoder().encode(payload))
+    .verify("HMAC", await signingKey(), mac, new TextEncoder().encode(payload))
     .catch(() => false)
   if (!ok) return null
 
   try {
-    const claim = JSON.parse(new TextDecoder().decode(decode(payload))) as Claim
+    const claim = JSON.parse(new TextDecoder().decode(body)) as Claim
     if (typeof claim.entryId !== "string" || typeof claim.expiresAt !== "number") return null
     return claim.expiresAt <= Date.now() ? null : claim
   } catch {
@@ -113,7 +127,7 @@ export const previewRoutes = (db: Connection): Route[] => {
         // rule the editor itself applies, restated because a preview link
         // outlives the session that made it.
         const identity = auth(c)
-        if (!can.publishContent(identity.role) && row.author_id !== identity.id) {
+        if (!allows(identity, can.publishContent) && row.author_id !== identity.id) {
           throw badRequest("You can only share previews of entries you authored", { code: "NOT_YOURS" })
         }
 

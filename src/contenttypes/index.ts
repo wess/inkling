@@ -133,7 +133,7 @@ export const upsertOwned = async (
 }
 
 export const contentTypeRoutes = (db: Connection): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageTypes, "manage content types"), parseJson)
   const destroy = pipeline(requireAuth(db), requireCan(can.manageTypes, "manage content types"))
 

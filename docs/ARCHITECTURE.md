@@ -215,9 +215,9 @@ and executes each file transactionally. It also namespaces plugin migrations in
 
 ## Data model
 
-17 core tables. The spine is `content_types` → `entries` → `revisions`, with
+18 core tables. The spine is `content_types` → `entries` → `revisions`, with
 `media`, `taxonomies`/`terms`/`entry_terms`, `menus`, `settings`, `api_keys`,
-`webhooks`, `plugins`, `users`/`sessions`, `ai_credentials`, and
+`agent_keys`, `webhooks`, `plugins`, `users`/`sessions`, `ai_credentials`, and
 `audit_events`/`rate_limits`.
 
 **Content types** are user-defined shapes. `fields` holds an ordered array of
@@ -778,6 +778,27 @@ Capabilities live in `src/auth/roles.ts` as predicates (`can.publishContent`),
 and routes guard with `requireCan(can.x, "…")` so permission rules are in one
 place rather than scattered role-string comparisons.
 
+Each capability also carries a **scope name** — `content.publish`,
+`settings.manage` — and those names are the vocabulary agent-key grants are
+written in. That is the whole reason they exist: a machine credential has to be
+narrower than the account behind it, and "narrower" is only checkable if the
+route layer and the grant list are naming the same things. `requireCan` reads
+`.scope` off the predicate it is handed, so route code did not change and cannot
+forget.
+
+There are three credentials, and keeping them apart is load-bearing:
+
+| | who holds it | reaches | table |
+|---|---|---|---|
+| **session JWT** | a person, in a browser | all of `/api`, per role | `sessions` |
+| **agent key** `inkagt_…` | a program | `/api`, per role ∩ grants | `agent_keys` |
+| **delivery key** `ink_…` | a website | `/content`, `/site` | `api_keys` |
+
+They are told apart by prefix in `requireAuth`, and a JWT can never begin with
+`inkagt_`. A delivery key is refused on `/api` and an agent key is refused on
+`/content`, in both directions — mixing them would mean a website key that leaks
+into a repository becomes admin access.
+
 Session JWTs carry a `jti` bound to a `sessions` row, so logout and "sign out
 everywhere" work server-side. Every request re-reads the user, so a demoted or
 deleted account loses access immediately rather than at token expiry. An
@@ -795,6 +816,53 @@ API keys are stored only as SHA-256; the plaintext is shown exactly once. A
 key's `scopes` is a validated list of content-type names, or `[]` meaning all,
 and keys can have an explicit expiration time.
 
+### Agent keys
+
+`src/agents/` — how a program signs in. An MCP server, a build script, a
+migration. The alternative it replaces is worth naming, because it is what
+`scripts/mcp.ts` used to do: hold an owner's email and password and sign in.
+That is not a scoped credential, it is the account. Anything that could read the
+environment could mint delivery keys, register webhooks, connect a social
+account, or create a second owner — whatever tool list sat in front of it — and
+revoking it meant changing the password, which signs every person out too.
+
+Four rules, and each one closes a way that failed:
+
+1. **Never more than its account.** The effective permission is the grant list
+   intersected with the account's *live* role, re-read per request. Demote the
+   account and every key it minted narrows with it.
+2. **Content only.** `GRANTABLE_SCOPES` excludes `users.manage`, `keys.manage`,
+   `webhooks.manage`, `plugins.manage`, `ai.manage`, `ai.use`, and
+   `social.manage`. Those are not "not granted by default" — they are not
+   grantable, so no key exists that reaches them. Every one of them is either an
+   escalation (create an owner, mint a longer-lived credential) or a way to
+   reach outside this install (a webhook URL, a connected account).
+3. **Revocable alone.** Cutting off an agent is one row, not a password change.
+4. **Minting is human-only, and asks for the password again.** A key that could
+   mint a key would be its own renewal; and without the password step, a stolen
+   fourteen-day session token could be traded for a ninety-day one that survives
+   "sign out everywhere".
+
+Anyone may mint a key for themselves — it can never exceed them, and making an
+admin do it for every editor is the friction that sends people back to sharing a
+password. Admins with `keys.manage` see and revoke everyone's.
+
+Three places had to change so the grants actually bite. Routes that read
+`can.x(identity.role)` directly now call `allows(identity, can.x)`, because
+reading the role alone is exactly how a key would inherit everything its account
+can do. Read routes that were `requireAuth` alone now name `can.readContent`,
+which every role passes — the point is that `content.read` becomes checkable.
+And soft-deleting an entry keeps its author-plus-ownership role rule but adds
+`requireGrant("content.delete")`, so a key allowed to draft cannot empty the
+site.
+
+`GET /api/agents/me` reports what a credential may actually do. `scripts/mcp.ts`
+calls it at startup and publishes only the tools its grants cover — but that is
+presentation, so the model does not plan around a call that would 403. The
+refusal happens in Inkling. Audited content changes carry `agentKeyId` in their
+metadata, so the trail distinguishes "Wess published this" from "a program
+holding Wess's key published this".
+
 ## Admin SPA
 
 `src/web/app.tsx` — a single-file React 19 SPA, hooks only, no router
@@ -810,6 +878,18 @@ server. `src/server.ts` calls it once at boot and falls through to it for
 anything the router doesn't claim, so there is no second process and no proxy —
 the bearer token is same-origin by construction and CORS never enters the
 picture. `bun --hot` re-runs the module on change, which rebuilds the bundle.
+
+The admin sets its own Content-Security-Policy, in `serve.ts`, on the document
+response — not through `withSecurityHeaders`, which stays `disableCsp: true`. A
+policy only governs a document, and a blanket one would also land on media,
+where `frame-ancestors 'none'` would stop a consuming site embedding a PDF it is
+entitled to. It matters because the admin keeps a fourteen-day bearer token in
+`localStorage`, which makes any script on this origin a session thief:
+`script-src 'self'` plus a **sha256 hash** of the one inline line (`__INKLING_BASE__`)
+is what keeps that from being one bad `innerHTML` away. Hash rather than
+`'unsafe-inline'`, which would defeat the point. `connect-src` names the
+WebSocket origin explicitly — `'self'` does cover same-origin `ws:` in current
+browsers, but the rule is subtle enough to be worth spelling out.
 
 Three inherited-from-experience details. `NODE_ENV` must not be `development` in
 production or Bun bundles against the dev JSX runtime while resolving React to

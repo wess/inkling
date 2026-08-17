@@ -98,7 +98,7 @@ export const pluginDispatch = (registry: Registry): Route[] => {
 }
 
 export const pluginRoutes = (db: Connection, hooks: Hooks, registry: Registry, dir: string): Route[] => {
-  const read = pipeline(requireAuth(db))
+  const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const manage = pipeline(requireAuth(db), requireCan(can.managePlugins, "manage plugins"))
   const manageJson = pipeline(requireAuth(db), requireCan(can.managePlugins, "manage plugins"), parseJson)
 

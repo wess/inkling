@@ -2,6 +2,7 @@ import { dirname, isAbsolute, resolve } from "node:path"
 import { from } from "atlas/db"
 import { withSecurityHeaders } from "atlas/security"
 import { get, json, pipe, router } from "atlas/server"
+import { agentKeyRoutes } from "./agents/index.ts"
 import { agentRoutes } from "./ai/agent.ts"
 import { assistantRoutes } from "./ai/assistant.ts"
 import { aiPublicRoutes, aiRoutes } from "./ai/index.ts"
@@ -179,6 +180,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...menuRoutes(db),
       ...settingsRoutes(db),
       ...apiKeyRoutes(db),
+      ...agentKeyRoutes(db),
       ...webhookRoutes(db),
       ...searchRoutes(db),
       ...previewRoutes(db),
@@ -247,9 +249,12 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   // media, which needs `cross-origin` — still wins.
   const handler = withSecurityHeaders(router(...routes), {
     dev: config.environment !== "production",
-    // The admin bundle is emitted with hashed chunk names and inline styles, so
-    // a document policy would need to be written against that output
-    // specifically. Until it is, an unset CSP is honest; a wrong one is worse.
+    // No blanket policy. A CSP only governs a document, and the only document
+    // this origin serves is the admin — which sets its own in `src/web/serve.ts`,
+    // written against that bundle's actual output and pinning the one inline
+    // script by hash. A policy applied to everything would also land on media,
+    // where `frame-ancestors 'none'` would stop a consuming site embedding a
+    // PDF it is entitled to.
     disableCsp: true,
   })
 
