@@ -12,6 +12,17 @@ Bun.serve({
   port: config.port,
   hostname: config.host,
   idleTimeout: 60,
+  // Bun buffers a whole request body before any handler runs, and its default
+  // ceiling is 128MB. Nothing downstream can help: `parseJson` calls
+  // `request.json()` on whatever arrived, and the upload limit in src/media is
+  // checked *after* multipart has already been parsed into memory. So any
+  // account could hold 128MB per request, and a handful at once is an OOM on a
+  // box this size.
+  //
+  // Refusing at the socket is the only place that costs nothing. The headroom
+  // over MAX_UPLOAD_BYTES is for multipart framing and the other fields in the
+  // form; the real per-file limit stays where an operator configured it.
+  maxRequestBodySize: config.maxUploadBytes + 2 * 1024 * 1024,
   fetch: async (request, server) => {
     // A WebSocket upgrade has to be answered before the router sees the request
     // — once `fetch` returns a Response the handshake is gone.

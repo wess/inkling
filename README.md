@@ -366,6 +366,9 @@ import { createInkling } from "inkling"
 const inkling = await createInkling({ adminBase: "/admin", siteKeyName: "site" })
 
 Bun.serve({
+  // Bun buffers a whole body before any handler runs, and defaults to 128MB.
+  // Cap it, or any signed-in account can hold that much per request.
+  maxRequestBodySize: inkling.config.maxUploadBytes + 2 * 1024 * 1024,
   fetch: async (request, server) => {
     if (request.headers.get("upgrade") === "websocket") {
       if (inkling.upgrade(request, server)) return undefined as unknown as Response

@@ -129,3 +129,49 @@ test("field definitions reject invalid constraints before editors can use them",
   })
   expect(validateDefinition([{ key: "links", type: "list", label: "Links", fields: [] }]).ok).toBe(false)
 })
+
+test("a field pattern that can hang the process is refused when the type is saved", () => {
+  // `field.pattern` is a regex somebody types into the content-type editor and
+  // it runs against entry data on every save. Checking only that it compiles let
+  // `(a+)+$` through, and Bun runs one JS thread — so a single save wedges the
+  // instance. These are the shapes that actually get written.
+  for (const pattern of ["(a+)+$", "(a|a)*$", "([a-z]+)*x", "(x{1,}){2,}", "(?:a+)+b", "(\\w+\\s?)*$"]) {
+    const result = validateDefinition([{ key: "code", type: "text", label: "Code", pattern }])
+    expect(result.ok).toBe(false)
+  }
+
+  // Length is its own limit, so a pattern cannot be a payload.
+  expect(validateDefinition([{ key: "code", type: "text", label: "Code", pattern: "a".repeat(201) }]).ok).toBe(false)
+
+  // And the patterns a person actually wants still work — a heuristic that
+  // refused these would be worse than the problem.
+  for (const pattern of [
+    "^[a-z]+$",
+    "^\\d{4}-\\d{2}-\\d{2}$",
+    "^(cat|dog)$",
+    "^#[0-9a-f]{6}$",
+    "(abc)+",
+    "(ab){3}",
+    "^\\+?[0-9 ()-]{7,20}$",
+  ]) {
+    const result = validateDefinition([{ key: "code", type: "text", label: "Code", pattern }])
+    expect(result.ok).toBe(true)
+  }
+})
+
+test("a refused pattern is refused before it can be run", () => {
+  // The guard is at definition time because by save time there is nothing to do
+  // about it but wait. Proof the shape really is pathological rather than
+  // theoretically so: run directly, this blocks the only JS thread there is.
+  // Measured on Bun 1.3 — 24 characters costs ~135ms, and the cost climbs with
+  // both the input and the nesting (`^(([a-z])+.)+[A-Z]([a-z])+$` reaches
+  // seconds). Per field, per save, so a bulk publish multiplies it.
+  const started = Date.now()
+  ;/(a+)+$/.test(`${"a".repeat(24)}!`)
+  const elapsed = Date.now() - started
+
+  // A linear regex answers this in well under a millisecond. The margin is wide
+  // so a fast machine cannot make this flaky.
+  expect(elapsed).toBeGreaterThan(20)
+  expect(validateDefinition([{ key: "code", type: "text", label: "Code", pattern: "(a+)+$" }]).ok).toBe(false)
+})

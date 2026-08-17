@@ -62,6 +62,70 @@ const err = (message: string) => ({ error: message })
 const isErr = (value: unknown): value is { error: string } =>
   typeof value === "object" && value !== null && "error" in value
 
+// A field's `pattern` is a regex somebody typed into the content-type editor,
+// and it runs against entry data on every save — so it is attacker-adjacent in
+// a way a hardcoded regex is not. `validateDefinition` only ever checked that it
+// *compiled*, which lets `(a+)+$` through: against a long non-matching string
+// that backtracks exponentially, and Bun runs one JS thread, so a single save
+// wedges the whole instance. It does not need a malicious admin either — Inky
+// proposes content types, and a proposal is approved by someone reading the
+// summary rather than the regex.
+//
+// JavaScript has no way to time a regex out, so the check has to happen before
+// the pattern is stored. This is the star-height heuristic: a quantifier applied
+// to a group that itself quantifies or alternates is the shape that blows up.
+// It is a heuristic and says so — it will not catch every pathological pattern,
+// but it catches the family that actually gets written, and the alternative is a
+// dependency on RE2 for a feature most sites never use.
+// The quantifier sitting immediately after a group close. `?` and an exact
+// `{n}` are bounded and stay allowed; `*`, `+`, and any open-ended `{n,}` or
+// `{n,m}` are the ones that multiply out.
+const REPEATS_GROUP = /^\)(?:[*+]|\{\d*,\d*\})/
+
+export const unsafePattern = (pattern: string): string | null => {
+  if (pattern.length > 200) return "is too long — keep a field pattern under 200 characters"
+
+  // Only groups that can repeat internally matter; `(abc)+` is linear.
+  let depth = 0
+  const opens: number[] = []
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index]
+    if (char === "\\") {
+      index += 1
+      continue
+    }
+    if (char === "(") {
+      opens.push(index)
+      depth += 1
+    } else if (char === ")") {
+      depth -= 1
+      const start = opens.pop()
+      if (start === undefined) continue
+      if (!REPEATS_GROUP.test(pattern.slice(index))) continue
+      const inner = pattern.slice(start + 1, index)
+      if (/[*+]|\{\d*,\}|\|/.test(inner)) {
+        return "repeats a group that already repeats, which can hang on some inputs — simplify it"
+      }
+    }
+  }
+  if (depth !== 0) return "has unbalanced parentheses"
+  return null
+}
+
+// Compiled patterns are cached: `validate` runs per field per save, and
+// rebuilding the same RegExp for every entry in a bulk publish is work nobody
+// asked for. Bounded so a site with many types cannot grow it without limit.
+const compiled = new Map<string, RegExp>()
+
+const patternFor = (source: string): RegExp => {
+  const held = compiled.get(source)
+  if (held) return held
+  const built = new RegExp(source)
+  if (compiled.size > 500) compiled.clear()
+  compiled.set(source, built)
+  return built
+}
+
 const str = (max: number): Handler => ({
   empty: "",
   coerce: (value, field) => {
@@ -69,7 +133,9 @@ const str = (max: number): Handler => ({
     const limit = field.max ?? max
     if (value.length > limit) return err(`must be at most ${limit} characters`)
     if (field.min !== undefined && value.length < field.min) return err(`must be at least ${field.min} characters`)
-    if (field.pattern && !new RegExp(field.pattern).test(value)) return err("does not match the required format")
+    // Length is checked first on purpose: backtracking cost grows with the
+    // input, so an oversized value is refused before any pattern touches it.
+    if (field.pattern && !patternFor(field.pattern).test(value)) return err("does not match the required format")
     return value
   },
 })
@@ -311,6 +377,10 @@ export const validateDefinition = (fields: unknown): { readonly ok: true } | { r
       } catch {
         return { ok: false, error: `field "${field.key}" has an invalid pattern` }
       }
+      // Refused at author time rather than at every save, because by save time
+      // there is nothing to do about it but hang.
+      const unsafe = unsafePattern(field.pattern)
+      if (unsafe) return { ok: false, error: `field "${field.key}" has a pattern that ${unsafe}` }
     }
     if (field.type === "select" || field.type === "multiselect") {
       if (!Array.isArray(field.options) || field.options.length === 0) {

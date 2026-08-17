@@ -9,6 +9,39 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.5.1 — 2026-08-17
+
+Two more from the same audit pass, both denial of service by an authenticated
+caller rather than a way in.
+
+### Fixed
+
+- **A request body had no ceiling.** Bun buffers a whole body before any handler
+  runs and defaults to 128MB; `parseJson` called `request.json()` on whatever
+  turned up, and the upload limit was checked only *after* multipart had already
+  been parsed into memory. So any signed-in account could hold 128MB per request,
+  and a few at once is an OOM on a box the size these run on. Capped at the
+  configured upload limit plus framing headroom, refused at the socket where it
+  costs nothing. An embedding host owns its own `Bun.serve`, so the README and
+  the architecture doc now show the option in the example rather than leaving it
+  to be discovered.
+- **A field's `pattern` could hang the process.** It is a regex typed into the
+  content-type editor and run against entry data on every save, and it was only
+  ever checked for *compiling* — so `(a+)+$` was accepted, and one save then
+  blocked the only JS thread there is. Measured on Bun 1.3: 24 characters of
+  input costs about 135ms, and it climbs with both the input and the nesting
+  (`^(([a-z])+.)+[A-Z]([a-z])+$` reaches seconds). Per field, per save, so a bulk
+  publish multiplies it. Patterns that repeat an already-repeating group are now
+  refused when the content type is saved, along with anything over 200
+  characters, and compiled patterns are cached rather than rebuilt per entry.
+
+  It does not take a malicious admin. Inky proposes content types, and a
+  proposal is approved by someone reading the summary rather than the regex.
+
+  The check is a heuristic and says so in the code — it catches the family of
+  patterns that actually gets written, not every pathological one. The
+  alternative was a dependency on RE2 for a feature most sites never use.
+
 ## 1.5.0 — 2026-08-17
 
 The MCP server no longer holds your password, because it never should have.
