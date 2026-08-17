@@ -11,6 +11,8 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.5.2 — 2026-08-17
+
 ### Fixed
 
 - **Claude connections work again.** Every Claude request carried the
