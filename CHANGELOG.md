@@ -11,6 +11,20 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.5.3 — 2026-08-17
+
+### Fixed
+
+- **The rest of the Claude fix.** 1.5.2 stopped sending `fallbacks` to models
+  that reject it, and stopped asking for the beta that goes with it — but an
+  empty beta list is not the same as none by the time it reaches the wire. The
+  SDK still sent `anthropic-beta:` with nothing in it, and the API rejects a
+  header it cannot parse: `Unexpected value(s) '' for the 'anthropic-beta'
+  header`. So a Sonnet request that correctly declined to ask for the beta
+  failed anyway, on the header announcing it. Both the betas and the fallback
+  chain are now omitted rather than sent empty. Claude connections were still
+  failing their test on 1.5.2; upgrade past it.
+
 ## 1.5.2 — 2026-08-17
 
 ### Fixed

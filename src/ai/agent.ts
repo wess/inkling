@@ -14,7 +14,7 @@ import type { ResolvedCredential } from "./complete.ts"
 // properties of the credential and the model rather than of a call site — and
 // because the copy that lived here drifted into sending `fallbacks` to models
 // that reject it.
-import { betasFor, fallbackFor, readable } from "./complete.ts"
+import { claudeExtras, readable } from "./complete.ts"
 import { resolveCredential } from "./index.ts"
 import type { ProviderName } from "./providers.ts"
 import { endpointFor } from "./providers.ts"
@@ -272,8 +272,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
     const turn = client.beta.messages.stream({
       model: run.credential.model,
       max_tokens: 32_000,
-      betas: betasFor(run.credential),
-      ...fallbackFor(run.credential.model),
+      ...claudeExtras(run.credential),
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system,

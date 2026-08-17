@@ -63,8 +63,25 @@ const CLASSIFIER_MODELS = /^claude-(opus-5|fable-5)/
 
 export const fallbackReady = (model: string): boolean => CLASSIFIER_MODELS.test(model)
 
-// The fallback half of a Claude request, present only when the model takes it.
-export const fallbackFor = (model: string) => (fallbackReady(model) ? { fallbacks: FALLBACKS } : {})
+// The opt-in half of a Claude request: the betas it uses and the fallback chain,
+// each present only when it applies.
+//
+// Both are omitted rather than sent empty. `betas: []` is not "no betas" by the
+// time it reaches the wire — the SDK still sends `anthropic-beta:` with an empty
+// value, and the API rejects the header it cannot parse: `Unexpected value(s) ``
+// for the 'anthropic-beta' header`. So a Sonnet request that correctly declined
+// to ask for the fallback beta failed anyway, on the header announcing it.
+export const claudeExtras = (credential: ResolvedCredential) => {
+  const betas = [
+    ...(fallbackReady(credential.model) ? [FALLBACK_BETA] : []),
+    ...(credential.authKind === "oauth" ? [OAUTH_BETA] : []),
+  ]
+
+  return {
+    ...(betas.length ? { betas } : {}),
+    ...(fallbackReady(credential.model) ? { fallbacks: FALLBACKS } : {}),
+  }
+}
 
 // An OAuth access token is not an API key: it goes on `Authorization: Bearer`,
 // and the endpoint only honours it when the request also opts in to the OAuth
@@ -90,14 +107,6 @@ const claudeClient = (credential: ResolvedCredential) =>
     ? new Anthropic({ authToken: credential.secret })
     : new Anthropic({ apiKey: credential.secret })
 
-// Only the betas this request actually uses. The fallback beta rides with the
-// `fallbacks` parameter and is dropped with it, so a Sonnet request opts into
-// nothing it does not send.
-export const betasFor = (credential: ResolvedCredential): string[] => [
-  ...(fallbackReady(credential.model) ? [FALLBACK_BETA] : []),
-  ...(credential.authKind === "oauth" ? [OAUTH_BETA] : []),
-]
-
 export const complete = async (credential: ResolvedCredential, request: CompletionRequest): Promise<Completion> => {
   const maxTokens = request.maxTokens ?? 16_000
 
@@ -105,8 +114,7 @@ export const complete = async (credential: ResolvedCredential, request: Completi
     const response = await claudeClient(credential).beta.messages.create({
       model: credential.model,
       max_tokens: maxTokens,
-      betas: betasFor(credential),
-      ...fallbackFor(credential.model),
+      ...claudeExtras(credential),
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       system: request.system,
@@ -165,8 +173,7 @@ export async function* completeStream(
     const stream = claudeClient(credential).beta.messages.stream({
       model: credential.model,
       max_tokens: maxTokens,
-      betas: betasFor(credential),
-      ...fallbackFor(credential.model),
+      ...claudeExtras(credential),
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       system: request.system,

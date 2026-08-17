@@ -324,8 +324,11 @@ test("`fallbacks` is sent only to the models that accept it", async () => {
     // The test passes because the request the model rejects is no longer sent.
     expect(passed.ok).toBe(true)
     expect(seen[0]?.body.fallbacks).toBeUndefined()
-    // The beta rides with the parameter, so it goes too.
-    expect(seen[0]?.betas ?? "").not.toContain("server-side-fallback")
+    // The beta rides with the parameter, so it goes too — and it goes entirely.
+    // `betas: []` still puts `anthropic-beta:` on the wire with nothing in it,
+    // which the API rejects as a header it cannot parse, so dropping the last
+    // beta has to drop the header.
+    expect(seen[0]?.betas).toBeNull()
 
     // A model that does refuse still gets its fallback, which is the whole
     // point of the parameter — gating it must not quietly turn it off.
