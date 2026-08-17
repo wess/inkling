@@ -312,6 +312,17 @@ export const socialTargets = defineSchema("social_targets", {
   updated_at: column.text(),
 })
 
+// One visitor's live conversation with the public assistant. The browser holds
+// only the id: turns kept here cannot be forged by the client that is talking
+// to them. Swept on TTL rather than retained — see the migration.
+export const publicAiSessions = defineSchema("public_ai_sessions", {
+  id: column.text().primaryKey(),
+  turns: column.text().default("[]"),
+  turn_count: column.integer().default(0),
+  created_at: column.text(),
+  last_seen_at: column.text(),
+})
+
 export const schemas = [
   users,
   sessions,
@@ -335,4 +346,5 @@ export const schemas = [
   socialAccounts,
   socialPosts,
   socialTargets,
+  publicAiSessions,
 ]

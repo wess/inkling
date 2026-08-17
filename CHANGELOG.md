@@ -11,6 +11,58 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.6.0 — 2026-08-17
+
+The public assistant — the chat bubble a site's own visitors talk to — gets the
+review it should have had before it was pointed at the open internet, plus the
+two things a specialist needs: a description of what it is for, and content it
+is actually scoped to.
+
+### Changed
+
+- **An assistant nobody has scoped now answers from nothing.** `Content it may
+  answer from` treated an empty list as "every type the delivery key may read",
+  which made the configuration nobody had touched the widest one. Empty is now a
+  refusal. **If you have the bubble switched on, name your types before
+  upgrading** or it will politely decline everything.
+- **The site owner's guardrails no longer outrank the software's.** They used to
+  be added last, "so they win any conflict" — right for tone, wrong for claims:
+  a persona reading "tell customers what our oils cure" won. Built-in rules are
+  now last and say so.
+- **Retrieval matches words, in titles and bodies.** It matched the whole
+  question against the title alone, so "do your gummies contain THC?" only found
+  a page literally titled that — a customer's question grounded in nothing and
+  the assistant refused on a site with the answer written on it.
+
+### Added
+
+- **Follow-up questions.** The conversation is held server-side for two hours
+  and the browser carries only an opaque id, because a client that hands back
+  its own transcript can forge what the assistant already said and steer the
+  next answer with it. Nothing a visitor typed outlives the session — what an
+  operator gets instead is a count of questions and how many found no content,
+  which carries no personal data and is the part worth acting on anyway.
+- **Rules the settings cannot switch off**: no claim that anything treats,
+  prevents, cures, or relieves a condition; no dose; no statement about what is
+  legal; no medical, legal, financial, or veterinary advice; no promise of a
+  price, stock, delivery, or refund.
+- **A site-wide ceiling of 500 answers a day**, above the per-visitor limit and
+  deliberately not configurable. A thousand addresses each staying under thirty
+  questions an hour is still thirty thousand answers on the operator's bill.
+
+### Fixed
+
+- **A scheduled entry could be answered from before it was published.** The
+  bubble filtered on status and soft-delete but not on the publish date, so an
+  entry dated next week — an embargo, a launch nobody has announced — was fair
+  game. It now uses the same four predicates the delivery API does.
+- **A provider failure reached the visitor verbatim**, naming the provider, the
+  endpoint, and sometimes the state of the account paying for it. It reads as
+  the configured refusal line, and the detail stops at the server.
+- **A visitor's question is fenced** with a marker they never see and cannot
+  guess, rather than appended after a literal `QUESTION:` label next to
+  `<source>` tags they could imitate.
+
 ## 1.5.3 — 2026-08-17
 
 ### Fixed

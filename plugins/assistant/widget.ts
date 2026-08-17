@@ -23,6 +23,10 @@ export const WIDGET = `
   var title = script.getAttribute("data-title") || "Ask"
   var accent = script.getAttribute("data-accent") || "#3d5afe"
 
+  // Names the turns this server recorded for this visitor. Opaque, and the only
+  // thing about the conversation the browser holds.
+  var sessionId = null
+
   var host = document.createElement("div")
   host.setAttribute("data-inkling-assistant", "")
   var root = host.attachShadow({ mode: "open" })
@@ -121,7 +125,7 @@ export const WIDGET = `
       fetch(base + "/ext/assistant/public-ask", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: question, path: location.pathname }),
+        body: JSON.stringify({ question: question, path: location.pathname, sessionId: sessionId }),
       })
         .then(function (response) {
           return response.json().then(function (body) {
@@ -130,6 +134,9 @@ export const WIDGET = `
         })
         .then(function (result) {
           if (!result.ok) throw new Error((result.body && result.body.error) || "That did not work.")
+          // Held in memory only, so a reload starts a new conversation and a
+          // borrowed browser never hands the next person the last one's.
+          sessionId = (result.body.data && result.body.data.sessionId) || sessionId
           pending.textContent = (result.body.data && result.body.data.answer) || ""
           var sources = (result.body.data && result.body.data.sources) || []
           if (sources.length) {
@@ -139,8 +146,10 @@ export const WIDGET = `
             log.appendChild(note)
           }
         })
-        .catch(function (error) {
-          pending.textContent = String(error.message || error)
+        .catch(function () {
+          // Deliberately not the error: whatever went wrong upstream is not
+          // something a visitor can act on, and its text is a map of the install.
+          pending.textContent = "Sorry — I couldn't answer that just now."
         })
         .then(function () {
           send.disabled = false

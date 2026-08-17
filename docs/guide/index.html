@@ -380,6 +380,16 @@ GET /content/post/hello</pre></div>
     </p>
 
     <p>
+      It has no tools. The admin's assistant runs a loop that can read the whole
+      site and propose changes; this one gets a single completion with a block of
+      published text in front of it, so there is no write path to abuse and no
+      call it can make at all. Follow-up questions work because the conversation
+      is held here for a couple of hours and the browser holds only an opaque id
+      — a client that carried its own transcript could forge what the assistant
+      already said and steer the next answer with it.
+    </p>
+
+    <p>
       It borrows whatever provider the admin already uses, so there is no second
       key to manage. Turn on <b>Show a bubble on the public site</b> and it ships
       its own — one script tag, a shadow root so nothing of yours leaks in or
@@ -388,15 +398,29 @@ GET /content/post/hello</pre></div>
 
     <div class="screen"><pre>&lt;script src="<span class="s">https://cms.yoursite.com/ext/assistant/widget.js</span>" defer&gt;&lt;/script&gt;</pre></div>
 
+    <div class="note warn">
+      <b>Rules you cannot write over</b>
+      <p>
+        Whatever the persona and guardrails say, the assistant will not claim
+        that anything treats, prevents, cures, or relieves a condition, will not
+        suggest a dose, will not say whether anything is legal, will not give
+        medical, legal, financial, or veterinary advice, and will not promise a
+        price, stock, a delivery, or a refund. Those rules are added last and
+        say plainly that they outrank the site owner's — because the person
+        carrying the liability for a bad claim is the same site owner on a worse
+        day. Nothing typed into the settings turns them off.
+      </p>
+    </div>
+
     <table class="table">
       <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td>Persona</td><td>Who it is and what the site is. Prepended to every answer.</td></tr>
-        <tr><td>Guardrails</td><td>Your house rules in plain sentences — what it must always say, must never promise, and which topics go to a human instead. Added to its instructions verbatim.</td></tr>
+        <tr><td>What it specialises in</td><td>The assistant in a sentence or two — what it knows about and who it is talking to. "A CBD, hemp and cannabinoid specialist for this shop, answering retail customers." A description, not a licence: see the built-in rules below.</td></tr>
+        <tr><td>Guardrails</td><td>Your house rules in plain sentences — what it must always say, must never promise, and which topics go to a human instead. Added to its instructions verbatim, and outranked by the built-in rules below.</td></tr>
         <tr><td>When the answer isn't in the content</td><td>Returned word for word instead of letting the model guess.</td></tr>
         <tr><td>Sites allowed to use the bubble</td><td>Comma-separated origins. With none listed the bubble answers nobody — that is the default, and it is deliberate.</td></tr>
-        <tr><td>Content types to search</td><td>Narrow what it reads. Empty means everything published.</td></tr>
-        <tr><td>Questions per hour per visitor</td><td>The ceiling per address. 30 by default.</td></tr>
+        <tr><td>Content it may answer from</td><td>Comma-separated type names. Only published entries of these kinds ever reach the model. <b>Empty means it answers nothing</b> — an assistant nobody has scoped is not one that should be reading everything.</td></tr>
+        <tr><td>Questions per hour per visitor</td><td>The ceiling per address. 30 by default. A site-wide ceiling of 500 answers a day sits above it and is not configurable — it is what bounds the bill when a thousand addresses each stay politely under their own limit.</td></tr>
       </tbody>
     </table>
 
