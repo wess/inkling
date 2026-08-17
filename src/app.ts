@@ -77,6 +77,9 @@ export type Inkling = {
   // a Response. False means the request was not for /realtime.
   upgrade: Realtime["upgrade"]
   websocket: Realtime["websocket"]
+  // Spread into `Bun.serve` by whoever owns the port. Values a host inheriting
+  // this cannot safely forget — see the comment where it is built.
+  serveOptions: { idleTimeout: number; maxRequestBodySize: number }
   siteKey: string | null
   adminBase: string
   db: typeof db
@@ -286,6 +289,23 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
     },
     upgrade: (request, server) => realtime.upgrade(request, server),
     websocket: realtime.websocket,
+    // The `Bun.serve` options a host must not get wrong, for the same reason
+    // `withSecurityHeaders` is built here: an embedding host inherits them by
+    // spreading this instead of being told to retype them. `idleTimeout` was
+    // already missing from every embed example we ship, which is the argument.
+    //
+    // `maxRequestBodySize` is the load-bearing one. Bun buffers a whole request
+    // body before any handler runs, default ceiling 128MB, and nothing
+    // downstream can help: `parseJson` calls `request.json()` on whatever
+    // arrived, and the upload limit in src/media is checked *after* multipart
+    // has been parsed into memory. Refusing at the socket is the only place that
+    // costs nothing. The headroom over MAX_UPLOAD_BYTES covers multipart framing
+    // and the form's other fields; the real per-file limit stays where an
+    // operator configured it.
+    serveOptions: {
+      idleTimeout: 60,
+      maxRequestBodySize: config.maxUploadBytes + 2 * 1024 * 1024,
+    },
     siteKey,
     adminBase,
     db,

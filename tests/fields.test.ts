@@ -159,19 +159,37 @@ test("a field pattern that can hang the process is refused when the type is save
   }
 })
 
-test("a refused pattern is refused before it can be run", () => {
-  // The guard is at definition time because by save time there is nothing to do
-  // about it but wait. Proof the shape really is pathological rather than
-  // theoretically so: run directly, this blocks the only JS thread there is.
-  // Measured on Bun 1.3 — 24 characters costs ~135ms, and the cost climbs with
-  // both the input and the nesting (`^(([a-z])+.)+[A-Z]([a-z])+$` reaches
-  // seconds). Per field, per save, so a bulk publish multiplies it.
+test("a stored pattern is refused at match time, not only when the type is edited", () => {
+  // `validateDefinition` guards the admin editor, and it is not the only way a
+  // pattern gets stored: a plugin declares content types through `upsertOwned`,
+  // which never sees it, and rows written before the check existed are still on
+  // disk. So the refusal has to happen where the pattern is compiled — these
+  // fields stand in for both, having never been through the editor.
+  const hostile = validate([field({ key: "code", type: "text", pattern: "(a+)+$" })], { code: "aaaaaaaaaaaaaaaaaaaa!" })
+  expect(hostile.valid).toBe(false)
+  if (!hostile.valid) expect(hostile.errors[0]?.key).toBe("code")
+
+  // Same for one that no longer compiles: a field error, not a thrown 500.
+  const broken = validate([field({ key: "code", type: "text", pattern: "([" })], { code: "anything" })
+  expect(broken.valid).toBe(false)
+
+  // A safe pattern still matches, and still rejects a non-match.
+  const good = [field({ key: "code", type: "text", pattern: "^[a-z]{3}$" })]
+  expect(validate(good, { code: "abc" }).valid).toBe(true)
+  expect(validate(good, { code: "ab1" }).valid).toBe(false)
+})
+
+test("the shape the guard refuses really does hang, rather than theoretically", () => {
+  // Proof the heuristic is aimed at something real: run directly, this blocks
+  // the only JS thread there is. Measured on Bun 1.3, the curve is steep — 20
+  // characters costs ~9ms, 24 costs ~130ms, and `^(([a-z])+.)+[A-Z]([a-z])+$`
+  // reaches seconds. 20 is used here because the test asserts the shape, not the
+  // clock, and 130ms is 90% of this file's runtime for the same information.
   const started = Date.now()
-  ;/(a+)+$/.test(`${"a".repeat(24)}!`)
+  ;/(a+)+$/.test(`${"a".repeat(20)}!`)
   const elapsed = Date.now() - started
 
-  // A linear regex answers this in well under a millisecond. The margin is wide
-  // so a fast machine cannot make this flaky.
-  expect(elapsed).toBeGreaterThan(20)
-  expect(validateDefinition([{ key: "code", type: "text", label: "Code", pattern: "(a+)+$" }]).ok).toBe(false)
+  // A linear regex answers this in microseconds, so the margin is still ~4x
+  // even though the absolute cost is small.
+  expect(elapsed).toBeGreaterThan(2)
 })

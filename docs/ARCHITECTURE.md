@@ -103,8 +103,8 @@ import { createInkling } from "inkling"
 const inkling = await createInkling({ adminBase: "/admin", siteKeyName: "site" })
 
 Bun.serve({
-  // Bun buffers the whole body before any handler runs; its default is 128MB.
-  maxRequestBodySize: inkling.config.maxUploadBytes + 2 * 1024 * 1024,
+  // Body ceiling and idle timeout, decided by Inkling so a host cannot drift.
+  ...inkling.serveOptions,
   fetch: async (request, server) => {
     // Before anything returns a Response, or the handshake is gone.
     if (request.headers.get("upgrade") === "websocket") {
@@ -131,11 +131,18 @@ name yields the same key on every boot — the row is replaced when it is missin
 stale after a `SECRET` rotation, or revoked. Rotating `SECRET` rotates this key
 along with sessions and stored AI credentials.
 
-Two things the host must not omit, both of which fail silently. **`maxRequestBodySize`**
-— Bun buffers a whole request body before any handler runs and defaults to
-128MB, `parseJson` calls `request.json()` on whatever arrived, and the upload
-limit in `src/media` is checked only *after* multipart has been parsed into
-memory. **Pass `server` through to `fetch`.** `withSecurityHeaders` is applied inside
+**`serveOptions`** exists so two `Bun.serve` values are Inkling's decision rather
+than a host's to remember. `maxRequestBodySize` is the load-bearing one: Bun
+buffers a whole request body before any handler runs and defaults to 128MB,
+`parseJson` calls `request.json()` on whatever arrived, and the upload limit in
+`src/media` is checked only *after* multipart has been parsed into memory — so
+the socket is the only place a ceiling costs nothing. It carries headroom over
+`MAX_UPLOAD_BYTES` for multipart framing. `idleTimeout` rides along because it
+was missing from this snippet until they were bundled together — which is the
+argument for bundling them.
+
+One thing is still the host's to get right, and it fails silently.
+**Pass `server` through to `fetch`.** `withSecurityHeaders` is applied inside
 `createInkling` rather than by the port owner, precisely so an embedding host
 cannot forget it: the wrapper is also what stashes the socket peer on the request
 for `src/security#clientIp` to read. Without a peer, `clientIp` returns an empty

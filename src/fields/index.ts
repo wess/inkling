@@ -62,31 +62,40 @@ const err = (message: string) => ({ error: message })
 const isErr = (value: unknown): value is { error: string } =>
   typeof value === "object" && value !== null && "error" in value
 
-// A field's `pattern` is a regex somebody typed into the content-type editor,
-// and it runs against entry data on every save — so it is attacker-adjacent in
-// a way a hardcoded regex is not. `validateDefinition` only ever checked that it
-// *compiled*, which lets `(a+)+$` through: against a long non-matching string
-// that backtracks exponentially, and Bun runs one JS thread, so a single save
-// wedges the whole instance. It does not need a malicious admin either — Inky
-// proposes content types, and a proposal is approved by someone reading the
-// summary rather than the regex.
-//
-// JavaScript has no way to time a regex out, so the check has to happen before
-// the pattern is stored. This is the star-height heuristic: a quantifier applied
-// to a group that itself quantifies or alternates is the shape that blows up.
-// It is a heuristic and says so — it will not catch every pathological pattern,
-// but it catches the family that actually gets written, and the alternative is a
-// dependency on RE2 for a feature most sites never use.
 // The quantifier sitting immediately after a group close. `?` and an exact
 // `{n}` are bounded and stay allowed; `*`, `+`, and any open-ended `{n,}` or
-// `{n,m}` are the ones that multiply out.
-const REPEATS_GROUP = /^\)(?:[*+]|\{\d*,\d*\})/
+// `{n,m}` are the ones that multiply out. Sticky so the scan can test in place
+// rather than slicing a fresh substring at every closing paren.
+const REPEATS_GROUP = /\)(?:[*+]|\{\d*,\d*\})/y
 
-export const unsafePattern = (pattern: string): string | null => {
+// The same question asked of a group's *contents*, and deliberately not the
+// same regex: a bounded repeat inside a group stays linear, so `(ab){3}` is
+// fine while `(a{1,}){2,}` is not. Alternation counts because `(a|a)*` is the
+// other classic shape.
+const REPEATS_INTERNALLY = /[*+]|\{\d*,\}|\|/
+
+// A field's `pattern` is a regex somebody typed into the content-type editor,
+// and it runs against entry data on every save — so it is attacker-adjacent in
+// a way a hardcoded regex is not. Checking only that it *compiled* lets
+// `(a+)+$` through: against a long non-matching string that backtracks
+// exponentially, and Bun runs one JS thread, so a single save wedges the whole
+// instance. It does not need a malicious admin either — Inky proposes content
+// types, and a proposal is approved by someone reading the summary rather than
+// the regex.
+//
+// JavaScript has no way to time a regex out, so the check has to happen before
+// the pattern is ever run. This is the star-height heuristic: a quantifier
+// applied to a group that itself quantifies or alternates is the shape that
+// blows up. It is a heuristic and says so — it will not catch every
+// pathological pattern, but it catches the family that actually gets written,
+// and the alternative is a dependency on RE2 for a feature most sites never
+// use.
+const unsafePattern = (pattern: string): string | null => {
   if (pattern.length > 200) return "is too long — keep a field pattern under 200 characters"
 
-  // Only groups that can repeat internally matter; `(abc)+` is linear.
-  let depth = 0
+  // Only groups that can repeat internally matter; `(abc)+` is linear. The
+  // stack doubles as the balance check — a `)` with nothing open, or an unclosed
+  // `(` left at the end, is unbalanced.
   const opens: number[] = []
   for (let index = 0; index < pattern.length; index += 1) {
     const char = pattern[index]
@@ -96,33 +105,51 @@ export const unsafePattern = (pattern: string): string | null => {
     }
     if (char === "(") {
       opens.push(index)
-      depth += 1
-    } else if (char === ")") {
-      depth -= 1
-      const start = opens.pop()
-      if (start === undefined) continue
-      if (!REPEATS_GROUP.test(pattern.slice(index))) continue
-      const inner = pattern.slice(start + 1, index)
-      if (/[*+]|\{\d*,\}|\|/.test(inner)) {
-        return "repeats a group that already repeats, which can hang on some inputs — simplify it"
-      }
+      continue
+    }
+    if (char !== ")") continue
+    const start = opens.pop()
+    if (start === undefined) return "has unbalanced parentheses"
+    REPEATS_GROUP.lastIndex = index
+    if (!REPEATS_GROUP.test(pattern)) continue
+    if (REPEATS_INTERNALLY.test(pattern.slice(start + 1, index))) {
+      return "repeats a group that already repeats, which can hang on some inputs — simplify it"
     }
   }
-  if (depth !== 0) return "has unbalanced parentheses"
-  return null
+  return opens.length > 0 ? "has unbalanced parentheses" : null
 }
 
-// Compiled patterns are cached: `validate` runs per field per save, and
-// rebuilding the same RegExp for every entry in a bulk publish is work nobody
-// asked for. Bounded so a site with many types cannot grow it without limit.
-const compiled = new Map<string, RegExp>()
+// Every pattern that reaches a match goes through here, and that is the point:
+// `validateDefinition` is not the only way one gets stored. A plugin declares
+// content types through `upsertOwned`, which never sees the admin's validation,
+// and rows written before this check existed are still on disk. Refusing at the
+// point of compilation is the only gate all of those pass through.
+//
+// The *verdict* is memoised rather than just the RegExp. JSC already caches
+// compiled sources, so holding the object saves ~24ns — not worth a Map — while
+// re-running the scan for every entry in a bulk publish is the cost worth
+// avoiding. A refusal is cached too, so a bad pattern is judged once.
+const verdicts = new Map<string, RegExp | null>()
 
-const patternFor = (source: string): RegExp => {
-  const held = compiled.get(source)
-  if (held) return held
-  const built = new RegExp(source)
-  if (compiled.size > 500) compiled.clear()
-  compiled.set(source, built)
+const patternFor = (source: string): RegExp | null => {
+  const held = verdicts.get(source)
+  if (held !== undefined) return held
+
+  let built: RegExp | null = null
+  if (!unsafePattern(source)) {
+    try {
+      built = new RegExp(source)
+    } catch {
+      // A stored pattern that does not compile is refused like an unsafe one.
+      // Throwing here would turn one bad definition into a 500 on every save.
+      built = null
+    }
+  }
+
+  // Never cleared on overflow: clearing makes every later lookup miss,
+  // recompile, and re-seed, which measures slower than not caching at all. Past
+  // the bound we simply stop memoising.
+  if (verdicts.size <= 500) verdicts.set(source, built)
   return built
 }
 
@@ -135,7 +162,13 @@ const str = (max: number): Handler => ({
     if (field.min !== undefined && value.length < field.min) return err(`must be at least ${field.min} characters`)
     // Length is checked first on purpose: backtracking cost grows with the
     // input, so an oversized value is refused before any pattern touches it.
-    if (field.pattern && !patternFor(field.pattern).test(value)) return err("does not match the required format")
+    // That is not the real defence though — `field.max` reaches 500,000 on
+    // richtext — so `patternFor` refusing outright is what bounds the cost.
+    if (field.pattern) {
+      const rule = patternFor(field.pattern)
+      if (!rule) return err("has a pattern that cannot be used — fix the content type")
+      if (!rule.test(value)) return err("does not match the required format")
+    }
     return value
   },
 })
@@ -377,8 +410,9 @@ export const validateDefinition = (fields: unknown): { readonly ok: true } | { r
       } catch {
         return { ok: false, error: `field "${field.key}" has an invalid pattern` }
       }
-      // Refused at author time rather than at every save, because by save time
-      // there is nothing to do about it but hang.
+      // `patternFor` refuses these anyway, at every path that can run one. This
+      // is here for the message: told at author time, the person who typed the
+      // regex can fix it, which is not true of an error on someone else's save.
       const unsafe = unsafePattern(field.pattern)
       if (unsafe) return { ok: false, error: `field "${field.key}" has a pattern that ${unsafe}` }
     }

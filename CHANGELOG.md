@@ -9,6 +9,30 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## Unreleased
+
+### Fixed
+
+- **A dangerous field pattern is now refused wherever it runs, not only in the
+  editor.** 1.5.1 checked the pattern when a content type was *saved*, which is
+  one of the ways a pattern gets stored — a plugin declares content types
+  straight into the table, and rows written before 1.5.1 were never checked at
+  all. Either way the regex still reached entry data on every save. The refusal
+  now happens where the pattern is compiled, so all three paths are covered with
+  no migration to run. A field whose pattern is refused fails validation with a
+  message saying so instead of hanging, and a stored pattern that no longer
+  compiles is a field error rather than a 500.
+
+### Changed
+
+- **`createInkling()` returns `serveOptions` for an embedding host to spread into
+  `Bun.serve`.** It carries `maxRequestBodySize` — which 1.5.1 asked hosts to
+  compute themselves from `config.maxUploadBytes` — and `idleTimeout`, which the
+  examples had never mentioned. Both are values Inkling should decide rather than
+  ask a host to remember, for the same reason `withSecurityHeaders` is applied
+  inside `createInkling()`. Existing embedders need no change: setting the option
+  by hand still works, and spreading `serveOptions` after it wins.
+
 ## 1.5.1 — 2026-08-17
 
 Two more from the same audit pass, both denial of service by an authenticated
