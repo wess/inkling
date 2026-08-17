@@ -10,7 +10,11 @@ import { body, optionalText, requireText } from "../http/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
 import { siteSettings } from "../settings/index.ts"
 import type { ResolvedCredential } from "./complete.ts"
-import { readable } from "./complete.ts"
+// Betas and fallbacks are decided once, in complete.ts, because they are
+// properties of the credential and the model rather than of a call site — and
+// because the copy that lived here drifted into sending `fallbacks` to models
+// that reject it.
+import { betasFor, fallbackFor, readable } from "./complete.ts"
 import { resolveCredential } from "./index.ts"
 import type { ProviderName } from "./providers.ts"
 import { endpointFor } from "./providers.ts"
@@ -73,17 +77,10 @@ const compatibleConfig = (credential: ResolvedCredential) => ({
   baseUrl: endpointFor(credential.provider, credential.baseUrl),
 })
 
-const FALLBACK_BETA = "server-side-fallback-2026-06-01"
-const OAUTH_BETA = "oauth-2025-04-20"
-const FALLBACKS = [{ model: "claude-opus-4-8" }]
-
 const clientFor = (credential: ResolvedCredential) =>
   credential.authKind === "oauth"
     ? new Anthropic({ authToken: credential.secret })
     : new Anthropic({ apiKey: credential.secret })
-
-const betasFor = (credential: ResolvedCredential): string[] =>
-  credential.authKind === "oauth" ? [FALLBACK_BETA, OAUTH_BETA] : [FALLBACK_BETA]
 
 const systemFor = async (db: Connection, editor: string): Promise<string> => {
   const settings = await siteSettings(db).catch(() => ({}) as Record<string, unknown>)
@@ -276,7 +273,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
       model: run.credential.model,
       max_tokens: 32_000,
       betas: betasFor(run.credential),
-      fallbacks: FALLBACKS,
+      ...fallbackFor(run.credential.model),
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system,

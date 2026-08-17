@@ -260,3 +260,84 @@ test("with nothing connected the assistant reads as off rather than broken", asy
   expect(await resolveCredential(db)).toBeNull()
   await db.close()
 })
+
+// A Claude endpoint that records what it was asked, so the request itself can be
+// asserted on. The response is the smallest well-formed message the SDK accepts.
+const recordingClaude = () => {
+  const seen: { body: Record<string, unknown>; betas: string | null }[] = []
+  const server = Bun.serve({
+    port: 0,
+    fetch: async request => {
+      seen.push({
+        body: (await request.json()) as Record<string, unknown>,
+        betas: request.headers.get("anthropic-beta"),
+      })
+      return new Response(
+        JSON.stringify({
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-5",
+          content: [{ type: "text", text: "OK" }],
+          stop_reason: "end_turn",
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+        { headers: { "content-type": "application/json" } },
+      )
+    },
+  })
+  return { seen, server }
+}
+
+test("`fallbacks` is sent only to the models that accept it", async () => {
+  // Reported from the field: every Claude connection failed its test with
+  // `400 'claude-sonnet-5' does not support the 'fallbacks' parameter`, and the
+  // assistant failed the same way, because the parameter went out on every
+  // request. Only the models carrying safety classifiers can decline, so only
+  // they publish an `allowed_fallback_models` list and take the parameter —
+  // and Sonnet 5 is the default model here, so the default connection was the
+  // one that could not work.
+  const { seen, server } = recordingClaude()
+  const previous = process.env.ANTHROPIC_BASE_URL
+  process.env.ANTHROPIC_BASE_URL = `http://localhost:${server.port}`
+
+  try {
+    const { db, call, admin } = await setup()
+
+    const connect = async (model: string) =>
+      (
+        (await (
+          await call("/ai/credentials", admin, {
+            method: "POST",
+            body: JSON.stringify({ provider: "anthropic", key: "sk-ant-notarealkey-abcd", model }),
+          })
+        ).json()) as { id: string }
+      ).id
+
+    const sonnet = await connect("claude-sonnet-5")
+    const passed = (await (await call(`/ai/credentials/${sonnet}/test`, admin, { method: "POST" })).json()) as {
+      ok: boolean
+      error?: string
+    }
+
+    // The test passes because the request the model rejects is no longer sent.
+    expect(passed.ok).toBe(true)
+    expect(seen[0]?.body.fallbacks).toBeUndefined()
+    // The beta rides with the parameter, so it goes too.
+    expect(seen[0]?.betas ?? "").not.toContain("server-side-fallback")
+
+    // A model that does refuse still gets its fallback, which is the whole
+    // point of the parameter — gating it must not quietly turn it off.
+    const opus = await connect("claude-opus-5")
+    await call(`/ai/credentials/${opus}/test`, admin, { method: "POST" })
+    expect(seen[1]?.body.fallbacks).toEqual([{ model: "claude-opus-4-8" }])
+    expect(seen[1]?.betas ?? "").toContain("server-side-fallback")
+
+    await db.close()
+  } finally {
+    if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL
+    else process.env.ANTHROPIC_BASE_URL = previous
+    server.stop()
+  }
+})

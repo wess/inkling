@@ -13,6 +13,22 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ### Fixed
 
+- **Claude connections work again.** Every Claude request carried the
+  `fallbacks` parameter, which the API accepts only from the models that can
+  refuse in the first place — Fable 5 and Opus 5, the ones with safety
+  classifiers. Anything else answers with
+  `400 'claude-sonnet-5' does not support the 'fallbacks' parameter`, and Sonnet
+  5 is the default model, so the default connection was the one that could not
+  work: the connection test, the editorial rewrites and Inky all failed the same
+  way. The parameter and its beta header are now sent only to the models that
+  take them; a model that does refuse still gets its fallback.
+- **A connection test no longer fails a reasoning model for thinking.** The test
+  asks for one word and used to allow sixteen tokens for it, which is right for
+  a model that answers immediately and wrong for one that reasons first: the
+  budget is spent before the answer starts, and the reply comes back a
+  well-formed 200 with no text in it. The admin then reported that the provider
+  "returned no text" and pointed at the model name, which was fine. Seen on
+  Ollama Cloud's hosted reasoning models.
 - **A dangerous field pattern is now refused wherever it runs, not only in the
   editor.** 1.5.1 checked the pattern when a content type was *saved*, which is
   one of the ways a pattern gets stored — a plugin declares content types

@@ -46,6 +46,26 @@ export type Completion = {
 const FALLBACK_BETA = "server-side-fallback-2026-06-01"
 const FALLBACKS = [{ model: "claude-opus-4-8" }]
 
+// ...but only on the models that can refuse in the first place. Classifier
+// declines are a property of Fable 5 and Opus 5, so they are the only models
+// that publish an `allowed_fallback_models` list, and the only ones the API will
+// accept `fallbacks` for at all. Every other model answers the parameter with a
+// 400 that names it — `'claude-sonnet-5' does not support the 'fallbacks'
+// parameter` — which fails the whole call. Sonnet 5 is this admin's default
+// model, so sending it unconditionally took every Claude connection down: the
+// assistant, the editorial rewrites, and the connection test alike.
+//
+// Prefix-matched because a pinned build (`claude-opus-5-20260514`) and an alias
+// (`claude-opus-5-latest`) are the same model, and the field takes either. A
+// model that gains classifiers later gets no fallback until it is named here,
+// which loses the retry rather than the request.
+const CLASSIFIER_MODELS = /^claude-(opus-5|fable-5)/
+
+export const fallbackReady = (model: string): boolean => CLASSIFIER_MODELS.test(model)
+
+// The fallback half of a Claude request, present only when the model takes it.
+export const fallbackFor = (model: string) => (fallbackReady(model) ? { fallbacks: FALLBACKS } : {})
+
 // An OAuth access token is not an API key: it goes on `Authorization: Bearer`,
 // and the endpoint only honours it when the request also opts in to the OAuth
 // beta. Both are properties of the credential, so both are decided here rather
@@ -70,8 +90,13 @@ const claudeClient = (credential: ResolvedCredential) =>
     ? new Anthropic({ authToken: credential.secret })
     : new Anthropic({ apiKey: credential.secret })
 
-const betasFor = (credential: ResolvedCredential): string[] =>
-  credential.authKind === "oauth" ? [FALLBACK_BETA, OAUTH_BETA] : [FALLBACK_BETA]
+// Only the betas this request actually uses. The fallback beta rides with the
+// `fallbacks` parameter and is dropped with it, so a Sonnet request opts into
+// nothing it does not send.
+export const betasFor = (credential: ResolvedCredential): string[] => [
+  ...(fallbackReady(credential.model) ? [FALLBACK_BETA] : []),
+  ...(credential.authKind === "oauth" ? [OAUTH_BETA] : []),
+]
 
 export const complete = async (credential: ResolvedCredential, request: CompletionRequest): Promise<Completion> => {
   const maxTokens = request.maxTokens ?? 16_000
@@ -81,7 +106,7 @@ export const complete = async (credential: ResolvedCredential, request: Completi
       model: credential.model,
       max_tokens: maxTokens,
       betas: betasFor(credential),
-      fallbacks: FALLBACKS,
+      ...fallbackFor(credential.model),
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       system: request.system,
@@ -141,7 +166,7 @@ export async function* completeStream(
       model: credential.model,
       max_tokens: maxTokens,
       betas: betasFor(credential),
-      fallbacks: FALLBACKS,
+      ...fallbackFor(credential.model),
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       system: request.system,

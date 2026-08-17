@@ -435,7 +435,16 @@ export const aiRoutes = (db: Connection): Route[] => {
           const result = await complete(credential, {
             system: "Reply with the single word OK.",
             prompt: "Reply with the single word OK.",
-            maxTokens: 16,
+            // Room to think before answering. A one-word reply needs one token,
+            // and 16 was sized for that — but a reasoning model spends its
+            // budget on reasoning first and only then writes the answer, so a
+            // budget that fits the answer and nothing else is spent before a
+            // single character of it is produced. The response comes back a
+            // well-formed 200 with an empty `content`, which reads here as "the
+            // provider returned no text" and sends the operator off to check a
+            // model name that was right all along. Cheap either way: a model
+            // that does not think still stops after "OK".
+            maxTokens: 512,
           })
           // Three outcomes, and they used to collapse into one. `refused` is set
           // only by Claude's safety classifiers, so on every other provider a
@@ -452,7 +461,7 @@ export const aiRoutes = (db: Connection): Route[] => {
               ? "The model declined this request."
               : answered
                 ? undefined
-                : `${spec.label} accepted the request but returned no text. The usual cause is the model: check that "${row.model}" is one your account can actually use, and that it is a chat model rather than an embedding or vision-only one.`,
+                : `${spec.label} accepted the request but returned no text. The usual cause is the model: check that "${row.model}" is one your account can actually use, that it is a chat model rather than an embedding or vision-only one, and — if it is a reasoning model — that it answers rather than only thinking.`,
           })
         } catch (error) {
           // The provider's message is the useful part (bad key, no quota, host
