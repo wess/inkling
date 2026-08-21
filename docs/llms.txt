@@ -127,12 +127,14 @@ never in `settings`, and are never returned by the API.
 - `POST /ai/assist` — editorial assistant, SSE. Intents: `draft`, `rewrite`,
   `shorten`, `expand`, `summarize`, `titles`, `seo`, `translate`, `ask`.
 - `POST /ai/agent` — the agent, named **Inky** (`src/ai/agent.ts`), a tool loop
-  over `src/ai/tools.ts`, streamed over SSE. Holds no server-side state: the
+  over `src/ai/tools/`, streamed over SSE. Holds no server-side state: the
   transcript rides back and forth with the browser and is refused, not
   truncated, when it outgrows its cap. Runs on any of the four providers: two
   wire formats, Claude's own and OpenAI's, with Ollama taking the OpenAI path
   because it serves a compatible `/v1` endpoint locally and as Ollama Cloud (separate entries; the cloud one has a fixed endpoint so no URL can be mistyped). It
-  reaches entries, content types, media, site settings, and menus. Its system
+  reaches entries, content types, media, categories, menus, site settings,
+  plugins, people, delivery keys, webhooks, and the social setup — 38 tools, of
+  which 13 read, 24 propose, and one (`open_screen`) moves the admin. Its system
   prompt is most of the feature: it assumes a non-technical asker, translates
   outcomes into model changes, and states the boundary that Inkling stores
   content and does not render the site — so colours, fonts, and layout are the
@@ -142,6 +144,22 @@ never in `settings`, and are never returned by the API.
   `src/web/app.tsx`); `describe(route, types)` turns the current route into one
   sentence of context that rides along with the question, which is why "make
   this shorter" resolves without the user naming the entry.
+  **Every tool is a read.** A `propose_*` tool records an intention; the admin
+  renders a diff and applies it through the ordinary admin route, so there is one
+  write path and the history names the person who approved it.
+  **The list is filtered by role.** Each tool declares the capability its
+  proposal needs at apply time, `toolsFor(role)` drops what the asker could not
+  apply, and each proposal carries its scope so the panel can grey one card.
+  `POST /ai/agent/status` returns `{ configured, supported, provider, model,
+  mayUse, scopes }`.
+  **Setup guidance is a first-class job**, especially social: `get_social_setup`
+  reports app / credentials / connected account per network with the exact
+  redirect URI, and `get_social_guide` hands over `src/social/guides.ts` so Inky
+  can walk someone through a developer console. Inky is told to ask for a client
+  ID but never a client secret; the admin masks one in the diff if it arrives.
+  Four things need a person and are reached with `open_screen` rather than
+  described: uploading a file, creating an account, pressing Connect, pasting a
+  secret.
 - `POST /ext/assistant/ask` — the optional public assistant (a plugin), answering
   from published content only, grounded in the page the visitor is on. Requires
   an API key, for a site relaying its own visitors' questions server-side.

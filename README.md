@@ -81,8 +81,10 @@ database of its own.
 - **An editorial assistant** — drafting, rewriting, summarizing, titles, and
   metadata that know your content model, on the fields where you are already
   working. Connect it with an API key or by authorizing an account over OAuth
-- **[Inky](#inky)**, an agent with the run of the site, and a **visitor bubble**
-  for your public pages. Both optional, both off until you connect a provider
+- **[Inky](#inky)**, an agent with the run of the site — pages, models, media,
+  navigation, categories, people, keys, plugins, and social setup — and a
+  **visitor bubble** for your public pages. Both optional, both off until you
+  connect a provider
 - **Webhooks** on content events, HMAC-signed
 - **Activity history** for sign-ins, edits, publishing, and media changes
 - **Plugins** that add content types, routes, settings, admin panels, and their
@@ -101,8 +103,9 @@ returned by the API.
 
 It is built for the person who did *not* build the site. You describe what you
 want the way you would say it out loud, and Inky works out whether that is a
-change to what a page says, to what a page is made of, to your navigation, or to
-your site details:
+change to what a page says, to what a page is made of, to your navigation, your
+categories, your site details, who has an account, or a network you are trying
+to connect for the first time:
 
 ```
 you   We need a page about our new roastery, and put it in the menu.
@@ -113,17 +116,42 @@ inky  read  your page shapes … 3 kinds
       queued   a menu item under Visit
 
       Both are waiting for you to look at. Nothing is live yet.
+
+you   I want to start posting these to Instagram.
+
+inky  read  your social setup … no app registered for Instagram
+      Instagram goes through a Facebook app, which is the part that
+      catches everyone out. I will walk you through it — first, are you
+      an admin of the Facebook Page the account is linked to?
 ```
 
 Because the dock travels with you, "make this shorter" on an open post has no
 ambiguity about *this* — the screen you are on is handed over with the question.
+And it moves you: ask how to start posting to Instagram and you end up on the
+right screen with the next step said in one sentence, rather than reading
+directions to it.
 
-**Every tool it has is a read.** Inky has thirteen tools: six read your site, and
-seven record a *proposal*. None of them writes, and no setting makes them able
-to. The admin renders a proposal as a diff, and applying it sends the change
-through the same route your own edit takes — so revisions, field validation, slug
-uniqueness, reference checks, and the audit trail all keep working, and the
-history names the person who approved it rather than a machine nobody can ask.
+**Every tool it has is a read.** Inky has thirty-eight tools: thirteen read your
+site, twenty-four record a *proposal*, and one moves the admin. None of them
+writes, and no setting makes them able to. The admin renders a proposal as a
+diff, and applying it sends the change through the same route your own edit takes
+— so revisions, field validation, slug uniqueness, reference checks, and the
+audit trail all keep working, and the history names the person who approved it
+rather than a machine nobody can ask.
+
+**What it is offered depends on who is asking.** Each tool names the permission
+its proposal will need, and the list is filtered to what your role could actually
+apply — so an author is never shown the site settings and never queues a change
+that dead-ends on a greyed button.
+
+Setting things up is half of what it is for. Social posting needs a developer app
+registered with the network, its client ID and secret saved here, and an account
+connected — three states, and the usual answer is that one of them is missing.
+Inky reads which, then walks you through that network's console a step at a time,
+in its own words, with the redirect URI quoted exactly. Four things still need
+your hands, and it takes you to them rather than describing the route: uploading
+a file, creating an account, pressing Connect, and pasting a client secret — a
+secret is a password, and Inky is told never to ask you to type one into a chat.
 
 What it will not do is pretend. Inkling stores content; it does not render your
 site. Colours, fonts, spacing, and layout live in your own code, which Inky

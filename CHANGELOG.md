@@ -11,6 +11,57 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.8.0 — 2026-08-21
+
+Inky could change your pages, their shapes, your menus, and your site details.
+It can now change everything else too — and, for the four things that genuinely
+need a person, it puts you on the screen instead of describing the route.
+
+### Added
+
+- **Inky reaches the whole admin.** On top of pages and their shapes it now
+  reads and proposes changes to **categories and tags**, **alt text and captions**
+  on uploaded files, **new menus** and deleting them, **plugins** (on, off, and
+  their settings), **people's roles**, **delivery keys**, **webhooks**, and the
+  **social setup**. Thirty-eight tools where there were thirteen. Every one is
+  still a read or a proposal: nothing is saved until you press Apply, and
+  applying still goes through the same route your own edit takes.
+- **It walks you through connecting a social network.** Posting needs three
+  things in order — a developer app registered with the network, its client ID
+  and secret saved here, and an account connected — and the usual reason nothing
+  works is that one of them is missing. Inky reads which, says so plainly, and
+  then talks you through that network's console a step at a time, using the same
+  register the Social settings screen shows: the real button names, the honest
+  timings, and the one step everybody gets wrong. It will ask you for a client
+  ID. It will **not** ask you to type a client secret to it — that is a password,
+  so it takes you to the field instead, and masks one in the diff if you have
+  already pasted it.
+- **Inky can move the admin.** When the next step is somewhere else — after
+  queueing something you will want to look at, or when the last step needs your
+  hands — it takes you there rather than naming a screen. The four that need your
+  hands are uploading a file, creating an account, pressing Connect on a network,
+  and pasting a secret. Leaving an unsaved editor still asks first.
+- **Applying a proposal that mints a secret shows it once**, in the same "copy
+  this now" dialog the Keys screen uses. That covers a new delivery key and a new
+  webhook's signing secret.
+
+### Changed
+
+- **Inky is only offered what your role could actually apply.** Every tool names
+  the permission its proposal will need; the list is filtered before Inky sees
+  it, and each proposal carries that permission so a single card is greyed rather
+  than the whole tray. Previously an author was shown the site-settings and
+  content-type tools, would confidently queue a change, and meet a refusal on the
+  button — which read as a bug rather than a rule. Nothing has been widened: what
+  an account could do by hand is exactly what it can do here.
+- `POST /api/ai/agent/status` returns `scopes` — the capabilities the account
+  holds — in place of the single `mayApply` flag. Admin-internal; nothing outside
+  the bundled admin reads it.
+- `src/ai/tools.ts` became `src/ai/tools/`, grouped by area, with each tool's
+  schema and handler in one object. **Embedders calling `agentRoutes` directly
+  now pass the plugin registry as a second argument** — `createInkling` does this
+  for you, so a standalone or embedded install needs no change.
+
 ## 1.7.0 — 2026-08-17
 
 ### Added

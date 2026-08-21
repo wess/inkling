@@ -388,17 +388,20 @@ told to treat it as material, never as instructions: an entry whose body says
 "ignore your instructions" is a string an editor typed.
 
 **The agent is named Inky** (`POST /ai/agent`, `src/ai/agent.ts`) and is the
-assistant given the run of the site rather than one field: it lists content
-types, reads entries, media, settings, and menus, works out which page you meant,
-and comes back with changes. It is a tool loop over `src/ai/tools.ts`, streamed
-over SSE so the tool trace is visible as it happens, and it holds no server-side
-state — the transcript rides back and forth with the browser, which is refused
-rather than truncated when it outgrows its cap.
+assistant given the run of the site rather than one field. It reads content
+types, entries, media, categories, menus, site settings, plugins, people,
+delivery keys, webhooks, and the social setup; it works out which page — or
+which missing piece of setup — you meant; and it comes back with changes. It is
+a tool loop over `src/ai/tools/`, streamed over SSE so the tool trace is visible
+as it happens, and it holds no server-side state — the transcript rides back and
+forth with the browser, which is refused rather than truncated when it outgrows
+its cap.
 
 The name and the voice are load-bearing rather than decoration. The person asking
 is usually not the person who built the site: they describe an outcome — "we need
-somewhere for customer quotes", "take the old promo off the menu" — and the
-translation into a field on a content type is Inky's job, not theirs. So the
+somewhere for customer quotes", "take the old promo off the menu", "I want to
+post this to Instagram" — and the translation into a field on a content type, or
+into a developer app registered with a network, is Inky's job, not theirs. So the
 system prompt does most of the work here. It states the two kinds of change that
 exist (what a page *says* is an entry; what a page is *made of* is its content
 type), tells Inky to prefer acting over interrogating, and tells it to speak in
@@ -414,18 +417,60 @@ hero say less" is usually what was meant — and to name the rest as belonging t
 whoever builds the site.
 
 **Every tool in that surface is a read.** The agent cannot write, and no flag
-makes it able to: `propose_entry_update`, `propose_entry_create`,
-`propose_type_update`, `propose_settings_update`, and `propose_menu_update`
-record an intention and hand it to the admin, which renders a diff and applies it
-by sending the change through the ordinary admin route — `PUT /api/entries/:id`
-for an entry, and the type, settings, and menu routes for the rest — the
-same route a human edit takes. That keeps one write path in the codebase, so
-revisions, field validation, slug uniqueness, relation checks, hooks, and the
-audit trail all keep working without a second implementation to keep honest, and
-the history names the person who approved the change rather than a machine nobody
-can ask about it. `tests/aiagent.test.ts` asserts the tool list contains nothing
-but reads and proposals, because a write tool added later would otherwise fail
-silently — the first sign would be a published page changing by itself.
+makes it able to: every `propose_*` tool records an intention and hands it to the
+admin, which renders a diff and applies it by sending the change through the
+ordinary admin route — `PUT /api/entries/:id` for an entry, and its own route for
+each of the rest. That keeps one write path in the codebase, so revisions, field
+validation, slug uniqueness, relation checks, hooks, and the audit trail all keep
+working without a second implementation to keep honest, and the history names the
+person who approved the change rather than a machine nobody can ask about it.
+`tests/aiagent.test.ts` asserts the tool list contains nothing but reads,
+proposals, and the one navigation tool, because a write tool added later would
+otherwise fail silently — the first sign would be a published page changing by
+itself.
+
+A tool is its schema and its handler in one object (`src/ai/tools/common.ts#Tool`),
+grouped by area across `content.ts`, `site.ts`, `access.ts`, and `social.ts`. The
+two halves drifted apart when they lived in a spec list and a `switch`, which is
+the argument for the shape.
+
+**The tool list is filtered by the asker's role**, and that is a correctness
+property rather than a courtesy. Each tool declares the capability its proposal
+will need at apply time; `toolsFor(role)` drops the ones the person could not
+apply, and `runTool` refuses a call the model invented anyway. Without it an
+author would be shown `propose_settings_update`, confidently queue a rename, and
+meet a 403 on the button — which reads as a bug rather than as a rule. Each
+proposal also carries the scope it needs, and `POST /ai/agent/status` returns the
+scopes the account holds (`scopesFor` in `src/auth/roles.ts`), so the panel greys
+one card rather than the whole tray and never keeps a second copy of the role
+ladder in the browser.
+
+**One tool is neither a read nor a proposal.** `open_screen` moves the admin, and
+it happens as it is announced rather than waiting for a button — `go()` in the
+SPA already asks about unsaved work, so it is the only mover. It exists because
+four things genuinely need hands: uploading a file, creating an account (a
+password has to be typed), pressing Connect on a social network (a consent screen
+on the network's own domain), and pasting a client secret. For those the honest
+answer is not a sentence naming a screen; it is being on it. The screen names are
+enumerated in `src/ai/tools/index.ts` and mirrored by `routeFor` in the admin, so
+a screen the model invents is refused rather than routed to a blank page.
+
+**Setting things up is half of what Inky is asked**, and the social networks are
+the hard case: posting needs a developer app registered with the network, its
+client ID and secret saved here, and then an account connected — three states,
+and the usual answer is that one of them is missing. `get_social_setup` reports
+all three per network with the exact redirect URI; `get_social_guide` hands over
+the register in `src/social/guides.ts` — the real button names, the honest
+timings, and the one step everybody gets wrong — so Inky can walk somebody
+through a console a step at a time instead of the operator reading prose alone.
+Inky is told to ask for a client ID in conversation but never for a **secret**:
+it is a password, and a chat window sends it further than it needs to go. The
+tool accepts one if it is already in the transcript, because refusing it then
+protects nothing, and the admin masks it in the diff.
+
+Two proposals hand back something that exists exactly once — a delivery key and a
+webhook's signing secret — so applying either opens the same "copy this now"
+modal the Keys screen uses.
 
 Inky runs on any of the three providers, because all three can call tools. What
 differs is the wire format, and there are only two: Claude's own, through the

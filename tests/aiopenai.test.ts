@@ -9,6 +9,7 @@ import { up } from "../src/migrate/index.ts"
 import { aiCredentials, contentTypes, entries } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 import { createUser } from "../src/users/index.ts"
+import { noPlugins } from "./fixtures/registry.ts"
 
 // The OpenAI-shaped loop carries two of the three providers — OpenAI itself, and
 // Ollama, which serves a compatible endpoint locally and as Ollama Cloud. It is a
@@ -155,7 +156,7 @@ const setup = async (baseUrl: string, provider = "openai") => {
 }
 
 const ask = async (db: Awaited<ReturnType<typeof setup>>["db"], token: string, message: string) => {
-  const handle = router(...agentRoutes(db))
+  const handle = router(...agentRoutes(db, noPlugins))
   const response = await handle(
     new Request("http://localhost/ai/agent", {
       method: "POST",
@@ -266,7 +267,7 @@ test("a returned transcript is accepted back, tool results and all", async () =>
   // messages, and the validator has to let that shape back in.
   expect((history as { role: string }[]).some(message => message.role === "tool")).toBe(true)
 
-  const handle = router(...agentRoutes(db))
+  const handle = router(...agentRoutes(db, noPlugins))
   const again = await handle(
     new Request("http://localhost/ai/agent", {
       method: "POST",

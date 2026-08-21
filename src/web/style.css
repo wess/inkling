@@ -2152,7 +2152,12 @@ tbody tr.click:hover {
   padding: 12px;
   overflow-y: auto;
 }
+/* The whole dock body scrolls, so the log sizes to its content rather than
+   being squeezed by whatever is below it. Left flexible, a turn with three
+   proposals under it collapses to a single clipped line — which is the answer
+   nobody gets to read. */
 .dock .agentlog {
+  flex: none;
   min-height: 0;
   max-height: none;
 }

@@ -353,8 +353,10 @@ GET /content/post/hello</pre></div>
 
     <p>
       Inky is the assistant given the run of the site rather than one field. It
-      reads your types, entries, media, site details, and menus, works out which
-      page you meant, and comes back with changes.
+      reads your page shapes, your pages, your media, your categories, your
+      navigation, your site details, your plugins, your people, your delivery
+      keys and webhooks, and your social setup — works out which page, or which
+      missing piece of setup, you meant — and comes back with changes.
     </p>
 
     <p>
@@ -369,9 +371,9 @@ GET /content/post/hello</pre></div>
       It is built for the person who did <em>not</em> build the site. You describe
       what you want in ordinary words — "we need somewhere to put customer
       quotes", "take the old promo off the menu", "the homepage opening is too
-      long" — and Inky works out whether that is a change to what a page says, to
-      what a page is made of, to your navigation, or to your site details, and
-      proposes it. It talks in pages and sections rather than entries and fields.
+      long", "I want to post this to Instagram" — and Inky works out what that
+      means here and proposes it. It talks in pages and sections rather than
+      entries and fields.
     </p>
 
     <table class="table">
@@ -382,8 +384,50 @@ GET /content/post/hello</pre></div>
         <tr><td>"We need a page for returns"</td><td>A new draft, written to match your other pages.</td></tr>
         <tr><td>"Drop the promo from the menu"</td><td>Your navigation.</td></tr>
         <tr><td>"Rename the site"</td><td>Your site title, tagline, description, logo, or social image.</td></tr>
+        <tr><td>"File this under Announcements"</td><td>Your categories and tags, and which ones a page carries.</td></tr>
+        <tr><td>"Describe this photo for screen readers"</td><td>The alt text on a file already uploaded.</td></tr>
+        <tr><td>"Our new designer needs to publish"</td><td>Somebody's role — never above your own.</td></tr>
+        <tr><td>"The marketing site needs to read our blog"</td><td>A delivery key, scoped to the types you name. Shown once.</td></tr>
+        <tr><td>"Help me post to Instagram"</td><td>Reads which of the three setup steps is missing, then walks you through that network's console.</td></tr>
+        <tr><td>"Where do I upload a logo?"</td><td>Nothing — it takes you to the media library instead of describing the route.</td></tr>
       </tbody>
     </table>
+
+    <h3>Setting things up</h3>
+
+    <p>
+      Half of what Inky is asked is not a change to content at all — it is
+      somebody trying to get something working for the first time, stuck on a
+      console built for people who write software for a living. Social posting is
+      the hard case, and it needs three things in order: a <b>developer app</b>
+      registered with the network, its <b>client ID and secret</b> saved here, and
+      then an <b>account connected</b> by pressing Connect. Inky reads which of
+      the three is missing and says so plainly, then walks you through that
+      network's console a step at a time — the real button names, the honest
+      timing, and the one step everybody gets wrong — waiting for you at each one
+      rather than pasting a wall of instructions.
+    </p>
+
+    <div class="note warn">
+      <b>Inky will never ask you to type a secret</b>
+      <p>
+        A client ID is fine to say in conversation. A client <em>secret</em> is a
+        password, and a chat window carries it further than it needs to go — so
+        Inky takes you to the field on <b>Social → Settings</b> and lets you paste
+        it there. If you have already pasted one into the chat it will use it
+        rather than making you do it twice, and the diff masks it.
+      </p>
+    </div>
+
+    <h3>What still needs your hands</h3>
+
+    <p>
+      Four things, and Inky takes you to the screen rather than describing the
+      route: <b>uploading a file</b>, <b>creating an account</b> (a password has
+      to be typed), <b>pressing Connect</b> on a social network (the consent
+      screen is on the network's own domain), and <b>pasting a client secret</b>.
+      Everything else it can propose.
+    </p>
 
     <div class="note warn">
       <b>What Inky cannot do</b>
@@ -405,7 +449,19 @@ GET /content/post/hello</pre></div>
         change through the same route a human edit takes. So revisions, field
         validation, slug uniqueness, relation checks, and the audit trail all keep
         working, and the history names the person who approved the change rather
-        than a machine nobody can ask about it.
+        than a machine nobody can ask about it. The one exception acts rather than
+        proposes, and changes nothing: moving you to a screen.
+      </p>
+    </div>
+
+    <div class="note">
+      <b>It is only offered what your role could apply</b>
+      <p>
+        Every tool names the permission its proposal will need, and the list is
+        filtered before Inky ever sees it. An author is not shown the site
+        settings, an editor is not shown delivery keys, and neither is left
+        confidently queueing a change that dead-ends on a greyed button. If one
+        does appear greyed, it is a change somebody more senior has to apply.
       </p>
     </div>
 

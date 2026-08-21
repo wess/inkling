@@ -189,7 +189,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...previewRoutes(db),
       ...aiRoutes(db),
       ...assistantRoutes(db),
-      ...agentRoutes(db),
+      ...agentRoutes(db, registry),
       ...socialRoutes(db, store, hooks),
       ...realtime.routes,
       ...pluginRoutes(db, hooks, registry, pluginDir),

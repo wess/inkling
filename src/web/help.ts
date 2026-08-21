@@ -452,6 +452,22 @@ const ENTRIES = {
       "Inky needs a model that can use tools; the writing tools do not. A cheaper model is usually fine for rewriting a paragraph.",
   },
 
+  "ai.inky": {
+    title: "Proposed changes",
+    what: "Inky never saves anything itself. Everything it works out is queued here as a before-and-after for you to read, and it only happens when you press Apply.",
+    example:
+      'Ask for "a page about our new roastery, and put it in the menu" and you get two cards: the drafted page, and the menu item. Apply either, both, or neither.',
+    careful:
+      "Applying is the same save you would make by hand, so it is checked the same way, recorded in Activity under your name, and — for a page — leaves a version you can go back to. A card greyed out is one your role cannot make; ask an admin.",
+  },
+
+  "ai.reach": {
+    title: "What Inky can change",
+    what: "Your pages and what they say, the shape those pages take, your navigation, your categories, your files' descriptions, your site details, who has an account, your delivery keys and webhooks, your plugins, and your social setup. It can also take you to any screen here.",
+    careful:
+      "Four things need your own hands and Inky will take you to them instead: uploading a file, creating an account, pressing Connect on a social network, and pasting a client secret. It will never ask you to type a secret to it — paste those into the field on the Social settings screen.",
+  },
+
   "ai.baseUrl": {
     title: "Base URL",
     what: "Where to reach the model, if it is not where that provider normally lives.",

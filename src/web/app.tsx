@@ -67,6 +67,7 @@ import type {
   PluginPanel,
   PluginStatsPayload,
   SocialAccount,
+  SocialAppInput,
   SocialNetwork,
   SocialOverview,
   SocialPost,
@@ -6201,107 +6202,266 @@ const brief = (value: unknown, length = 220): string => {
 
 type Change = { key: string; before: unknown; after: unknown }
 
-// What the editor is being asked to approve, flattened out of whichever shape
+const labelsOf = (raw: unknown): string => {
+  const walk = (nodes: unknown): string[] =>
+    Array.isArray(nodes)
+      ? nodes.flatMap(node => {
+          const item = node as { label?: unknown; children?: unknown }
+          const children = walk(item.children)
+          const own = String(item.label ?? "?")
+          return children.length > 0 ? [`${own} (${children.join(", ")})`] : [own]
+        })
+      : []
+  return walk(raw).join(" · ") || "nothing"
+}
+
+const keysOf = (raw: unknown): string[] =>
+  Array.isArray(raw) ? raw.map(field => String((field as { key?: unknown }).key ?? "?")) : []
+
+// A client secret is a password. It has already reached the model to get this
+// far, but it should not also be sitting in a diff on a shared screen.
+const SECRET_KEYS = new Set(["clientSecret", "secret", "password"])
+
+const patchRows = (patch: Record<string, unknown>, before: Record<string, unknown> = {}): Change[] =>
+  Object.entries(patch).map(([key, after]) => ({
+    key,
+    before: SECRET_KEYS.has(key) ? "—" : (before[key] ?? null),
+    after: SECRET_KEYS.has(key) ? "•••••• (kept out of this diff)" : after,
+  }))
+
+// What the person is being asked to approve, flattened out of whichever shape
 // the proposal took. A content-model change is described by its field keys
 // rather than its JSON, because "adds `subtitle`, drops `kicker`" is the part
-// that decides whether the change is safe.
+// that decides whether the change is safe — and the same reasoning drives every
+// case below: show the consequence, not the payload.
 const changesIn = (proposal: AgentProposal): Change[] => {
-  if (proposal.kind === "entry.create") {
-    const data = (proposal.payload.data ?? {}) as Record<string, unknown>
-    return [
-      { key: "title", before: null, after: proposal.payload.title },
-      ...Object.entries(data).map(([key, after]) => ({ key, before: null, after })),
-    ]
-  }
-
-  if (proposal.kind === "type.update") {
-    const keysOf = (raw: unknown): string[] =>
-      Array.isArray(raw) ? raw.map(field => String((field as { key?: unknown }).key ?? "?")) : []
-    const before = keysOf(proposal.before.fields)
-    const after = keysOf(proposal.patch.fields)
-    return [
-      { key: "added", before: null, after: after.filter(key => !before.includes(key)).join(", ") || "nothing" },
-      { key: "removed", before: null, after: before.filter(key => !after.includes(key)).join(", ") || "nothing" },
-      { key: "order", before: before.join(" → "), after: after.join(" → ") },
-    ]
-  }
-
-  if (proposal.kind === "type.create") {
-    const fields = Array.isArray(proposal.payload.fields) ? proposal.payload.fields : []
-    return [
-      { key: "name", before: null, after: proposal.payload.name },
-      { key: "label", before: null, after: proposal.payload.label },
-      { key: "kind", before: null, after: proposal.payload.kind },
-      {
-        key: "sections",
-        before: null,
-        after: fields.map((f: unknown) => String((f as { key?: unknown }).key ?? "?")).join(", ") || "none",
-      },
-    ]
-  }
-
-  if (proposal.kind === "entry.status") {
-    return [{ key: "status", before: proposal.from, after: proposal.to }]
-  }
-
-  if (proposal.kind === "settings.update") {
-    return Object.entries(proposal.patch).map(([key, after]) => ({
-      key,
-      before: proposal.before[key] ?? null,
-      after,
-    }))
-  }
-
-  // A menu is a tree, and a JSON dump of one is unreadable at review time. The
-  // labels in order are what an editor is actually approving.
-  if (proposal.kind === "menu.update") {
-    const labels = (raw: unknown): string => {
-      const walk = (nodes: unknown): string[] =>
-        Array.isArray(nodes)
-          ? nodes.flatMap(node => {
-              const item = node as { label?: unknown; children?: unknown }
-              const children = walk(item.children)
-              const own = String(item.label ?? "?")
-              return children.length > 0 ? [`${own} (${children.join(", ")})`] : [own]
-            })
-          : []
-      return walk(raw).join(" · ") || "nothing"
+  switch (proposal.kind) {
+    case "entry.update": {
+      const data = (proposal.patch.data ?? {}) as Record<string, unknown>
+      const out: Change[] = []
+      if (proposal.patch.title !== undefined) {
+        out.push({ key: "title", before: proposal.before.title, after: proposal.patch.title })
+      }
+      if (proposal.patch.slug !== undefined) {
+        out.push({ key: "slug", before: proposal.before.slug, after: proposal.patch.slug })
+      }
+      for (const [key, after] of Object.entries(data)) out.push({ key, before: proposal.before[key] ?? null, after })
+      return out
     }
-    const out: Change[] = [{ key: "items", before: labels(proposal.before.items), after: labels(proposal.patch.items) }]
-    if (proposal.patch.label !== undefined) {
-      out.unshift({ key: "menu name", before: proposal.before.label, after: proposal.patch.label })
-    }
-    return out
-  }
 
-  const data = (proposal.patch.data ?? {}) as Record<string, unknown>
-  const out: Change[] = []
-  if (proposal.patch.title !== undefined) {
-    out.push({ key: "title", before: proposal.before.title, after: proposal.patch.title })
+    case "entry.create": {
+      const data = (proposal.payload.data ?? {}) as Record<string, unknown>
+      return [
+        { key: "title", before: null, after: proposal.payload.title },
+        ...Object.entries(data).map(([key, after]) => ({ key, before: null, after })),
+      ]
+    }
+
+    case "entry.status":
+      return [{ key: "status", before: proposal.from, after: proposal.to }]
+
+    case "entry.delete":
+      return [{ key: "page", before: proposal.entryTitle, after: "moved to the trash, restorable" }]
+
+    case "entry.terms":
+      return [
+        {
+          key: "filed under",
+          before: proposal.before.join(", ") || "nothing",
+          after: proposal.labels.join(", ") || "nothing",
+        },
+      ]
+
+    case "type.update": {
+      const before = keysOf(proposal.before.fields)
+      const after = keysOf(proposal.patch.fields)
+      return [
+        { key: "added", before: null, after: after.filter(key => !before.includes(key)).join(", ") || "nothing" },
+        { key: "removed", before: null, after: before.filter(key => !after.includes(key)).join(", ") || "nothing" },
+        { key: "order", before: before.join(" → "), after: after.join(" → ") },
+      ]
+    }
+
+    case "type.create":
+      return [
+        { key: "name", before: null, after: proposal.payload.name },
+        { key: "label", before: null, after: proposal.payload.label },
+        { key: "kind", before: null, after: proposal.payload.kind },
+        { key: "sections", before: null, after: keysOf(proposal.payload.fields).join(", ") || "none" },
+      ]
+
+    case "media.update":
+      return patchRows(proposal.patch, proposal.before)
+
+    case "taxonomy.create":
+      return [
+        { key: "label", before: null, after: proposal.payload.label },
+        { key: "nests", before: null, after: proposal.payload.hierarchical ? "yes" : "no" },
+      ]
+
+    case "term.create":
+      return [
+        { key: "label", before: null, after: proposal.payload.label },
+        { key: "inside", before: null, after: proposal.taxonomyLabel },
+      ]
+
+    case "settings.update":
+      return patchRows(proposal.patch, proposal.before)
+
+    // A menu is a tree, and a JSON dump of one is unreadable at review time.
+    // The labels in order are what a person is actually approving.
+    case "menu.update": {
+      const out: Change[] = [
+        { key: "items", before: labelsOf(proposal.before.items), after: labelsOf(proposal.patch.items) },
+      ]
+      if (proposal.patch.label !== undefined) {
+        out.unshift({ key: "menu name", before: proposal.before.label, after: proposal.patch.label })
+      }
+      return out
+    }
+
+    case "menu.create":
+      return [
+        { key: "menu name", before: null, after: proposal.menuLabel },
+        { key: "items", before: null, after: labelsOf(proposal.items) },
+      ]
+
+    case "menu.delete":
+      return [{ key: "menu", before: proposal.menuLabel, after: "deleted — this cannot be undone" }]
+
+    case "plugin.state":
+      return [
+        { key: proposal.pluginLabel, before: proposal.enabled ? "off" : "on", after: proposal.enabled ? "on" : "off" },
+      ]
+
+    case "plugin.settings":
+      return patchRows(proposal.patch, proposal.before)
+
+    case "person.role":
+      return [{ key: proposal.personName, before: proposal.from, after: proposal.to }]
+
+    case "key.create":
+      return [
+        { key: "name", before: null, after: proposal.payload.name },
+        {
+          key: "may read",
+          before: null,
+          after: (proposal.payload.scopes as string[])?.join(", ") || "every content type",
+        },
+        { key: "expires", before: null, after: proposal.payload.expiresAt ?? "never" },
+      ]
+
+    case "webhook.create":
+      return [
+        { key: "name", before: null, after: proposal.payload.name },
+        { key: "posts to", before: null, after: proposal.payload.url },
+        { key: "on", before: null, after: (proposal.payload.events as string[])?.join(", ") },
+      ]
+
+    case "webhook.update":
+      return patchRows(proposal.patch, proposal.before)
+
+    case "social.app":
+      return patchRows(proposal.patch, proposal.before)
+
+    case "social.post":
+      return [
+        { key: "goes to", before: null, after: proposal.accounts.join(", ") },
+        { key: "caption", before: null, after: proposal.payload.caption },
+        { key: "when", before: null, after: proposal.payload.scheduledAt ?? "saved as a draft" },
+      ]
+
+    // Nothing to diff — the card is a button, not a change.
+    case "admin.open":
+      return []
   }
-  if (proposal.patch.slug !== undefined) {
-    out.push({ key: "slug", before: proposal.before.slug, after: proposal.patch.slug })
-  }
-  for (const [key, after] of Object.entries(data)) out.push({ key, before: proposal.before[key] ?? null, after })
-  return out
 }
 
 const targetOf = (proposal: AgentProposal): string => {
   switch (proposal.kind) {
     case "entry.update":
+    case "entry.status":
+    case "entry.delete":
+    case "entry.terms":
       return proposal.entryTitle
     case "entry.create":
       return `New ${proposal.typeName}`
     case "type.create":
       return `New ${proposal.typeName} model`
-    case "entry.status":
-      return proposal.entryTitle
+    case "type.update":
+      return `${proposal.typeName} model`
+    case "media.update":
+      return proposal.filename
+    case "taxonomy.create":
+      return "A new way to file content"
+    case "term.create":
+      return proposal.taxonomyLabel
     case "settings.update":
       return "Site details"
     case "menu.update":
+    case "menu.delete":
       return `${proposal.menuLabel} menu`
+    case "menu.create":
+      return "New menu"
+    case "plugin.state":
+    case "plugin.settings":
+      return `${proposal.pluginLabel} plugin`
+    case "person.role":
+      return proposal.personName
+    case "key.create":
+      return "New delivery key"
+    case "webhook.create":
+      return "New webhook"
+    case "webhook.update":
+      return proposal.webhookName
+    case "social.app":
+      return `${proposal.networkLabel} setup`
+    case "social.post":
+      return "New social post"
+    // The button already says where it goes, so a second line repeating it is
+    // noise on the one card that has no diff under it.
+    case "admin.open":
+      return ""
+  }
+}
+
+// Screens with no parameters of their own. Anything Inky names outside this set
+// and the three below is refused rather than routed, so a screen it invented
+// does not become a blank page.
+const PLAIN_SCREENS = new Set([
+  "dashboard",
+  "activity",
+  "media",
+  "taxonomy",
+  "menus",
+  "trash",
+  "webhooks",
+  "plugins",
+  "settings",
+  "keys",
+  "agents",
+  "users",
+  "ai",
+  "social",
+  "socialposts",
+  "socialcalendar",
+  "socialaccounts",
+  "socialsettings",
+])
+
+const routeFor = (proposal: Extract<AgentProposal, { kind: "admin.open" }>): Route | null => {
+  const type = proposal.typeName ?? ""
+  switch (proposal.screen) {
+    case "collection":
+      return type ? { name: "collection", type } : null
+    case "editor":
+      return type ? { name: "editor", type, id: proposal.entryId ?? null } : null
+    case "types":
+      return type ? { name: "types", type } : { name: "types" }
+    case "socialcompose":
+      return { name: "socialcompose", id: proposal.entryId ?? null }
     default:
-      return `${proposal.typeName} model`
+      return PLAIN_SCREENS.has(proposal.screen) ? ({ name: proposal.screen } as Route) : null
   }
 }
 
@@ -6314,49 +6474,74 @@ const ProposalCard = ({
 }: {
   proposal: AgentProposal
   decided: "applied" | "dismissed" | undefined
+  // False when the signed-in role cannot apply *this* proposal. Inky's reach
+  // now covers menus, plugins, keys, and social setup, so one flag for the
+  // whole panel would grey out an entry edit an author is entitled to make.
   canApply: boolean
   onApply: () => void
   onDismiss: () => void
-}) => (
-  <div className={cx("proposal", decided)}>
-    <div className="row">
-      <div style={{ minWidth: 0 }}>
-        <div className="proposalhead">{proposal.summary}</div>
-        <div className="dim2" style={{ fontSize: 12 }}>
-          {targetOf(proposal)}
+}) => {
+  const changes = changesIn(proposal)
+  const target = targetOf(proposal)
+  // Navigation is not a change: it has no diff, nothing to dismiss, and the
+  // button stays live so it can be pressed again after wandering off.
+  const navigational = proposal.kind === "admin.open"
+
+  return (
+    <div className={cx("proposal", !navigational && decided)}>
+      <div className="row">
+        <div style={{ minWidth: 0 }}>
+          <div className="proposalhead">{proposal.summary}</div>
+          {target ? (
+            <div className="dim2" style={{ fontSize: 12 }}>
+              {target}
+            </div>
+          ) : null}
+        </div>
+        <div className="row rowend">
+          {navigational ? (
+            <button type="button" className="btn sm" onClick={onApply}>
+              <ExternalLink size={13} /> {(proposal as Extract<AgentProposal, { kind: "admin.open" }>).label}
+            </button>
+          ) : decided === "applied" ? (
+            <span className="pill published">applied</span>
+          ) : decided === "dismissed" ? (
+            <span className="pill archived">dismissed</span>
+          ) : (
+            <>
+              <button type="button" className="btn sm" onClick={onDismiss}>
+                Dismiss
+              </button>
+              <button
+                type="button"
+                className="btn primary sm"
+                disabled={!canApply}
+                title={canApply ? undefined : "Your role cannot make this change"}
+                onClick={onApply}
+              >
+                <Check size={13} /> Apply
+              </button>
+            </>
+          )}
         </div>
       </div>
-      <div className="row rowend">
-        {decided === "applied" ? (
-          <span className="pill published">applied</span>
-        ) : decided === "dismissed" ? (
-          <span className="pill archived">dismissed</span>
-        ) : (
-          <>
-            <button type="button" className="btn sm" onClick={onDismiss}>
-              Dismiss
-            </button>
-            <button type="button" className="btn primary sm" disabled={!canApply} onClick={onApply}>
-              <Check size={13} /> Apply
-            </button>
-          </>
-        )}
-      </div>
-    </div>
 
-    <table className="difftable">
-      <tbody>
-        {changesIn(proposal).map(change => (
-          <tr key={change.key}>
-            <td className="mono dim2">{change.key}</td>
-            <td className="dim2 diffbefore">{brief(change.before)}</td>
-            <td>{brief(change.after)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)
+      {changes.length > 0 ? (
+        <table className="difftable">
+          <tbody>
+            {changes.map(change => (
+              <tr key={change.key}>
+                <td className="mono dim2">{change.key}</td>
+                <td className="dim2 diffbefore">{brief(change.before)}</td>
+                <td>{brief(change.after)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+    </div>
+  )
+}
 
 // Turns and tool calls both carry an id because both are append-only lists
 // whose entries are not distinguishable by content — the agent can call the
@@ -6404,13 +6589,11 @@ const describe = (route: Route, types: ContentType[]): InkyContext => {
 }
 
 const InkyDock = ({
-  role,
   route,
   types,
   toast,
   go,
 }: {
-  role: string
   route: Route
   types: ContentType[]
   toast: (message: string, bad?: boolean) => void
@@ -6446,7 +6629,7 @@ const InkyDock = ({
               <X size={14} />
             </button>
           </div>
-          <AgentPanel canApply={hasRole(role, "author")} toast={toast} go={go} context={context} compact />
+          <AgentPanel toast={toast} go={go} context={context} compact />
         </div>
       ) : null}
 
@@ -6465,13 +6648,11 @@ const InkyDock = ({
 }
 
 const AgentPanel = ({
-  canApply,
   toast,
   go,
   context,
   compact,
 }: {
-  canApply: boolean
   toast: (message: string, bad?: boolean) => void
   go: (route: Route) => void
   context?: InkyContext
@@ -6482,6 +6663,9 @@ const AgentPanel = ({
   const [history, setHistory] = useState<unknown[]>([])
   const [proposals, setProposals] = useState<AgentProposal[]>([])
   const [decided, setDecided] = useState<Record<string, "applied" | "dismissed">>({})
+  // A delivery key and a webhook secret exist exactly once, at the moment they
+  // are created. Everything else about a proposal can be looked at again.
+  const [fresh, setFresh] = useState<{ title: string; value: string } | null>(null)
   const [draft, setDraft] = useState("")
   const [running, setRunning] = useState(false)
   const tail = useRef<HTMLDivElement>(null)
@@ -6527,6 +6711,12 @@ const AgentPanel = ({
             break
           case "proposal":
             setProposals(current => [...current, event.proposal])
+            // Navigation is the one thing Inky does rather than proposes, so it
+            // happens as it is announced. `go` still asks about unsaved work.
+            if (event.proposal.kind === "admin.open") {
+              const route = routeFor(event.proposal)
+              if (route) go(route)
+            }
             break
           case "done":
             setHistory(event.history)
@@ -6544,29 +6734,118 @@ const AgentPanel = ({
     }
   }
 
-  // Applying sends the change through the ordinary content routes — the same
-  // ones the editor screens use — so it is validated, revisioned, and audited
-  // as this user's edit rather than as something a machine did.
+  // Applying sends the change through the ordinary admin routes — the same ones
+  // the screens use — so it is validated, revisioned, and audited as this user's
+  // change rather than as something a machine did. Two of them hand back a
+  // secret that exists exactly once, which is what `fresh` is for.
   const apply = async (proposal: AgentProposal) => {
     try {
-      if (proposal.kind === "entry.update") await api.updateEntry(proposal.entryId, proposal.patch as Partial<Entry>)
-      else if (proposal.kind === "entry.create")
-        await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
-      else if (proposal.kind === "type.create") await api.createType(proposal.payload as Partial<ContentType>)
-      else if (proposal.kind === "entry.status")
-        // Publishing has its own route because it revalidates the entry against
-        // its content type; the editorial statuses share one.
-        await (proposal.to === "published"
-          ? api.publishEntry(proposal.entryId)
-          : api.setEntryStatus(proposal.entryId, proposal.to as "draft" | "review" | "archived"))
-      else if (proposal.kind === "settings.update") await api.saveSettings(proposal.patch)
-      else if (proposal.kind === "menu.update")
-        await api.saveMenu(
-          proposal.menuName,
-          (proposal.patch.label as string) ?? proposal.menuLabel,
-          (proposal.patch.items ?? []) as MenuItem[],
-        )
-      else await api.updateType(proposal.typeName, proposal.patch as Partial<ContentType>)
+      switch (proposal.kind) {
+        case "entry.update":
+          await api.updateEntry(proposal.entryId, proposal.patch as Partial<Entry>)
+          break
+        case "entry.create":
+          await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+          break
+        case "entry.status":
+          // Publishing has its own route because it revalidates the entry
+          // against its content type; the editorial statuses share one.
+          await (proposal.to === "published"
+            ? api.publishEntry(proposal.entryId)
+            : api.setEntryStatus(proposal.entryId, proposal.to as "draft" | "review" | "archived"))
+          break
+        case "entry.delete":
+          await api.deleteEntry(proposal.entryId)
+          break
+        case "entry.terms":
+          await api.setEntryTerms(proposal.entryId, proposal.termIds)
+          break
+        case "type.update":
+          await api.updateType(proposal.typeName, proposal.patch as Partial<ContentType>)
+          break
+        case "type.create":
+          await api.createType(proposal.payload as Partial<ContentType>)
+          break
+        case "media.update":
+          await api.updateMedia(proposal.mediaId, proposal.patch as Partial<Media>)
+          break
+        case "taxonomy.create":
+          await api.createTaxonomy(proposal.payload as { label: string; hierarchical: boolean; name?: string })
+          break
+        case "term.create":
+          await api.createTerm(proposal.taxonomyName, proposal.payload as { label: string })
+          break
+        case "settings.update":
+          await api.saveSettings(proposal.patch)
+          break
+        case "menu.update":
+          await api.saveMenu(
+            proposal.menuName,
+            (proposal.patch.label as string) ?? proposal.menuLabel,
+            (proposal.patch.items ?? []) as MenuItem[],
+          )
+          break
+        case "menu.create":
+          await api.createMenu(proposal.menuLabel, proposal.items as MenuItem[])
+          break
+        case "menu.delete":
+          await api.deleteMenu(proposal.menuName)
+          break
+        case "plugin.state":
+          await (proposal.enabled ? api.enablePlugin(proposal.pluginName) : api.disablePlugin(proposal.pluginName))
+          break
+        case "plugin.settings":
+          await api.savePluginSettings(proposal.pluginName, proposal.patch)
+          break
+        case "person.role":
+          await api.updateUser(proposal.userId, { role: proposal.to })
+          break
+        case "key.create": {
+          const created = await api.createKey(
+            String(proposal.payload.name ?? ""),
+            (proposal.payload.scopes as string[]) ?? [],
+            proposal.payload.expiresAt as string | undefined,
+          )
+          setFresh({ title: "Copy your delivery key", value: created.key })
+          break
+        }
+        case "webhook.create": {
+          const created = await api.createWebhook(
+            proposal.payload as { name: string; url: string; events: string[]; active: boolean },
+          )
+          setFresh({ title: "Copy the signing secret", value: created.secret })
+          break
+        }
+        case "webhook.update":
+          await api.updateWebhook(proposal.webhookId, proposal.patch as Partial<Webhook>)
+          break
+        case "social.app": {
+          const patch = proposal.patch
+          // Built out rather than cast: the route reads an absent secret as
+          // "keep the stored one", and an absent URL as "use the default".
+          const input: SocialAppInput = {
+            enabled: patch.enabled !== false,
+            clientId: String(patch.clientId ?? ""),
+            ...(patch.clientSecret === undefined ? {} : { clientSecret: String(patch.clientSecret) }),
+            authorizeUrl: (patch.authorizeUrl as string | undefined) ?? null,
+            tokenUrl: (patch.tokenUrl as string | undefined) ?? null,
+            scopes: (patch.scopes as string | undefined) ?? null,
+          }
+          await api.saveSocialApp(proposal.network, input)
+          break
+        }
+        case "social.post":
+          await api.createSocialPost(proposal.payload as SocialPostInput)
+          break
+        // Not a change, so nothing is sent and nothing is decided — `go` asks
+        // about unsaved work on the way, which is why it is the only mover.
+        case "admin.open": {
+          const route = routeFor(proposal)
+          if (route) go(route)
+          else toast("Inky asked for a screen that does not exist", true)
+          return
+        }
+      }
 
       setDecided(current => ({ ...current, [proposal.id]: "applied" }))
       toast("Change applied")
@@ -6594,7 +6873,17 @@ const AgentPanel = ({
 
   if (!status.mayUse) return <Note kind="warn">Your role cannot use the assistant.</Note>
 
-  const open = proposals.filter(proposal => !decided[proposal.id])
+  // Whether *this* proposal's Apply will be accepted, decided by the same
+  // capability the route will check rather than by a role comparison kept in
+  // the browser — see `scopesFor`.
+  const allowed = (proposal: AgentProposal) => status.scopes.includes(proposal.needs)
+
+  // Navigation cards are not pending decisions: they have already happened, and
+  // sweeping one into "Apply all" would move the screen mid-batch.
+  const open = proposals.filter(
+    proposal => proposal.kind !== "admin.open" && !decided[proposal.id] && allowed(proposal),
+  )
+  const refused = proposals.filter(proposal => !decided[proposal.id] && !allowed(proposal))
 
   return (
     <div className={cx("agent", compact && "agentcompact")}>
@@ -6602,17 +6891,21 @@ const AgentPanel = ({
         {turns.length === 0 ? (
           <div className="agentintro">
             <Sparkles size={22} />
-            <h3>Hi, I'm Inky</h3>
+            <h3>
+              Hi, I'm Inky <Hint id="ai.reach" />
+            </h3>
             <p className="dim2">
-              Tell me what you want changed in your own words — a page, the wording, what a page is made of, your
-              navigation, or your site details. I'll read your site, work out what that means, and show you the change
-              before anything is saved.
+              Tell me what you want in your own words — a page, its wording, what a page is made of, your navigation,
+              your categories, who has an account, or getting a social network connected. I'll read your site, work out
+              what that means, show you the change before anything is saved, and take you to the right screen when the
+              last step is one only you can do.
             </p>
             <div className="agentseeds">
               {[
                 "Add a section for customer quotes to the about page",
                 "Make the homepage opening shorter and warmer",
-                "Take the old promo out of the main menu",
+                "Help me set up posting to Instagram",
+                "Give our new designer an account that can publish",
                 "Which pages are missing a description?",
               ].map(seed => (
                 <button type="button" key={seed} className="btn sm" onClick={() => setDraft(seed)}>
@@ -6645,7 +6938,8 @@ const AgentPanel = ({
         <div className="proposals">
           <div className="row" style={{ marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>Proposed changes</h3>
-            {open.length > 1 && canApply ? (
+            <Hint id="ai.inky" />
+            {open.length > 1 ? (
               <button
                 type="button"
                 className="btn sm rowend"
@@ -6657,20 +6951,25 @@ const AgentPanel = ({
               </button>
             ) : null}
           </div>
-          {!canApply ? <Note kind="warn">Your role cannot save content changes.</Note> : null}
+          {refused.length > 0 ? (
+            <Note kind="warn">
+              {refused.length === 1 ? "One of these needs" : `${refused.length} of these need`} a role above yours. Ask
+              an admin, or dismiss {refused.length === 1 ? "it" : "them"}.
+            </Note>
+          ) : null}
           {proposals.map(proposal => (
             <ProposalCard
               key={proposal.id}
               proposal={proposal}
               decided={decided[proposal.id]}
-              canApply={canApply}
+              canApply={allowed(proposal)}
               onApply={() => void apply(proposal)}
               onDismiss={() => setDecided(current => ({ ...current, [proposal.id]: "dismissed" }))}
             />
           ))}
           <p className="dim2" style={{ fontSize: 12 }}>
-            Applied changes go through the same save an editor makes, so each one leaves a revision you can restore from
-            the entry's history.
+            Applied changes go through the same save you would make by hand, so each one is validated, recorded in
+            Activity, and — for a page — leaves a revision you can restore from its history.
           </p>
         </div>
       ) : null}
@@ -6679,7 +6978,7 @@ const AgentPanel = ({
         <textarea
           value={draft}
           rows={2}
-          placeholder="Ask Inky for a change — a page, its wording, your menu, your site details…"
+          placeholder="Ask Inky for anything about this site — a page, your menu, your categories, connecting a network…"
           disabled={running}
           onChange={event => setDraft(event.target.value)}
           onKeyDown={event => {
@@ -6697,6 +6996,27 @@ const AgentPanel = ({
         </button>
         .
       </p>
+
+      {fresh ? (
+        <Modal
+          title={fresh.title}
+          onClose={() => setFresh(null)}
+          footer={
+            <button type="button" className="btn primary" onClick={() => setFresh(null)}>
+              Done
+            </button>
+          }
+        >
+          <Note kind="warn">This is the only time it is shown. Store it somewhere safe now.</Note>
+          <input
+            className="mono"
+            readOnly
+            value={fresh.value}
+            style={{ marginTop: 14 }}
+            onFocus={event => event.target.select()}
+          />
+        </Modal>
+      ) : null}
     </div>
   )
 }
@@ -7030,11 +7350,7 @@ const AiScreen = ({
         </div>
       ) : null}
 
-      {tab === "providers" && mayManage ? (
-        <AiProviders toast={toast} />
-      ) : (
-        <AgentPanel canApply={hasRole(role, "author")} toast={toast} go={go} />
-      )}
+      {tab === "providers" && mayManage ? <AiProviders toast={toast} /> : <AgentPanel toast={toast} go={go} />}
     </>
   )
 }
@@ -9027,9 +9343,7 @@ const App = () => {
 
       {changingPassword ? <ChangePassword onClose={() => setChangingPassword(false)} toast={toast} /> : null}
 
-      {hasRole(me.role, "author") ? (
-        <InkyDock role={me.role} route={route} types={types} toast={toast} go={go} />
-      ) : null}
+      {hasRole(me.role, "author") ? <InkyDock route={route} types={types} toast={toast} go={go} /> : null}
 
       {message ? <div className={cx("toast", message.bad && "bad")}>{message.text}</div> : null}
     </div>

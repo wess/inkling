@@ -9,6 +9,7 @@ import { up } from "../src/migrate/index.ts"
 import { aiCredentials, contentTypes, entries } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 import { createUser } from "../src/users/index.ts"
+import { noPlugins } from "./fixtures/registry.ts"
 
 // Prompt caching is worth roughly ninety percent of the input cost of an agent
 // turn, and it fails silently: the answers stay correct and only the invoice
@@ -178,7 +179,7 @@ const ask = async (
   message: string,
   history?: unknown,
 ): Promise<{ status: number; history: unknown[] }> => {
-  const response = await router(...agentRoutes(db))(
+  const response = await router(...agentRoutes(db, noPlugins))(
     new Request("http://localhost/ai/agent", {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },

@@ -448,54 +448,90 @@ export type AiCredential = {
   scope: string | null
 }
 
-// Mirrors Proposal in src/ai/tools.ts. Nothing here has been saved — each one
-// is applied by sending it back through the ordinary content routes.
+// Mirrors Proposal in src/ai/tools/common.ts. Nothing here has been saved —
+// each one is applied by sending it back through the ordinary admin routes.
+// `needs` is the capability that will be checked when it is, so the card can
+// say why a button is greyed rather than failing on the press.
+type Proposed = { id: string; summary: string; needs: string }
+
 export type AgentProposal =
-  | {
+  | (Proposed & {
       kind: "entry.update"
-      id: string
-      summary: string
       entryId: string
       entryTitle: string
       typeName: string
       patch: Record<string, unknown>
       before: Record<string, unknown>
-    }
-  | { kind: "entry.create"; id: string; summary: string; typeName: string; payload: Record<string, unknown> }
-  | {
+    })
+  | (Proposed & { kind: "entry.create"; typeName: string; payload: Record<string, unknown> })
+  | (Proposed & { kind: "entry.status"; entryId: string; entryTitle: string; from: string; to: string })
+  | (Proposed & { kind: "entry.delete"; entryId: string; entryTitle: string; typeName: string })
+  | (Proposed & {
+      kind: "entry.terms"
+      entryId: string
+      entryTitle: string
+      termIds: string[]
+      labels: string[]
+      before: string[]
+    })
+  | (Proposed & {
       kind: "type.update"
-      id: string
-      summary: string
       typeName: string
       patch: Record<string, unknown>
       before: Record<string, unknown>
-    }
-  | { kind: "type.create"; id: string; summary: string; typeName: string; payload: Record<string, unknown> }
-  | {
-      kind: "entry.status"
-      id: string
-      summary: string
-      entryId: string
-      entryTitle: string
-      from: string
-      to: string
-    }
-  | {
-      kind: "settings.update"
-      id: string
-      summary: string
+    })
+  | (Proposed & { kind: "type.create"; typeName: string; payload: Record<string, unknown> })
+  | (Proposed & {
+      kind: "media.update"
+      mediaId: string
+      filename: string
       patch: Record<string, unknown>
       before: Record<string, unknown>
-    }
-  | {
+    })
+  | (Proposed & { kind: "taxonomy.create"; payload: Record<string, unknown> })
+  | (Proposed & {
+      kind: "term.create"
+      taxonomyName: string
+      taxonomyLabel: string
+      payload: Record<string, unknown>
+    })
+  | (Proposed & { kind: "settings.update"; patch: Record<string, unknown>; before: Record<string, unknown> })
+  | (Proposed & {
       kind: "menu.update"
-      id: string
-      summary: string
       menuName: string
       menuLabel: string
       patch: Record<string, unknown>
       before: Record<string, unknown>
-    }
+    })
+  | (Proposed & { kind: "menu.create"; menuLabel: string; items: unknown[] })
+  | (Proposed & { kind: "menu.delete"; menuName: string; menuLabel: string })
+  | (Proposed & { kind: "plugin.state"; pluginName: string; pluginLabel: string; enabled: boolean })
+  | (Proposed & {
+      kind: "plugin.settings"
+      pluginName: string
+      pluginLabel: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    })
+  | (Proposed & { kind: "person.role"; userId: string; personName: string; from: string; to: string })
+  | (Proposed & { kind: "key.create"; payload: Record<string, unknown> })
+  | (Proposed & { kind: "webhook.create"; payload: Record<string, unknown> })
+  | (Proposed & {
+      kind: "webhook.update"
+      webhookId: string
+      webhookName: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    })
+  | (Proposed & {
+      kind: "social.app"
+      network: string
+      networkLabel: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    })
+  | (Proposed & { kind: "social.post"; payload: Record<string, unknown>; accounts: string[] })
+  | (Proposed & { kind: "admin.open"; screen: string; typeName?: string; entryId?: string; label: string })
 
 export type AgentEvent =
   | { type: "start"; provider: string; model: string }
@@ -716,7 +752,7 @@ export const api = {
   deleteUser: (id: string) => request<{ deleted: boolean }>(`/users/${id}`, { method: "DELETE" }),
 
   taxonomies: () => request<Wrapped<Taxonomy[]>>("/taxonomies").then(r => r.data),
-  createTaxonomy: (input: { label: string; hierarchical: boolean }) =>
+  createTaxonomy: (input: { label: string; hierarchical: boolean; name?: string }) =>
     request<Taxonomy>("/taxonomies", { body: input }),
   deleteTaxonomy: (name: string) => request<{ deleted: boolean }>(`/taxonomies/${name}`, { method: "DELETE" }),
   terms: (name: string) => request<Wrapped<Term[]>>(`/taxonomies/${name}/terms`).then(r => r.data),
@@ -732,7 +768,7 @@ export const api = {
   menus: () => request<Wrapped<Menu[]>>("/menus").then(r => r.data),
   saveMenu: (name: string, label: string, items: MenuItem[]) =>
     request<Menu>(`/menus/${name}`, { method: "PUT", body: { label, items } }),
-  createMenu: (label: string) => request<Menu>("/menus", { body: { label, items: [] } }),
+  createMenu: (label: string, items: MenuItem[] = []) => request<Menu>("/menus", { body: { label, items } }),
   deleteMenu: (name: string) => request<{ deleted: boolean }>(`/menus/${name}`, { method: "DELETE" }),
 
   aiProviders: () => request<{ data: AiProvider[]; redirectUri: string }>("/ai/providers"),
@@ -758,7 +794,9 @@ export const api = {
         provider: string | null
         model: string | null
         mayUse: boolean
-        mayApply: boolean
+        // What this account is allowed to apply, so a card can be greyed with
+        // a reason rather than failing on the press.
+        scopes: string[]
       }>
     >("/ai/agent/status", { method: "POST" }).then(r => r.data),
 

@@ -4,14 +4,15 @@ import { router } from "atlas/server"
 import type { Markable } from "../src/ai/agent.ts"
 import { agentRoutes, clearBreakpoints, roll } from "../src/ai/agent.ts"
 import { endpointFor, PROVIDERS } from "../src/ai/providers.ts"
-import type { Proposal } from "../src/ai/tools.ts"
-import { runTool, TOOLS } from "../src/ai/tools.ts"
+import type { Proposal } from "../src/ai/tools/index.ts"
+import { runTool, TOOLS, toolsFor } from "../src/ai/tools/index.ts"
 import { issueSession } from "../src/auth/index.ts"
 import { id } from "../src/ids/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { contentTypes, entries, menus } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 import { createUser } from "../src/users/index.ts"
+import { noPlugins } from "./fixtures/registry.ts"
 
 // The agent's whole safety model is that its tool surface is read-only and its
 // "writes" are inert proposals an editor applies through the ordinary content
@@ -68,17 +69,103 @@ const setup = async () => {
   return { db, entryId }
 }
 
-const call = (db: Awaited<ReturnType<typeof setup>>["db"], proposals: Proposal[], name: string, input: object) =>
-  runTool({ db, proposals }, name, input as Record<string, unknown>)
+// Defaults to an owner, because most of these are about what a tool does rather
+// than who may call it. The tests that are about that pass a role.
+const call = (
+  db: Awaited<ReturnType<typeof setup>>["db"],
+  proposals: Proposal[],
+  name: string,
+  input: object,
+  role = "owner",
+) => runTool({ db, registry: noPlugins, role, proposals }, name, input as Record<string, unknown>)
 
-test("every tool the model is offered is either a read or a proposal", () => {
+test("every tool the model is offered is a read, a proposal, or a move", () => {
   // A write tool would have to be added here first, so this is the tripwire on
-  // the constraint the whole design rests on.
+  // the constraint the whole design rests on. `open_` is the third category and
+  // deliberately narrow: it moves the admin and touches no data.
   for (const tool of TOOLS) {
-    const reads = tool.name.startsWith("list_") || tool.name.startsWith("get_")
+    const reads = tool.name.startsWith("list_") || tool.name.startsWith("get_") || tool.name.startsWith("search_")
     const proposes = tool.name.startsWith("propose_")
-    expect(reads || proposes).toBe(true)
+    const moves = tool.name.startsWith("open_")
+    expect(reads || proposes || moves).toBe(true)
   }
+  expect(TOOLS.filter(tool => tool.name.startsWith("open_")).map(tool => tool.name)).toEqual(["open_screen"])
+})
+
+test("a tool is only offered to a role that could apply what it produces", () => {
+  const named = (role: string) => toolsFor(role).map(tool => tool.name)
+
+  // An author writes pages. They do not reshape content types, rename the site,
+  // hand out delivery keys, or connect a brand's social accounts.
+  const author = named("author")
+  expect(author).toContain("propose_entry_update")
+  expect(author).toContain("open_screen")
+  for (const beyond of [
+    "propose_type_update",
+    "propose_settings_update",
+    "propose_menu_update",
+    "list_people",
+    "list_delivery_keys",
+    "list_webhooks",
+    "list_plugins",
+    "get_social_setup",
+  ]) {
+    expect(author).not.toContain(beyond)
+  }
+
+  // An editor gains menus and categories but still not the administrative half.
+  const editor = named("editor")
+  expect(editor).toContain("propose_menu_update")
+  expect(editor).toContain("propose_term_create")
+  expect(editor).not.toContain("propose_settings_update")
+
+  // An owner gets everything there is.
+  expect(named("owner")).toHaveLength(TOOLS.length)
+})
+
+test("a tool a role cannot reach is refused even if the model asks for it anyway", async () => {
+  // The list was filtered, so this can only happen if the model invented the
+  // call — from a transcript, or from a description it half-remembered.
+  const { db } = await setup()
+  const proposals: Proposal[] = []
+
+  const refused = await call(
+    db,
+    proposals,
+    "propose_settings_update",
+    { summary: "x", settings: { title: "Nope" } },
+    "author",
+  )
+  expect(refused.isError).toBe(true)
+  expect(JSON.stringify(refused.output)).toContain("author")
+  expect(proposals).toHaveLength(0)
+
+  await db.close()
+})
+
+test("every proposal says which capability applying it will need", async () => {
+  // The admin greys a card it knows will be refused, and it reads this rather
+  // than keeping a copy of the role ladder in the browser.
+  const { db, entryId } = await setup()
+  const proposals: Proposal[] = []
+
+  await call(db, proposals, "propose_entry_update", { entryId, summary: "x", data: { excerpt: "New" } })
+  expect(proposals[0]?.needs).toBe("content.write")
+
+  // Publishing is a different permission from drafting, and it is the same
+  // tool — so this one proposal has to carry the stricter requirement.
+  await call(db, proposals, "propose_entry_status", { entryId, status: "draft", summary: "x" })
+  expect(proposals[1]?.needs).toBe("content.write")
+
+  await db.execute(
+    from(entries)
+      .update({ status: "draft" })
+      .where(q => q("id").equals(entryId)),
+  )
+  await call(db, proposals, "propose_entry_status", { entryId, status: "published", summary: "x" })
+  expect(proposals[2]?.needs).toBe("content.publish")
+
+  await db.close()
 })
 
 test("reading tools describe the model well enough to write against it", async () => {
@@ -306,7 +393,7 @@ test("the agent is off until a provider is connected, and says so", async () => 
     role: "author",
   })
   const session = await issueSession(db, author, { ip: "127.0.0.1", userAgent: "tests" })
-  const handle = router(...agentRoutes(db))
+  const handle = router(...agentRoutes(db, noPlugins))
 
   const status = await handle(
     new Request("http://localhost/ai/agent/status", {
@@ -339,7 +426,7 @@ test("a transcript from somewhere other than this route is refused", async () =>
     role: "author",
   })
   const session = await issueSession(db, author, { ip: "127.0.0.1", userAgent: "tests" })
-  const handle = router(...agentRoutes(db))
+  const handle = router(...agentRoutes(db, noPlugins))
 
   const send = (history: unknown) =>
     handle(

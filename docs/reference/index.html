@@ -253,29 +253,77 @@
     <h3>What Inky can do</h3>
 
     <p>
-      Thirteen tools: six read, seven propose. Nothing writes. A proposal is a
-      record the admin renders as a diff and applies through the same route your
-      own edit takes.
+      Thirty-eight tools: thirteen read, twenty-four propose, one moves the
+      admin. Nothing writes. A proposal is a record the admin renders as a diff
+      and applies through the same route your own edit takes — so it is
+      validated, revisioned where a revision exists, and recorded in Activity as
+      your change rather than a machine's.
+    </p>
+
+    <p>
+      Each tool names the permission its proposal will need, and the list is
+      filtered to what your role could actually apply. An author is never
+      offered the site settings; an editor is never offered delivery keys. The
+      panel greys a single card it knows will be refused rather than the whole
+      tray.
     </p>
 
     <table class="table">
-      <thead><tr><th>Tool</th><th>Kind</th><th>Does</th></tr></thead>
+      <thead><tr><th>Tool</th><th>Kind</th><th>Needs</th><th>Does</th></tr></thead>
       <tbody>
-        <tr><td><code>list_content_types</code></td><td>read</td><td>The model — every type and its fields.</td></tr>
-        <tr><td><code>list_entries</code></td><td>read</td><td>Entries of a type, filtered and paged.</td></tr>
-        <tr><td><code>get_entry</code></td><td>read</td><td>One entry in full.</td></tr>
-        <tr><td><code>list_media</code></td><td>read</td><td>The library, so it can pick an existing image.</td></tr>
-        <tr><td><code>get_site_settings</code></td><td>read</td><td>Title, tagline, description, logo, social image.</td></tr>
-        <tr><td><code>list_menus</code></td><td>read</td><td>Your navigation trees.</td></tr>
-        <tr><td><code>propose_entry_update</code></td><td>propose</td><td>Change what a page says.</td></tr>
-        <tr><td><code>propose_entry_create</code></td><td>propose</td><td>Draft a page that does not exist yet.</td></tr>
-        <tr><td><code>propose_entry_status</code></td><td>propose</td><td>Publish, unpublish, or return something to draft.</td></tr>
-        <tr><td><code>propose_type_update</code></td><td>propose</td><td>Add or change a field — which affects every page of that kind, and it says so.</td></tr>
-        <tr><td><code>propose_type_create</code></td><td>propose</td><td>A new kind of page altogether.</td></tr>
-        <tr><td><code>propose_settings_update</code></td><td>propose</td><td>Site details.</td></tr>
-        <tr><td><code>propose_menu_update</code></td><td>propose</td><td>Navigation.</td></tr>
+        <tr><td><code>list_content_types</code></td><td>read</td><td><code>content.read</code></td><td>The model — every type and its fields.</td></tr>
+        <tr><td><code>list_entries</code></td><td>read</td><td><code>content.read</code></td><td>Entries of a type, filtered and paged.</td></tr>
+        <tr><td><code>search_site</code></td><td>read</td><td><code>content.read</code></td><td>Find a page or a file by name across every type at once.</td></tr>
+        <tr><td><code>get_entry</code></td><td>read</td><td><code>content.read</code></td><td>One entry in full, including what it is filed under.</td></tr>
+        <tr><td><code>list_media</code></td><td>read</td><td><code>content.read</code></td><td>The library, so it can pick an existing image.</td></tr>
+        <tr><td><code>list_taxonomies</code></td><td>read</td><td><code>content.read</code></td><td>Categories, tags, and every term in each.</td></tr>
+        <tr><td><code>get_site_settings</code></td><td>read</td><td><code>content.read</code></td><td>Title, tagline, description, logo, social image.</td></tr>
+        <tr><td><code>list_menus</code></td><td>read</td><td><code>content.read</code></td><td>Your navigation trees.</td></tr>
+        <tr><td><code>list_plugins</code></td><td>read</td><td><code>plugins.manage</code></td><td>What is installed, what is on, and how each is configured.</td></tr>
+        <tr><td><code>list_people</code></td><td>read</td><td><code>users.manage</code></td><td>Everyone with an account, and the role each holds.</td></tr>
+        <tr><td><code>list_delivery_keys</code></td><td>read</td><td><code>keys.manage</code></td><td>Which sites read this one, and how far each may reach.</td></tr>
+        <tr><td><code>list_webhooks</code></td><td>read</td><td><code>webhooks.manage</code></td><td>Where this site posts on a change, and how the last one went.</td></tr>
+        <tr><td><code>get_social_setup</code></td><td>read</td><td><code>social.manage</code></td><td>Per network: app registered, credentials saved, account connected.</td></tr>
+        <tr><td><code>get_social_guide</code></td><td>read</td><td><code>social.manage</code></td><td>The real steps through that network's console, and the step everybody misses.</td></tr>
+        <tr><td><code>list_social_posts</code></td><td>read</td><td><code>social.write</code></td><td>Drafts, what is scheduled, and what already went out.</td></tr>
+        <tr><td><code>propose_entry_update</code></td><td>propose</td><td><code>content.write</code></td><td>Change what a page says.</td></tr>
+        <tr><td><code>propose_entry_create</code></td><td>propose</td><td><code>content.write</code></td><td>Draft a page that does not exist yet.</td></tr>
+        <tr><td><code>propose_entry_status</code></td><td>propose</td><td><code>content.write</code>, or <code>content.publish</code> to go live</td><td>Publish, unpublish, or return something to draft.</td></tr>
+        <tr><td><code>propose_entry_delete</code></td><td>propose</td><td><code>content.write</code></td><td>Move a page to the trash, where it stays restorable.</td></tr>
+        <tr><td><code>propose_entry_terms</code></td><td>propose</td><td><code>content.write</code></td><td>File a page under categories or tags.</td></tr>
+        <tr><td><code>propose_type_update</code></td><td>propose</td><td><code>types.manage</code></td><td>Add or change a field — which affects every page of that kind, and it says so.</td></tr>
+        <tr><td><code>propose_type_create</code></td><td>propose</td><td><code>types.manage</code></td><td>A new kind of page altogether.</td></tr>
+        <tr><td><code>propose_media_update</code></td><td>propose</td><td><code>media.manage</code></td><td>Alt text, captions, and folders on files already uploaded.</td></tr>
+        <tr><td><code>propose_taxonomy_create</code></td><td>propose</td><td><code>taxonomy.manage</code></td><td>A new way of filing content.</td></tr>
+        <tr><td><code>propose_term_create</code></td><td>propose</td><td><code>taxonomy.manage</code></td><td>One category or tag inside an existing set.</td></tr>
+        <tr><td><code>propose_settings_update</code></td><td>propose</td><td><code>settings.manage</code></td><td>Site details.</td></tr>
+        <tr><td><code>propose_menu_update</code></td><td>propose</td><td><code>menus.manage</code></td><td>Navigation.</td></tr>
+        <tr><td><code>propose_menu_create</code></td><td>propose</td><td><code>menus.manage</code></td><td>A second menu — a footer, a sidebar.</td></tr>
+        <tr><td><code>propose_menu_delete</code></td><td>propose</td><td><code>menus.manage</code></td><td>Remove one outright, which is not recoverable.</td></tr>
+        <tr><td><code>propose_plugin_state</code></td><td>propose</td><td><code>plugins.manage</code></td><td>Switch a plugin on or off.</td></tr>
+        <tr><td><code>propose_plugin_settings</code></td><td>propose</td><td><code>plugins.manage</code></td><td>Configure one, within the keys it declares.</td></tr>
+        <tr><td><code>propose_person_role</code></td><td>propose</td><td><code>users.manage</code></td><td>Move somebody up or down the ladder, never above yourself.</td></tr>
+        <tr><td><code>propose_delivery_key</code></td><td>propose</td><td><code>keys.manage</code></td><td>Mint a key for a website. Shown once, on apply.</td></tr>
+        <tr><td><code>propose_webhook_create</code></td><td>propose</td><td><code>webhooks.manage</code></td><td>Tell another system when content moves. Secret shown once.</td></tr>
+        <tr><td><code>propose_webhook_update</code></td><td>propose</td><td><code>webhooks.manage</code></td><td>Repoint one, change its events, or switch it off.</td></tr>
+        <tr><td><code>propose_social_app</code></td><td>propose</td><td><code>social.manage</code></td><td>Save a network's client ID and secret, so its Connect button works.</td></tr>
+        <tr><td><code>propose_social_post</code></td><td>propose</td><td><code>social.write</code>, or <code>social.publish</code> to schedule</td><td>Draft a post to the accounts that are connected.</td></tr>
+        <tr><td><code>open_screen</code></td><td>move</td><td><code>content.read</code></td><td>Take you to a screen. The only tool that acts rather than proposes.</td></tr>
       </tbody>
     </table>
+
+    <h3>What still needs your hands</h3>
+
+    <p>
+      Four things, and Inky takes you to the screen rather than describing the
+      route: <strong>uploading a file</strong>, <strong>creating an
+      account</strong> (a password has to be typed), <strong>pressing
+      Connect</strong> on a social network (the consent screen is on the
+      network's own domain), and <strong>pasting a client secret</strong>. Inky
+      will ask for a client ID in conversation but is told never to ask for a
+      secret — it is a password, and a chat window carries it further than it
+      needs to go.
+    </p>
 
     <h3>Visitor bubble</h3>
 

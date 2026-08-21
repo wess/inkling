@@ -90,6 +90,15 @@ export const can = {
   manageSocial: capability("social.manage", "admin"),
 }
 
+// Which of those a role actually holds. The admin reads this to know whether a
+// proposal's Apply button will be refused before anybody presses it — the panel
+// cannot re-derive the ladder without keeping a second copy of it in the
+// browser, and a second copy is how the two drift.
+export const scopesFor = (role: string): Scope[] =>
+  Object.values(can)
+    .filter(capability => capability(role))
+    .map(capability => capability.scope)
+
 // What an agent key may ever be granted, however senior the account behind it.
 //
 // The line is drawn at anything that widens the blast radius beyond this
