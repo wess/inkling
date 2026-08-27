@@ -60,6 +60,9 @@ for (const [file, html] of pages) {
   if (!/<link rel="describedby" href="[^"]+">/i.test(html)) {
     report(file, "missing a describedby link to llms.txt")
   }
+  if (/:\/\/[^/<\s"']+:[^@/<\s"']+@/u.test(html)) {
+    report(file, "connection strings must split @ into its own element so the CDN does not rewrite them as email")
+  }
 
   const ids = [...html.matchAll(/<[a-z][^>]*\sid="([^"]+)"[^>]*>/gi)].map(match => match[1] as string)
   const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index)
