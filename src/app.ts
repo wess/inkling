@@ -43,7 +43,7 @@ import { registerWebhookBridge, webhookRoutes } from "./webhooks/index.ts"
 //
 // The composition order below is load-bearing and unchanged from when this was
 // one script: migrate → bootstrap the first owner → services → plugins →
-// routes → sweeps.
+// routes → admin bundle → sweeps.
 
 // Migrations and plugins ship *with* this package, so their paths are resolved
 // against it rather than the working directory. Standalone the two are the same
@@ -216,7 +216,12 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
     ...deliveryRoutes(db, hooks),
   ]
 
-  // 6. Background sweeps. Small enough not to justify a job runner; each is
+  // 6. Bundle the admin before starting anything that needs explicit cleanup.
+  // An embedding host may catch a failed boot and try again in the same
+  // process; starting intervals first would leave the failed attempt running.
+  const admin = await buildAdmin(adminBase)
+
+  // 7. Background sweeps. Small enough not to justify a job runner; each is
   // wrapped so a failure logs rather than killing the interval.
   const limiter = createRateLimit(db)
   const timers: ReturnType<typeof setInterval>[] = []
@@ -236,10 +241,6 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   every(3600, "rate-limit-sweep", () => limiter.sweep(86_400))
 
   await hooks.emit("server.ready", { at: now() })
-
-  // 7. The admin, bundled by this process. No second server and no proxy — it
-  // is a handler the router falls through to.
-  const admin = await buildAdmin(adminBase)
 
   // Also stashes the real socket peer on the request, which is what
   // `src/security#clientIp` reads instead of trusting a client-supplied

@@ -231,14 +231,16 @@ export const deliveryRoutes = (db: Connection, hooks: Hooks): Route[] => {
       wanted.entries.push(...found.entries)
     }
 
-    const refs = await loadExpansions(db, [...new Set(wanted.media)], [...new Set(wanted.entries)], identity)
-    const termsByEntry = includeTerms
-      ? await termsForEntries(
-          db,
-          entryRows.map(r => r.id),
-        )
-      : new Map()
-    const authorByEntry = includeAuthor ? await authorsForEntries(db, entryRows) : new Map<string, PublicAuthor>()
+    const [refs, termsByEntry, authorByEntry] = await Promise.all([
+      loadExpansions(db, [...new Set(wanted.media)], [...new Set(wanted.entries)], identity),
+      includeTerms
+        ? termsForEntries(
+            db,
+            entryRows.map(r => r.id),
+          )
+        : new Map(),
+      includeAuthor ? authorsForEntries(db, entryRows) : new Map<string, PublicAuthor>(),
+    ])
 
     const shaped = []
     for (const row of entryRows) {
@@ -300,11 +302,10 @@ export const deliveryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         const sort = sortable.has(c.query.sort ?? "") ? (c.query.sort as string) : "published_at"
         const order = c.query.order === "asc" ? "ASC" : "DESC"
 
-        const rows = await selectRows<EntryRow>(
-          db,
-          query.select("e.*").orderBy(`e.${sort}`, order).limit(limit).offset(offset),
-        )
-        const total = await countRows(db, query.select("COUNT(*) as total"))
+        const [rows, total] = await Promise.all([
+          selectRows<EntryRow>(db, query.select("e.*").orderBy(`e.${sort}`, order).limit(limit).offset(offset)),
+          countRows(db, query.select("COUNT(*) as total")),
+        ])
 
         const data = await shape(type, rows, included(c.query.include), keyIdentity(c))
         return json(privateCache(c, 30), 200, {
@@ -388,7 +389,7 @@ export const deliveryRoutes = (db: Connection, hooks: Hooks): Route[] => {
       guard(async c => {
         const identity = keyIdentity(c)
         const rows = await db.all<ContentTypeRow>(from("content_types").orderBy("sort_order", "ASC"))
-        return json(c, 200, {
+        return json(privateCache(c, 60), 200, {
           data: rows
             .filter(row => keyAllows(identity, row.name))
             .map(row => ({

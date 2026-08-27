@@ -9,17 +9,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="canonical" href="https://inkling.wess.dev/start/">
+<link rel="canonical" href="https://wess.io/inkling/start/">
+<link rel="describedby" href="../llms.txt">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav">
   <div class="wrap nav-in">
     <a class="wordmark" href="../">Inkling<b>.</b></a>
     <div class="nav-links">
       
-      <a href="/school/">School</a>
+      <a href="https://inkling.wess.dev/school/">School</a>
       <a href="./" aria-current="page">Start</a>
       <a href="../guide/">Guide</a>
       <a href="../tutorials/">Tutorials</a>
@@ -44,7 +47,7 @@
     </ol>
   </aside>
 
-  <main class="prose">
+  <main class="prose" id="main">
 
     <p class="eyebrow">Getting started</p>
     <h1 class="page-title">Get set up</h1>
@@ -99,10 +102,13 @@ cp .env.example .env</pre></div>
           than 32 characters — so set a real one now and save yourself the
           surprise later.
         </p>
-        <div class="screen"><pre><span class="c"># .env</span>
+        <div class="screen"><pre><span class="c"># generate once, then paste the output into .env</span>
+openssl rand -hex 32
+
+<span class="c"># .env</span>
 <span class="k">DATABASE_URL</span>=<span class="s">postgres://postgres:postgres@127.0.0.1:5432/inkling</span>
 <span class="k">PUBLIC_URL</span>=<span class="s">http://localhost:4300</span>
-<span class="k">SECRET</span>=<span class="s">$(openssl rand -hex 32)</span></pre></div>
+<span class="k">SECRET</span>=<span class="s">paste-the-generated-value-here</span></pre></div>
       </li>
 
       <li class="step">

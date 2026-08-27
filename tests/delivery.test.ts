@@ -132,6 +132,17 @@ test("returns published entries only, with media expanded", async () => {
   await db.close()
 })
 
+test("content discovery is private-cacheable because it depends on the key", async () => {
+  const { call, key, db } = await setup()
+
+  const response = await call("/content", { "x-api-key": key })
+  expect(response.status).toBe(200)
+  expect(response.headers.get("cache-control")).toBe("private, max-age=60")
+  expect(response.headers.get("vary")).toContain("x-api-key")
+
+  await db.close()
+})
+
 test("a scoped key cannot expand a reference outside its scopes", async () => {
   const { call, db } = await setup()
 

@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs"
-import { dirname, join, resolve } from "node:path"
+import { join } from "node:path"
 import { config } from "../config/index.ts"
 
 // The admin is bundled by the same process that serves the API, and handed back
@@ -12,8 +11,7 @@ import { config } from "../config/index.ts"
 // build that has no such export, and every component throws on first render.
 const isDev = config.environment !== "production"
 
-const HERE = dirname(new URL(import.meta.url).pathname)
-const DIST = resolve(HERE, "dist")
+const HERE = import.meta.dir
 
 // A request is for a file (not an admin navigation) when its last path segment
 // has a dot. Admin routes never do, so this avoids keeping a route allowlist in
@@ -67,11 +65,8 @@ const documentCsp = async (inlineScript: string): Promise<string> => {
 export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
   const prefix = base === "/" ? "" : base.replace(/\/+$/, "")
 
-  if (!existsSync(DIST)) mkdirSync(DIST, { recursive: true })
-
   const result = await Bun.build({
     entrypoints: [join(HERE, "index.html")],
-    outdir: DIST,
     target: "browser",
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
@@ -80,6 +75,16 @@ export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
     for (const log of result.logs) console.error(log)
     throw new Error("admin bundle failed")
   }
+
+  const index = result.outputs.find(output => output.path === "./index.html")
+  if (!index) throw new Error("admin bundle did not emit an index document")
+
+  // Keep the build in memory. Writing hashed chunks to a shared directory
+  // leaves every prior build behind, and there is no reason for runtime output
+  // to outlive the process serving it.
+  const assets = new Map(
+    result.outputs.filter(output => output !== index).map(output => [output.path.replace(/^\.\//, ""), output]),
+  )
 
   // Bun.build emits `crossorigin` on the module script and stylesheet it injects.
   // The assets are same-origin, so the attribute is gratuitous — but Safari then
@@ -95,7 +100,7 @@ export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
   // what part of the path is the mount point rather than a route.
   const baseScript = `window.__INKLING_BASE__=${JSON.stringify(prefix)}`
 
-  const indexHtml = (await Bun.file(join(DIST, "index.html")).text())
+  const indexHtml = (await index.text())
     .replace(/ crossorigin(?=[\s>])/g, "")
     .replace(/(src|href)="\.\/(chunk-)/g, `$1="${prefix}/$2`)
     .replace("</head>", `<script>${baseScript}</script></head>`)
@@ -114,11 +119,17 @@ export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
       },
     })
 
-  const asset = async (path: string): Promise<Response | null> => {
+  const asset = (path: string): Response | null => {
     const safe = path.replace(/^\/+/, "")
     if (safe.includes("..")) return null
-    const file = Bun.file(join(DIST, safe))
-    return (await file.exists()) ? new Response(file) : null
+    const file = assets.get(safe)
+    if (!file) return null
+    return new Response(file, {
+      headers: {
+        "content-type": file.type,
+        "cache-control": "public, max-age=31536000, immutable",
+      },
+    })
   }
 
   const withoutPrefix = (pathname: string): string =>
@@ -127,6 +138,6 @@ export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
   return async url => {
     const path = withoutPrefix(url.pathname)
     if (!looksLikeFile(path)) return document()
-    return (await asset(path)) ?? new Response("Not found", { status: 404 })
+    return asset(path) ?? new Response("Not found", { status: 404 })
   }
 }

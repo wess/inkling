@@ -9,10 +9,12 @@
 <meta property="og:title" content="Inkling — the content behind your sites">
 <meta property="og:description" content="Every word, image, and shape your sites are made of.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://wess.io/inkling/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="canonical" href="https://inkling.wess.dev/">
+<link rel="canonical" href="https://wess.io/inkling/">
+<link rel="describedby" href="llms.txt">
 <link rel="stylesheet" href="site.css">
 <style>
 /* Hero only. The shared system is in site.css; what follows is the opening
@@ -239,7 +241,6 @@
   animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.8s backwards;
 }
 .strip::-webkit-scrollbar { display: none; }
-.strip::-webkit-scrollbar { display: none; }
 
 .stage {
   flex: 1 0 auto;
@@ -298,12 +299,14 @@
 </head>
 <body>
 
+<a class="skip" href="#main">Skip to content</a>
+
 <nav class="nav">
   <div class="wrap nav-in">
     <a class="wordmark" href="./">Inkling<b>.</b></a>
     <div class="nav-links">
       
-      <a href="/school/">School</a>
+      <a href="https://inkling.wess.dev/school/">School</a>
       <a href="start/">Start</a>
       <a href="guide/">Guide</a>
       <a href="tutorials/">Tutorials</a>
@@ -355,7 +358,7 @@
   </div>
 </header>
 
-<main>
+<main id="main">
 
   <!-- ————————————————————— Inky, up front ————————————————————— -->
   <section class="flood-flame upswept">

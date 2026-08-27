@@ -519,10 +519,23 @@ const byName = new Map(available.map(tool => [tool.name, tool]))
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: any }
 
-// The client proposes a protocol version and we answer with one. Echoing what
-// it asked for keeps this working as the spec moves, rather than pinning a
-// version this file would have to be edited to bump.
-const PROTOCOL = "2025-06-18"
+// The 2026 protocol is stateless and carries its version on every request. The
+// earlier revisions use initialize. Supporting both keeps existing clients
+// working while letting current ones probe deterministically with
+// server/discover.
+const MODERN_PROTOCOL = "2026-07-28"
+const LEGACY_PROTOCOLS = ["2025-11-25", "2025-06-18"] as const
+const SUPPORTED_PROTOCOLS = [MODERN_PROTOCOL, ...LEGACY_PROTOCOLS] as const
+const VERSION_META = "io.modelcontextprotocol/protocolVersion"
+const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
+const CACHE_MS = 300_000
+
+const instructions =
+  `Content tools for the Inkling site at ${BASE}, acting as ${me.name || me.email}. ` +
+  "Call list_types first — field names differ per site, and create_entry/update_entry are validated against " +
+  "them. New entries are drafts until publish_entry is called. " +
+  `This credential is limited to: ${[...held].join(", ")}. Anything not listed is refused by the site, not ` +
+  "by this tool — do not plan around it."
 
 const send = (message: unknown): void => {
   process.stdout.write(`${JSON.stringify(message)}\n`)
@@ -532,34 +545,108 @@ const reply = (id: number | string, result: unknown): void => {
   send({ jsonrpc: "2.0", id, result })
 }
 
+const fail = (id: number | string | null, code: number, message: string, data?: unknown): void => {
+  send({ jsonrpc: "2.0", id, error: { code, message, ...(data === undefined ? {} : { data }) } })
+}
+
+type Era = "modern" | "legacy"
+let era: Era | null = null
+const active = new Set<string>()
+const cancelled = new Set<string>()
+const requestKey = (id: number | string): string => `${typeof id}:${id}`
+
+const versionFor = (request: Request): string | null => {
+  const value = request.params?._meta?.[VERSION_META]
+  return typeof value === "string" ? value : null
+}
+
+const complete = (modern: boolean, result: Record<string, unknown>): Record<string, unknown> =>
+  modern ? { resultType: "complete", ...result } : result
+
 const handle = async (request: Request): Promise<void> => {
-  // A notification has no id and takes no response — `notifications/initialized`
-  // is the one that matters. Answering it is a protocol error.
+  if (request.jsonrpc !== "2.0" || typeof request.method !== "string") {
+    fail(request.id ?? null, -32600, "Invalid request")
+    return
+  }
+
+  // A cancellation has to be observed while a tool call is still in flight,
+  // which is why messages are dispatched concurrently below. The underlying
+  // HTTP request may finish, but its result is never sent after cancellation.
+  if (request.method === "notifications/cancelled") {
+    const id = request.params?.requestId
+    if (typeof id === "string" || typeof id === "number") {
+      const key = requestKey(id)
+      if (active.has(key)) cancelled.add(key)
+    }
+    return
+  }
+
+  // Other notifications have no id and take no response. Answering
+  // notifications/initialized is itself a protocol error.
   if (request.id === undefined) return
 
+  const requestedVersion = versionFor(request)
+  const modern = requestedVersion !== null
+
+  if (modern) {
+    if (era === "legacy") {
+      fail(request.id, -32600, "This stdio process was initialized as a legacy MCP session")
+      return
+    }
+    era = "modern"
+    if (requestedVersion !== MODERN_PROTOCOL) {
+      fail(request.id, -32022, "Unsupported protocol version", {
+        supported: [...SUPPORTED_PROTOCOLS],
+        requested: requestedVersion,
+      })
+      return
+    }
+  } else if (request.method !== "initialize" && era !== "legacy") {
+    fail(request.id, -32600, `Missing ${VERSION_META}; legacy clients must initialize first`)
+    return
+  }
+
   switch (request.method) {
-    case "initialize":
+    case "server/discover":
       reply(request.id, {
-        protocolVersion:
-          typeof request.params?.protocolVersion === "string" ? request.params.protocolVersion : PROTOCOL,
+        resultType: "complete",
+        supportedVersions: [...SUPPORTED_PROTOCOLS],
+        capabilities: { tools: {} },
+        _meta: { [SERVER_INFO_META]: { name: "inkling", version: pkg.version } },
+        instructions,
+        ttlMs: CACHE_MS,
+        cacheScope: "private",
+      })
+      return
+
+    case "initialize":
+      if (era === "modern") {
+        fail(request.id, -32600, "This stdio process is using modern per-request MCP metadata")
+        return
+      }
+      era = "legacy"
+      reply(request.id, {
+        protocolVersion: LEGACY_PROTOCOLS.includes(request.params?.protocolVersion)
+          ? request.params.protocolVersion
+          : LEGACY_PROTOCOLS[0],
         capabilities: { tools: {} },
         serverInfo: { name: "inkling", version: pkg.version },
-        instructions:
-          `Content tools for the Inkling site at ${BASE}, acting as ${me.name || me.email}. ` +
-          "Call list_types first — field names differ per site, and create_entry/update_entry are validated against " +
-          "them. New entries are drafts until publish_entry is called. " +
-          `This credential is limited to: ${[...held].join(", ")}. Anything not listed is refused by the site, not ` +
-          "by this tool — do not plan around it.",
+        instructions,
       })
       return
 
     case "tools/list":
-      reply(request.id, {
-        tools: available.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-      })
+      reply(
+        request.id,
+        complete(modern, {
+          tools: available.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+          ...(modern ? { ttlMs: CACHE_MS, cacheScope: "private" } : {}),
+        }),
+      )
       return
 
     case "tools/call": {
+      const key = requestKey(request.id)
       const name = String(request.params?.name ?? "")
       const tool = byName.get(name)
 
@@ -570,27 +657,39 @@ const handle = async (request: Request): Promise<void> => {
           : READONLY && WRITES.has(known.needs)
             ? `"${name}" writes, and this server is running read-only.`
             : `"${name}" needs the "${known.needs}" grant, which this key does not hold.`
-        reply(request.id, { content: [{ type: "text", text: why }], isError: true })
+        reply(request.id, complete(modern, { content: [{ type: "text", text: why }], isError: true }))
         return
       }
 
       // A failed tool call comes back as a result the model can read and work
       // around, not a JSON-RPC error — a 409 on a single-kind type or a
       // validation refusal is information, and the agent should see the text.
+      active.add(key)
       try {
         const result = await tool.run((request.params?.arguments ?? {}) as Record<string, any>)
-        reply(request.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] })
+        if (cancelled.has(key)) return
+        reply(
+          request.id,
+          complete(modern, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], isError: false }),
+        )
       } catch (error) {
-        reply(request.id, {
-          content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-          isError: true,
-        })
+        if (cancelled.has(key)) return
+        reply(
+          request.id,
+          complete(modern, {
+            content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+            isError: true,
+          }),
+        )
+      } finally {
+        active.delete(key)
+        cancelled.delete(key)
       }
       return
     }
 
     default:
-      send({ jsonrpc: "2.0", id: request.id, error: { code: -32601, message: `Unknown method: ${request.method}` } })
+      fail(request.id, -32601, `Unknown method: ${request.method}`)
   }
 }
 
@@ -599,9 +698,17 @@ log(`${available.length} of ${TOOLS.length} tools against ${BASE}${READONLY ? " 
 if (available.length === 0) log("this key grants nothing these tools can use — check what it was minted with")
 
 // Newline-delimited JSON, decoded incrementally: a message can arrive split
-// across chunks, and two can arrive in one.
+// across chunks, and two can arrive in one. Calls run concurrently so a slow
+// read cannot head-of-line block another call or its cancellation.
 const decoder = new TextDecoder()
 let buffer = ""
+const pending = new Set<Promise<void>>()
+
+const dispatch = (request: Request): void => {
+  const task = handle(request).catch(error => log(`request failed: ${error instanceof Error ? error.message : error}`))
+  pending.add(task)
+  void task.finally(() => pending.delete(task))
+}
 
 for await (const chunk of process.stdin) {
   buffer += decoder.decode(chunk as Uint8Array, { stream: true })
@@ -614,9 +721,12 @@ for await (const chunk of process.stdin) {
 
     if (!line) continue
     try {
-      await handle(JSON.parse(line) as Request)
+      dispatch(JSON.parse(line) as Request)
     } catch (error) {
       log(`bad message: ${error instanceof Error ? error.message : String(error)}`)
+      fail(null, -32700, "Parse error")
     }
   }
 }
+
+await Promise.allSettled(pending)

@@ -11,6 +11,48 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.8.1 — 2026-08-27
+
+### Fixed
+
+- **Admin builds no longer accumulate on disk.** The runtime bundle and its
+  hashed assets stay in memory for the life of the handler, and those assets now
+  carry an immutable one-year cache policy. A development checkout that had
+  been running since July had collected 261 MB of obsolete chunks. A failed
+  admin build also happens before background intervals start, so an embedding
+  host can catch and retry a failed boot without leaving sweeps behind.
+- **`GET /content` now carries the same private cache boundary as every other
+  delivery response.** Its list of content types depends on the delivery key's
+  scopes; without `private` and `Vary: x-api-key`, a shared cache could hand one
+  site's discovery response to another key. Delivery list counting, expansion,
+  terms, and bylines now run independent database work concurrently as well.
+- **A plugin settings save is atomic.** Multiple values are written in one
+  transaction, so a failure cannot leave half of a settings form applied.
+- **The MCP server speaks both current and established protocol revisions.**
+  Current clients can negotiate `2026-07-28` through `server/discover` and
+  per-request metadata; existing `2025-11-25` and `2025-06-18` initialization
+  clients keep working. Unknown versions get a deterministic supported-version
+  response, independent calls no longer block each other, and cancellation
+  cannot produce a late tool result.
+
+### Documentation
+
+- **The GitHub Pages site is canonical at `wess.io/inkling`.** README links,
+  package metadata, canonical tags, the release runbook, sitemap, and the
+  Pages-only School link now agree with the repository's actual Pages setting.
+  The site also has a designed 404 page, a keyboard skip link, and a mobile nav
+  that stays usable without swallowing the first viewport.
+- **Documentation is validated before it publishes.** `bun run docs` checks page
+  metadata, duplicate ids, local files, anchors, and the machine-readable docs;
+  both CI workflows run it. The setup guide no longer suggests putting a
+  literal shell expression in `.env`, and the embedding tutorial now carries
+  the required request ceiling and idle timeout through `serveOptions`.
+- **Agent-facing documentation follows the `llms.txt` convention.** The small
+  routing file links to focused Markdown guides for MCP site operations and the
+  delivery API, with the longer product and codebase context available as
+  `llms-full.txt`. Every HTML page advertises the machine-readable entry point,
+  and the tutorials now include a safe external-agent setup.
+
 ## 1.8.0 — 2026-08-21
 
 Inky could change your pages, their shapes, your menus, and your site details.

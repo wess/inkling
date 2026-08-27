@@ -37,11 +37,11 @@ Exits non-zero if anything is down or behind, so it can gate a deploy.
 
 ## Cutting a release
 
-1. **Green first.** All three must be clean — there is no build step, so this is
+1. **Green first.** All four must be clean — there is no build step, so this is
    the whole verification path.
 
    ```sh
-   bunx tsc --noEmit && bun test && bunx biome check .
+   bunx tsc --noEmit && bun test && bunx biome check . && bun run docs
    ```
 
 2. **Version.** Bump `package.json` and add a `CHANGELOG.md` entry. From 1.0
@@ -53,13 +53,14 @@ Exits non-zero if anything is down or behind, so it can gate a deploy.
    can move.
 
    ```sh
-   git commit -am "Release 0.4.0"
-   git tag -a v0.4.0 -m "Release 0.4.0"
-   git push origin main && git push origin v0.4.0
+   git commit -am "Release X.Y.Z"
+   git tag -a vX.Y.Z -m "Release X.Y.Z"
+   git push origin main && git push origin vX.Y.Z
    ```
 
-Anything under `docs/` publishes to the site on push — check
-https://inkling.wess.dev/ afterwards.
+Anything under `docs/` publishes to GitHub Pages on push — check
+https://wess.io/inkling/ afterwards. The School at `inkling.wess.dev` is a
+separate Inkling-powered surface and is seeded through its own deploy path.
 
 ## Rolling it to a site
 
@@ -69,12 +70,12 @@ One site at a time, verified before the next. They share a database server and a
 1. **Pin it.** In the site's `package.json`:
 
    ```json
-   "inkling": "github:wess/inkling#v0.4.0"
+   "inkling": "github:wess/inkling#vX.Y.Z"
    ```
 
    ```sh
    bun install && bunx tsc --noEmit
-   git commit -am "Pin Inkling to v0.4.0" && git push
+   git commit -am "Pin Inkling to vX.Y.Z" && git push
    ```
 
 2. **Deploy.** From the devops repo. The image runs its own `bun install`, so
@@ -114,8 +115,8 @@ the `down.sql` of anything applied since before relying on it.
 
 ```sh
 # in the site repo
-"inkling": "github:wess/inkling#v0.3.0"
-bun install && git commit -am "Roll back to v0.3.0" && git push
+"inkling": "github:wess/inkling#vPREVIOUS"
+bun install && git commit -am "Roll back Inkling to vPREVIOUS" && git push
 cd ~/Desktop/Dev/devops && bun run scripts/gohan.ts apothecary
 ```
 

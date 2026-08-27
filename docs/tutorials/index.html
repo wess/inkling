@@ -4,22 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tutorials — Inkling</title>
-<meta name="description" content="Build a blog end to end, write a plugin, run three sites at once, mount Inkling inside a site, and connect an assistant.">
+<meta name="description" content="Build a blog, write a plugin, run multiple sites, embed Inkling, connect an external agent, and configure the assistant.">
 <meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="canonical" href="https://inkling.wess.dev/tutorials/">
+<link rel="canonical" href="https://wess.io/inkling/tutorials/">
+<link rel="describedby" href="../llms.txt">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav">
   <div class="wrap nav-in">
     <a class="wordmark" href="../">Inkling<b>.</b></a>
     <div class="nav-links">
       
-      <a href="/school/">School</a>
+      <a href="https://inkling.wess.dev/school/">School</a>
       <a href="../start/">Start</a>
       <a href="../guide/">Guide</a>
       <a href="./" aria-current="page">Tutorials</a>
@@ -38,16 +41,17 @@
       <li><a href="#plugin">Write a plugin</a></li>
       <li><a href="#sites">Three sites at once</a></li>
       <li><a href="#embed">Mount it inside a site</a></li>
+      <li><a href="#agent">Connect an external agent</a></li>
       <li><a href="#ai">Connect an assistant</a></li>
     </ol>
   </aside>
 
-  <main class="prose">
+  <main class="prose" id="main">
 
     <p class="eyebrow">Tutorials</p>
     <h1 class="page-title">Build something</h1>
     <p class="lede">
-      Five walkthroughs, each one finished and running by the end. Start with the
+      Six walkthroughs, each one finished and running by the end. Start with the
       blog if you have not used Inkling before — the rest assume it.
     </p>
 
@@ -318,6 +322,8 @@ bun --env-file=gamma.env src/start.ts</pre></div>
 <span class="k">const</span> inkling = <span class="k">await</span> createInkling({ adminBase: <span class="s">"/admin"</span>, siteKeyName: <span class="s">"site"</span> })
 
 <span class="w">Bun</span>.serve({
+  <span class="c">// Keep Inkling's request ceiling and idle timeout.</span>
+  ...inkling.serveOptions,
   fetch: <span class="k">async</span> (request, server) =&gt; {
     <span class="c">// Answer the upgrade before anything returns a Response, or the
     // handshake is gone.</span>
@@ -353,6 +359,75 @@ bun --env-file=gamma.env src/start.ts</pre></div>
         bucket shared by every account.
       </p>
     </div>
+
+    <h2 id="agent">Connect an external agent</h2>
+
+    <p>
+      Give a coding agent a narrow, expiring credential and expose the existing
+      admin API as MCP tools. Changes still pass through Inkling's validation,
+      revisions, hooks, permissions, and audit trail.
+    </p>
+
+    <ol class="steps">
+
+      <li class="step">
+        <h3>Mint a key for this job</h3>
+        <p>
+          Open <b>Agent keys → New key</b>. Choose a short expiry and only the
+          grants the work needs. Copy the <code>inkagt_…</code> value when it is
+          shown; Inkling stores only its hash.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Add an MCP stdio server</h3>
+        <p>Use the configuration shape your MCP client expects:</p>
+        <div class="screen"><pre>{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"inkling-site"</span>: {
+      <span class="k">"command"</span>: <span class="s">"bun"</span>,
+      <span class="k">"args"</span>: [<span class="s">"run"</span>, <span class="s">"/absolute/path/to/inkling/scripts/mcp.ts"</span>],
+      <span class="k">"env"</span>: {
+        <span class="k">"INKLING_URL"</span>: <span class="s">"https://cms.example.com"</span>,
+        <span class="k">"INKLING_KEY"</span>: <span class="s">"inkagt_…"</span>
+      }
+    }
+  }
+}</pre></div>
+        <p>
+          Keep the key in local client configuration, never in the repository.
+          Add <code>INKLING_MCP_READONLY=1</code> for inspection and production
+          diagnosis.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Discover the model first</h3>
+        <p>
+          Ask the agent to call <code>list_types</code>, then
+          <code>get_type</code>, before it reads or changes entries. Field keys
+          are site-specific; labels are not an API contract. It should read the
+          current entry immediately before an update and verify the result
+          afterward.
+        </p>
+      </li>
+
+      <li class="step">
+        <h3>Revoke when the job is done</h3>
+        <p>
+          Every change is attributed to the account and records which key acted.
+          Revoke the job key without changing the account password or ending its
+          other sessions.
+        </p>
+      </li>
+
+    </ol>
+
+    <p>
+      The machine-readable <a href="../agent-guide.md">agent operations guide</a>
+      covers discovery order, safe production use, credentials, errors, and
+      retry rules in full.
+    </p>
 
     <h2 id="ai">Connect an assistant</h2>
 

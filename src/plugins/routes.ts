@@ -172,9 +172,11 @@ export const pluginRoutes = (db: Connection, hooks: Hooks, registry: Registry, d
           )
         }
 
-        for (const [key, value] of Object.entries(input)) {
-          await writeSetting(db, entry.plugin.name, key, value)
-        }
+        await db.transaction(async tx => {
+          for (const [key, value] of Object.entries(input)) {
+            await writeSetting(tx, entry.plugin.name, key, value)
+          }
+        })
         // Settings can change what a plugin registers, so re-register it.
         await registry.reload()
 

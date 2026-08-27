@@ -9,17 +9,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="canonical" href="https://inkling.wess.dev/reference/">
+<link rel="canonical" href="https://wess.io/inkling/reference/">
+<link rel="describedby" href="../llms.txt">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <nav class="nav">
   <div class="wrap nav-in">
     <a class="wordmark" href="../">Inkling<b>.</b></a>
     <div class="nav-links">
       
-      <a href="/school/">School</a>
+      <a href="https://inkling.wess.dev/school/">School</a>
       <a href="../start/">Start</a>
       <a href="../guide/">Guide</a>
       <a href="../tutorials/">Tutorials</a>
@@ -47,7 +50,7 @@
     </ol>
   </aside>
 
-  <main class="prose">
+  <main class="prose" id="main">
 
     <p class="eyebrow">Reference</p>
     <h1 class="page-title">Look it up</h1>
@@ -476,6 +479,7 @@
         <tr><td><code>bun run test</code></td><td>The test suite, on in-memory SQLite. No setup.</td></tr>
         <tr><td><code>bun run typecheck</code></td><td><code>tsc --noEmit</code>.</td></tr>
         <tr><td><code>bun run tidy</code></td><td>Format and lint, with fixes.</td></tr>
+        <tr><td><code>bun run docs</code></td><td>Validate every documentation page, local link, and anchor.</td></tr>
         <tr><td><code>bun run password</code></td><td>Set a user's password from the host. Run with no arguments to list the accounts. The way back in when the only owner is locked out — every browser path needs a credential they no longer have.</td></tr>
       </tbody>
     </table>

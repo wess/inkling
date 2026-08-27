@@ -62,6 +62,8 @@
 
 html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
 
+::selection { background: var(--sun); color: var(--ink); }
+
 body {
   margin: 0;
   background: var(--paper);
@@ -83,6 +85,22 @@ h1, h2, h3, h4 {
 }
 
 a { color: inherit; }
+
+.skip {
+  position: fixed;
+  top: 0;
+  left: var(--gutter);
+  z-index: 100;
+  padding: 0.7rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  text-decoration: none;
+  transform: translateY(-120%);
+  transition: transform 0.15s ease-out;
+}
+.skip:focus { transform: translateY(0.75rem); }
 
 :focus-visible {
   outline: 2px solid var(--flame);
@@ -143,6 +161,21 @@ a { color: inherit; }
 }
 .nav-links a:hover { border-bottom-color: var(--flame); }
 .nav-links a[aria-current="page"] { border-bottom-color: var(--ink); }
+
+@media (max-width: 720px) {
+  .nav-in { display: block; padding-block: 0.75rem; }
+  .wordmark { display: inline-block; margin-bottom: 0.65rem; }
+  .nav-links {
+    gap: 1.15rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(var(--gutter) * -1);
+    padding-inline: var(--gutter);
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+}
 /* The wordmark's dot becomes a drawn circle — the smallest instance of the
    shape the whole page is built from. */
 .wordmark b {
@@ -267,6 +300,17 @@ code {
 
 .page-title { font-size: clamp(2.6rem, 8vw, 5rem); margin-bottom: 1rem; }
 
+.missing {
+  min-height: calc(100vh - 12rem);
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  padding-block: clamp(4rem, 14vh, 9rem);
+}
+.missing .slate { width: min(100%, 42rem); }
+.missing h1 { max-width: 8ch; font-size: clamp(3.5rem, 12vw, 8rem); }
+.missing > p:not(.slate) { max-width: 42ch; margin: 1.5rem 0 0; font-size: 1.15rem; }
+
 /* ———————————————————— steps ———————————————————— */
 
 .steps { list-style: none; margin: 2rem 0 0; padding: 0; counter-reset: step; display: grid; gap: 2.5rem; }
@@ -384,7 +428,8 @@ code {
 /* ———————————————————— callout ———————————————————— */
 
 .note {
-  border-left: 4px solid var(--sun);
+  border: 1px solid var(--ink);
+  border-top: 4px solid var(--sun);
   background: var(--mist);
   padding: 1.1rem 1.3rem;
   margin: 1.75rem 0;
@@ -392,7 +437,7 @@ code {
 .note p { margin: 0.4rem 0 0; }
 .note p:first-child { margin-top: 0; }
 .note b { font-family: var(--display); font-weight: 600; font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; }
-.note.warn { border-left-color: var(--flame); }
+.note.warn { border-top-color: var(--flame); }
 
 /* ———————————————————— buttons ———————————————————— */
 

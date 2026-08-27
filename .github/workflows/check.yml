@@ -41,6 +41,9 @@ jobs:
       - name: Lint and format
         run: bunx biome check src/ plugins/ scripts/ tests/ templates/
 
+      - name: Validate documentation
+        run: bun run docs
+
       # The suite runs on in-memory SQLite and needs no services. The Postgres
       # tests below cover the dialect it actually ships on.
       - name: Test

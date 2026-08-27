@@ -24,6 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Validate documentation
+        run: bun run docs
+
       - name: Publish docs/ to gh-pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

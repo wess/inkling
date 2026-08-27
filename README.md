@@ -1,5 +1,8 @@
 # Inkling
 
+[![Check](https://github.com/wess/inkling/actions/workflows/check.yml/badge.svg)](https://github.com/wess/inkling/actions/workflows/check.yml)
+[Documentation](https://wess.io/inkling/) · [MIT license](LICENSE)
+
 A headless CMS with a plugin system and an agent that can work the whole of it,
 built on [Atlas](https://github.com/wess/atlas).
 
@@ -12,7 +15,7 @@ ordinary words and it reads your site, works out what you meant, and hands you a
 diff. And a **visitor bubble** you can add to the public site with one script
 tag, answering only from what you have published, under rules you write.
 
-Documentation is at **[inkling.wess.dev](https://inkling.wess.dev/)**.
+Documentation is at **[wess.io/inkling](https://wess.io/inkling/)**.
 
 ## Quick start
 
@@ -187,11 +190,19 @@ content types, media, menus, settings, taxonomy, search, and revisions.
 It signs in with an **agent key**, not your password. Mint one under **Agent
 keys** in the admin, ticking only what that agent needs:
 
-```sh
-claude mcp add mysite -s user \
-  -e INKLING_URL=https://cms.yoursite.com \
-  -e INKLING_KEY=inkagt_… \
-  -- bun run /path/to/inkling/scripts/mcp.ts
+```json
+{
+  "mcpServers": {
+    "mysite": {
+      "command": "bun",
+      "args": ["run", "/path/to/inkling/scripts/mcp.ts"],
+      "env": {
+        "INKLING_URL": "https://cms.yoursite.com",
+        "INKLING_KEY": "inkagt_…"
+      }
+    }
+  }
+}
 ```
 
 A key acts as the account that minted it, but only for the boxes you ticked,
@@ -210,6 +221,9 @@ same `/api` route the admin calls, so revisions, validation, hooks, and the audi
 trail keep working; the history shows the account, and records which key acted.
 `INKLING_MCP_READONLY=1` narrows further than the key does, for pointing an agent
 at production to look rather than touch without minting a second key.
+The [agent operations guide](https://wess.io/inkling/agent-guide.md) covers
+discovery order, production safety, failure handling, and reliable update
+workflows.
 
 ## Social
 
@@ -373,7 +387,7 @@ A site that would rather not deploy a second service can mount Inkling in its ow
 process. Install it from GitHub — there is no npm release:
 
 ```bash
-bun add github:wess/inkling#v0.6.0   # pin to a release
+bun add github:wess/inkling#v1.8.1   # pin to a release
 bun add github:wess/inkling          # or follow main
 ```
 
@@ -426,6 +440,7 @@ module-level, so mounting twice gives you two route sets over the same data.
 | `bun run test` | Test suite |
 | `bun run typecheck` | `tsc --noEmit` |
 | `bun run tidy` | Biome format + lint with fixes |
+| `bun run docs` | Validate every documentation page, local link, and anchor |
 | `bun run password` | Set a user's password from the host — the way back in when the only owner is locked out |
 | `bun run mcp` | The admin API as MCP tools, for an agent working a site from outside it |
 
@@ -435,18 +450,23 @@ and skip otherwise, so `bun test` stays zero-setup.
 
 ## Documentation
 
-- **[inkling.wess.dev](https://inkling.wess.dev/)** — the site
-  - [Get set up](https://inkling.wess.dev/start/) — empty database to a live site
-  - [Guide](https://inkling.wess.dev/guide/) — the model, delivery, realtime,
+- **[wess.io/inkling](https://wess.io/inkling/)** — the GitHub Pages site
+  - [Get set up](https://wess.io/inkling/start/) — empty database to a live site
+  - [Guide](https://wess.io/inkling/guide/) — the model, delivery, realtime,
     previews, AI, plugins, and running more than one site
-  - [Tutorials](https://inkling.wess.dev/tutorials/) — a blog end to end, writing
-    a plugin, three sites at once, mounting it inside a site
-  - [Reference](https://inkling.wess.dev/reference/) — every route, field type,
+  - [Tutorials](https://wess.io/inkling/tutorials/) — a blog end to end, writing
+    a plugin, multiple sites, embedding, and connecting an external agent
+  - [Reference](https://wess.io/inkling/reference/) — every route, field type,
     variable, and command
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module layout, data model,
   plugin system, realtime, previews, AI, and the dialect-portability rules
-- [`llms.txt`](https://inkling.wess.dev/llms.txt) — the same ground in one pass,
-  written to be read by an agent before it touches the code
+- [`llms.txt`](https://wess.io/inkling/llms.txt) — the small machine-readable map
+  agents can use to choose only the context they need
+- [Agent operations](https://wess.io/inkling/agent-guide.md) and
+  [delivery API](https://wess.io/inkling/delivery.md) — focused Markdown guides
+  without page chrome
+- [`llms-full.txt`](https://wess.io/inkling/llms-full.txt) — product and codebase
+  context for work that spans more than one focused guide
 - [`.env.example`](.env.example) — every configuration variable
 
 `docs/` is the site. Anything committed there publishes to the `gh-pages` branch

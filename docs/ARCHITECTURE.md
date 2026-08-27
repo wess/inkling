@@ -75,9 +75,12 @@ the first and skips the second.
 5. Load plugins in dependency order, auto-enabling `PLUGIN_AUTOENABLE` on a
    fresh install
 6. Assemble routes from feature factories
-7. Start background sweeps (`setInterval`): scheduled publishing every 60s,
-   rate-limit cleanup hourly
-8. Bundle the admin and return `{ fetch, upgrade, websocket, siteKey, db, config, stop }`
+7. Bundle the admin in memory. Nothing requiring cleanup starts before this
+   succeeds, so an embedding host can catch a failed boot without leaving
+   intervals behind
+8. Start background sweeps (`setInterval`): scheduled publishing every 60s,
+   rate-limit cleanup hourly, then return
+   `{ fetch, upgrade, websocket, siteKey, db, config, stop }`
 
 `src/server.ts` then wraps that in `Bun.serve` and `withSecurityHeaders`, with a
 `fetch` that attempts the WebSocket upgrade first — once anything returns a
@@ -921,6 +924,14 @@ refusal happens in Inkling. Audited content changes carry `agentKeyId` in their
 metadata, so the trail distinguishes "Wess published this" from "a program
 holding Wess's key published this".
 
+The MCP process is dual-era over stdio. It implements `server/discover` and the
+per-request metadata of protocol `2026-07-28`, while retaining the
+`2025-11-25` and `2025-06-18` initialization handshakes for existing clients.
+It never echoes an unknown version. Modern list and call results carry
+`resultType`; cache metadata is private because the tool list depends on the
+key. Requests are dispatched concurrently so one slow read cannot block another
+or its cancellation, and a cancelled call never emits a late response.
+
 ## Admin SPA
 
 `src/web/app.tsx` — a single-file React 19 SPA, hooks only, no router
@@ -947,7 +958,10 @@ dialog along with itself.
 server. `src/server.ts` calls it once at boot and falls through to it for
 anything the router doesn't claim, so there is no second process and no proxy —
 the bearer token is same-origin by construction and CORS never enters the
-picture. `bun --hot` re-runs the module on change, which rebuilds the bundle.
+picture. The emitted document and hashed assets stay in memory for the life of
+that handler; asset responses are immutable-cacheable, and no runtime build
+directory grows across restarts. `bun --hot` re-runs the module on change, which
+rebuilds the bundle.
 
 The admin sets its own Content-Security-Policy, in `serve.ts`, on the document
 response — not through `withSecurityHeaders`, which stays `disableCsp: true`. A
