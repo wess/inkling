@@ -4,13 +4,12 @@ import type { Route } from "atlas/server"
 import { badRequest, del, get, json, notFound, parseJson, pipeline, post, put } from "atlas/server"
 import { requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
-import { config } from "../config/index.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { id, secretToken } from "../ids/index.ts"
 import { decodeArray, encode, fromBit } from "../json/index.ts"
 import type { Hooks } from "../plugins/hooks.ts"
 import { webhooks } from "../schema/index.ts"
-import { checkOutboundUrl, isPrivateHost } from "../security/index.ts"
+import { checkOutboundUrl } from "../security/index.ts"
 import { now } from "../time/index.ts"
 
 export const WEBHOOK_EVENTS = [
@@ -68,7 +67,12 @@ const sign = async (payload: string, secret: string): Promise<string> => {
 // redirect would make the whole check theatre. A receiver that wants to move
 // should say so to whoever configured it.
 const deliver = async (url: string, payload: string, headers: Record<string, string>): Promise<Response | null> => {
-  if (!config.allowPrivateNetwork && isPrivateHost(new URL(url).hostname)) return null
+  // Re-resolve at delivery time as well as when the webhook is saved. DNS can
+  // change between those two moments; an old public hostname must not become a
+  // route into loopback, a sibling container, or cloud metadata by surprise.
+  // `redirect: "manual"` below closes the other half of the same gap.
+  const verdict = await checkOutboundUrl(url)
+  if (!verdict.ok) return null
   return fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },

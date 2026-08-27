@@ -11,6 +11,14 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.8.2 — 2026-08-27
+
+### Fixed
+
+- **Webhook delivery re-checks DNS at send time.** A hostname that was public
+  when saved can later resolve to a loopback, private, link-local, or metadata
+  address; dispatch now refuses that request as well as guarding redirects.
+
 ## 1.8.1 — 2026-08-27
 
 ### Fixed
