@@ -2779,6 +2779,43 @@ legend > .hintdot {
   margin: 3px 0 0;
   color: var(--text2);
 }
+/* A guide panel's steps double as a checklist, so a step that is behind you
+   says so and then gets out of the way — the eye should land on the first
+   thing still to do, not re-read the four that are done. */
+.guidestep.isdone > b,
+.guidestep.isdone > p {
+  color: var(--text3);
+}
+.guidestep .stepmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-right: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line2);
+  vertical-align: -2px;
+}
+.guidestep .stepmark.ok {
+  border-color: var(--good);
+  background: var(--good);
+  color: var(--paper);
+}
+.guidechoice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 9px;
+  flex-wrap: wrap;
+}
+.guidechoice select {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.guidelink {
+  margin-top: 10px;
+}
 .guidegotchas {
   margin: 0;
   padding: 0;

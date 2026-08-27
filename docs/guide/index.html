@@ -573,7 +573,7 @@ GET /content/post/hello</pre></div>
       <li><b>filter</b> — transformation. Listeners chain, and a throwing filter is skipped rather than blanking the payload, so a broken plugin degrades to a no-op instead of blocking a save.</li>
     </ul>
 
-    <p>Seven ship with it, each demonstrating a different extension point:</p>
+    <p>Eight ship with it, each demonstrating a different extension point:</p>
 
     <table class="table">
       <thead><tr><th>Plugin</th><th>What it shows</th></tr></thead>
@@ -585,6 +585,7 @@ GET /content/post/hello</pre></div>
         <tr><td><code>analytics</code></td><td>Cookieless traffic collection and a dashboard panel.</td></tr>
         <tr><td><code>assistant</code></td><td>Public answers grounded in published content.</td></tr>
         <tr><td><code>social</code></td><td>A queue, a calendar, and a performance report over four content types.</td></tr>
+        <tr><td><code>google</code></td><td>Google Analytics and Ads, behind a setup walkthrough that ticks itself off as you go.</td></tr>
       </tbody>
     </table>
 
@@ -593,6 +594,18 @@ GET /content/post/hello</pre></div>
       no address, and its visitor hash is salted with your secret <em>and the
       current date</em>, so it counts uniques within a day and is uncorrelatable
       across them. There is nothing to consent to and nothing to expire.
+    </p>
+
+    <p>
+      <code>google</code> is the one to read if you are setting a site up for
+      somebody who does not write software. It is deliberately two halves.
+      Pasting a <b>Measurement ID</b> under <b>Google → Setup</b> puts Google
+      Analytics on the site — five minutes, no Google Cloud project, nothing to
+      approve — and Inkling generates the snippet for you, or serves it to your
+      front end from <code>/ext/google/tag</code>. Connecting a Google account,
+      so the traffic and ad numbers appear in Inkling's own panels instead of on
+      Google's site, is a separate part marked optional, and nothing in the first
+      half mentions it.
     </p>
 
     <p>

@@ -7,11 +7,12 @@ import { upsertOwned } from "../contenttypes/index.ts"
 import { id } from "../ids/index.ts"
 import { downAll as migrateDownAll, up as migrateUp } from "../migrate/index.ts"
 import { contentTypes, plugins as pluginsTable, taxonomies } from "../schema/index.ts"
-import { clearScope, readScope, readSetting, writeSetting } from "../settings/index.ts"
+import { clearScope, readScope } from "../settings/index.ts"
 import { now } from "../time/index.ts"
 import type { Plugin, PluginContext } from "./define.ts"
 import { validatePlugin } from "./define.ts"
 import type { Hooks } from "./hooks.ts"
+import { openSecrets, readPluginSetting, writePluginSettings } from "./settings.ts"
 
 export type LoadedPlugin = {
   readonly plugin: Plugin
@@ -36,11 +37,14 @@ const context = (db: Connection, plugin: Plugin, hooks: Hooks, adminBase: string
   adminBase,
   on: (name, fn) => hooks.on(name, plugin.name, fn),
   filter: (name, fn) => hooks.addFilter(name, plugin.name, fn),
-  getSetting: (key, fallback) => readSetting(db, plugin.name, key, fallback),
-  setSetting: (key, value) => writeSetting(db, plugin.name, key, value),
+  // A plugin reads and writes its own settings in plaintext. Whether one of
+  // them is sealed on the way to the table is settled in ./settings.ts, and is
+  // deliberately not a thing the plugin has to remember.
+  getSetting: (key, fallback) => readPluginSetting(db, plugin, key, fallback),
+  setSetting: (key, value) => writePluginSettings(db, plugin, { [key]: value }),
   allSettings: async () => {
     const declared = Object.fromEntries((plugin.settings ?? []).map(s => [s.key, s.default ?? null]))
-    return { ...declared, ...(await readScope(db, plugin.name)) }
+    return openSecrets(plugin.settings, { ...declared, ...(await readScope(db, plugin.name)) })
   },
   log: message => console.log(`[plugin:${plugin.name}] ${message}`),
 })

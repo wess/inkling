@@ -149,7 +149,7 @@ export type PluginPanel = {
   id: string
   label: string
   icon?: string
-  kind: "settings" | "collection" | "table" | "stats" | "connections"
+  kind: "settings" | "collection" | "table" | "stats" | "connections" | "guide"
   contentType?: string
   endpoint?: string
   columns?: { key: string; label: string }[]
@@ -160,6 +160,7 @@ export type PluginPanel = {
 // Mirrors PluginStats in src/plugins/define.ts. Values arrive pre-formatted —
 // the plugin decides what a number means and how it reads.
 export type PluginStatsPayload = {
+  note?: string
   tiles: { label: string; value: string; hint?: string }[]
   series?: { label: string; points: { label: string; value: number }[] }
   tables?: { label: string; columns: { key: string; label: string }[]; rows: Record<string, string | number>[] }[]
@@ -172,6 +173,7 @@ export type PluginConnectionsPayload = {
     id: string
     label: string
     configured: boolean
+    hint?: string
     scopes?: string[]
     connection: {
       id: string
@@ -183,11 +185,35 @@ export type PluginConnectionsPayload = {
   }[]
 }
 
+// Mirrors PluginGuide in src/plugins/define.ts.
+export type PluginGuideStep = {
+  title: string
+  body: string
+  done?: boolean
+  copy?: string
+  link?: { label: string; url: string }
+  input?: { endpoint: string; value?: string; placeholder?: string; action?: string; secret?: boolean }
+  choices?: {
+    endpoint: string
+    selected?: string | null
+    empty?: string
+    options: { value: string; label: string; hint?: string }[]
+  }
+  connect?: { endpoint: string; id: string; label: string }
+}
+
+export type PluginGuidePayload = {
+  summary: string
+  parts: { title: string; summary?: string; time?: string; optional?: boolean; steps: PluginGuideStep[] }[]
+  gotchas?: string[]
+}
+
 export type PluginSetting = {
   key: string
   label: string
-  type: "text" | "textarea" | "number" | "boolean" | "select"
+  type: "text" | "textarea" | "number" | "boolean" | "select" | "secret"
   help?: string
+  find?: string
   default?: unknown
   options?: FieldOption[]
 }
@@ -712,6 +738,11 @@ export const api = {
     ),
   pluginDisconnect: (endpoint: string, id: string) =>
     request<Wrapped<{ id: string }>>(`${endpoint}/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  pluginGuide: (endpoint: string) => request<Wrapped<PluginGuidePayload>>(endpoint).then(r => r.data),
+  // A guide step's one write: the answer to a question only the connected
+  // account could be asked, sent back to the plugin that offered the list.
+  pluginGuideChoose: (endpoint: string, value: string) =>
+    request<Wrapped<unknown>>(endpoint, { method: "POST", body: { value } }),
 
   keys: () =>
     request<

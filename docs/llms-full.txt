@@ -214,17 +214,43 @@ migrations, and hook listeners. Routes are declared relative and namespaced to
 and a throwing filter degrades to a no-op rather than blanking the payload.
 
 Panels are declarative — the SPA is bundled before a plugin exists, so a plugin
-describes panels rather than shipping React. Five kinds: `settings`,
-`collection`, `table`, `stats`, `connections`. A `connections` panel is a list
-of authorizable accounts; the SPA owns three verbs (`POST <endpoint>/<id>/start`
-for a consent URL, the return leg, `DELETE <endpoint>/<connection id>`) and the
-plugin owns every word on a row. `ctx.adminBase` exists solely so a plugin's
-OAuth return leg — a top-level navigation — can land back in the admin.
+describes panels rather than shipping React. Six kinds: `settings`,
+`collection`, `table`, `stats`, `connections`, `guide`. A `connections` panel is
+a list of authorizable accounts; the SPA owns three verbs
+(`POST <endpoint>/<id>/start` for a consent URL, the return leg,
+`DELETE <endpoint>/<connection id>`) and the plugin owns every word on a row.
+`ctx.adminBase` exists solely so a plugin's OAuth return leg — a top-level
+navigation — can land back in the admin.
+
+A `guide` panel is a setup walkthrough that knows how far along it is. The
+payload comes in `parts` (a cheap half and an expensive half read as one
+eleven-step list otherwise), each step optionally carrying `done`, `copy`,
+`link`, `input`, `choices`, or `connect` — so a value is collected where it is
+asked for rather than on another screen. The plugin owns every word and the
+whole notion of "done". `PluginStats` also carries an optional `note`, so a
+dashboard can explain its own emptiness.
+
+A plugin setting declared `type: "secret"` is sealed with the same AES-GCM as
+every other stored credential. `src/plugins/settings.ts` is the only file that
+knows: the plugin reads plaintext from `getSetting`, the API and the assistant
+both read four characters, and every write — route, guide step, or approved
+assistant proposal — goes through `writePluginSettings`, where `null` clears,
+`""` or the mask leaves it alone, and anything else is sealed.
 
 Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`,
 `social` (client-side planning — four content types, an `entry.beforeSave`
-filter, two `stats` panels, and its own `social_results` table). Posting is not
-a plugin; see Social below.
+filter, two `stats` panels, and its own `social_results` table), `google`.
+Posting is not a plugin; see Social below.
+
+`google` is deliberately split in half, because Google sells it as one thing and
+it is two. Pasting a Measurement ID under Google → Setup puts Analytics on the
+site: five minutes, no Cloud project, nothing to approve, and `GET /ext/google/tag`
+serves the generated snippet to a front end holding a delivery key. Reading
+those numbers back into Inkling's own panels is the other half — a Cloud
+project, an OAuth client, and a consent screen — and it is marked optional
+everywhere it appears. Ads reporting needs one credential more (a developer
+token, issued against a manager account, starting on test access) and the
+`adwords` scope is only requested once that token exists.
 
 The generic authorization-code + PKCE machinery is `src/oauth/index.ts` — sealed
 `state` rather than a pending-flows table, ten-minute expiry, form-encoded token

@@ -585,21 +585,44 @@ namespaced, its content types are tagged with `owner_plugin`, and its routes are
 confined to `/ext/<name>`. `uninstall` rolls all of that back; `disable` is the
 reversible option and leaves data intact.
 
+**Secret settings.** A setting declared `type: "secret"` is a credential rather
+than a preference, and the two want opposite things: a preference is read back
+into the form it was typed in, a credential is written once and never shown
+again. `src/plugins/settings.ts` is the only file that knows the difference. It
+seals the value with the same AES-GCM as every other stored credential, hands
+four characters to anything reading for a human or a model — the API, and the
+assistant's `list_plugins` — and gives the plugin plaintext through
+`getSetting`, which does not know it was ever encrypted. Every write goes
+through `writePluginSettings`, where `null` clears, `""` or the mask leaves what
+is stored alone, and anything else is sealed; that is what lets a form that
+never echoes a secret back still be saved without wiping it.
+
 **Admin UI is declarative.** The SPA is bundled ahead of time, so a plugin
 cannot inject React into it. Instead it describes panels that the SPA already
 knows how to render — which is what makes a plugin installable without a
-rebuild. Five kinds: `settings`, `collection`, `table` (an endpoint plus
-columns), `stats`, and `connections`.
+rebuild. Six kinds: `settings`, `collection`, `table` (an endpoint plus
+columns), `stats`, `connections`, and `guide`.
 
 A `stats` panel is a plugin's dashboard. Its endpoint returns a `PluginStats`
 payload — tiles, one series, and any number of top-N tables — and the SPA lays
 out what it is handed. The plugin does all the aggregating *and* the formatting,
 including thousands separators and rounding, so a panel never has to guess what
 a number means. `ranges` adds a day-window switch that re-requests with `?days=`.
+An optional `note` is said above the tiles, so a dashboard with nothing in it
+can explain why rather than reading as broken.
 
-Bundled: `seo` (delivery filter), `redirects` (plugin-owned type + public
-route), `forms` (own table via plugin migrations), `commerce` (types +
-taxonomy + settings + route), `analytics` (own table + public write route +
+A `guide` panel is a setup walkthrough that knows how far along it is — the
+screen for the person who did not build the site. Its endpoint returns a
+`PluginGuide` in `parts`, because most setups have a cheap half and an expensive
+half and presenting them as one list makes the cheap half look like it needs the
+expensive one; a part marked `optional` says so and is left out of the
+completion count. A step may carry `done` (making it a checklist row), `copy` (a
+value to paste elsewhere), `link`, `input` (collect the value here rather than
+on another screen), `choices` (a question only the connected account can answer,
+so nobody hunts for a numeric id in a console), and `connect` (start an OAuth
+flow against a `connections` endpoint). Every word, and the whole notion of
+"done", belongs to the plugin.
+
 A `connections` panel is a list of things that can be authorized. Its endpoint
 returns a `PluginConnections` payload; the SPA owns exactly three verbs —
 `POST <endpoint>/<id>/start` for a consent URL, the return leg, and
@@ -615,7 +638,8 @@ route), `forms` (own table via plugin migrations), `commerce` (types +
 taxonomy + settings + route), `analytics` (own table + public write route +
 `stats` panel), `assistant` (public AI answers grounded in published content),
 `social` (four types, an `entry.beforeSave` filter, two `stats` panels, and a
-`connections` panel).
+`connections` panel), `google` (a `guide` panel, two `stats` panels, a
+`connections` panel, and `secret` settings).
 
 ### Social (the plugin)
 
@@ -671,6 +695,42 @@ Rows carry a denormalized `day`, since extracting a date from a timestamp is
 spelled differently per dialect and every report here groups by it. Retention
 runs from the first beacon of each new day rather than a timer — a plugin that
 installs its own `setInterval` keeps running after it is disabled.
+
+### Google
+
+`google` is one plugin covering Analytics and Ads, and it is split down the
+middle on purpose. Google sells all of it as one thing, every setup guide reads
+as one long list, and the conclusion people draw is that measuring a website
+requires a Cloud project, an OAuth client and a consent screen — so they do all
+of it or none of it.
+
+It is two jobs. **Measuring** is one id: paste a Measurement ID under
+Google → Setup and the site is measured. Five minutes, no Cloud project, nothing
+for Google to approve. `plugins/google/tag.ts` generates the snippet — Tag
+Manager wins over gtag when both are set, because a container almost always has
+Analytics configured inside it and sending both is what makes every number read
+exactly double — and `GET /ext/google/tag` serves it to a front end holding a
+delivery key, so a site can fetch it instead of hard-coding it.
+
+**Reporting** — those numbers inside Inkling's own panels — is the expensive
+half, and it is marked optional everywhere it appears. It uses the shared
+`src/oauth` machinery with `access_type=offline` and `prompt=consent`, without
+which Google issues a token that dies in an hour and no refresh token. The
+connection lives in the plugin's own `google_connections` table, one row,
+tokens sealed; `granted()` reads the scopes Google actually returned rather than
+the ones asked for, because somebody can untick Ads on the consent screen and
+the Ads panel has to say so instead of failing with a permission error. The
+`adwords` scope is only requested once there is a developer token to use it
+with, so an unused permission never appears on the consent screen.
+
+`plugins/google/guide.ts` is the actual product for a non-technical operator: a
+`guide` panel in three parts, collecting every value where it asks for it,
+listing the Analytics properties and Ads accounts the connected account can see
+rather than asking anyone to find a numeric id, and naming the trap at each step
+— the redirect URI that must match to the character, the test-user list that
+makes Google refuse an unverified app, the developer token that returns zeros
+rather than an error while it is on test access. Both panels degrade to a `note`
+that says which step is missing, so an empty dashboard never reads as a fault.
 
 ## Social
 

@@ -3,6 +3,7 @@ import { can } from "../../auth/roles.ts"
 import { decodeArray } from "../../json/index.ts"
 import type { MenuItem } from "../../menus/index.ts"
 import { safeUrl } from "../../menus/index.ts"
+import { maskSecrets } from "../../plugins/settings.ts"
 import { menus } from "../../schema/index.ts"
 import { isSiteSetting, readScope, siteSettings } from "../../settings/index.ts"
 import type { Tool } from "./common.ts"
@@ -71,7 +72,12 @@ export const siteTools: readonly Tool[] = [
     needs: can.managePlugins,
     run: async run => {
       const all = run.registry.all()
-      const values = await Promise.all(all.map(entry => readScope(run.db, entry.plugin.name)))
+      // Masked, because this output lands in a model's context and a `secret`
+      // setting is a credential. The model can see that one is set, and say so
+      // when a step is missing; it cannot read it.
+      const values = await Promise.all(
+        all.map(async entry => maskSecrets(entry.plugin.settings, await readScope(run.db, entry.plugin.name))),
+      )
       return {
         output: all.map((entry, index) => ({
           name: entry.plugin.name,
@@ -327,7 +333,7 @@ export const siteTools: readonly Tool[] = [
         )
       }
 
-      const current = await readScope(run.db, entry.plugin.name)
+      const current = maskSecrets(entry.plugin.settings, await readScope(run.db, entry.plugin.name))
       const before: Record<string, unknown> = {}
       for (const key of keys) before[key] = current[key] ?? null
 

@@ -267,7 +267,7 @@ screen says so if it is not.
 
 ## Plugins
 
-Drop a directory into `plugins/` and enable it in the admin. Seven ship with it:
+Drop a directory into `plugins/` and enable it in the admin. Eight ship with it:
 
 | Plugin | Demonstrates |
 |---|---|
@@ -278,6 +278,7 @@ Drop a directory into `plugins/` and enable it in the admin. Seven ship with it:
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
 | `assistant` | A public, page-aware assistant answering from published content only |
 | `social` | Client-side social planning — a queue, a calendar, and a performance report, built out of four content types and one of its own tables. Posting itself is core; see below |
+| `google` | Google Analytics and Google Ads. A `guide` panel that walks a non-technical operator through setup and ticks itself off as they go, two `stats` panels, and a `secret` setting whose value the API can never hand back |
 
 ```ts
 import { definePlugin } from "../../src/plugins/define.ts"

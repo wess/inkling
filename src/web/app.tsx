@@ -64,7 +64,10 @@ import type {
   MenuItem,
   Plugin,
   PluginConnectionsPayload,
+  PluginGuidePayload,
+  PluginGuideStep,
   PluginPanel,
+  PluginSetting,
   PluginStatsPayload,
   SocialAccount,
   SocialAppInput,
@@ -2713,6 +2716,16 @@ const StatsPanel = ({ panel, toast }: { panel: PluginPanel; toast: (message: str
         </div>
       ) : null}
 
+      {stats.note ? (
+        <div style={{ marginBottom: 16 }}>
+          <Note kind="info">
+            <div className="notebody">
+              <p>{emphasize(stats.note)}</p>
+            </div>
+          </Note>
+        </div>
+      ) : null}
+
       <div className="grid g4" style={{ marginBottom: 20 }}>
         {stats.tiles.map(tile => (
           <div className="card stat" key={tile.label}>
@@ -2898,10 +2911,12 @@ const ConnectionsPanel = ({
                     ) : row.configured ? (
                       (row.scopes ?? []).join(" · ") || "Not connected"
                     ) : (
-                      <>
-                        Set <code>SOCIAL_OAUTH_{row.id.toUpperCase()}_CLIENT_ID</code> and <code>_CLIENT_SECRET</code>{" "}
-                        to offer this one.
-                      </>
+                      (row.hint ?? (
+                        <>
+                          Set <code>SOCIAL_OAUTH_{row.id.toUpperCase()}_CLIENT_ID</code> and <code>_CLIENT_SECRET</code>{" "}
+                          to offer this one.
+                        </>
+                      ))
                     )}
                   </div>
                 </div>
@@ -2950,6 +2965,326 @@ const ConnectionsPanel = ({
   )
 }
 
+// A "guide" panel is the screen for the person who did not build the site: a
+// walkthrough that knows how far along it is and collects what it asks for
+// where it asks for it. Every word, every value, and the whole notion of "done"
+// comes from the plugin — see src/plugins/define.ts#PluginGuide — and this owns
+// four verbs: follow a link, save an answer, pick from a list, start a
+// connection.
+//
+// It is deliberately a page rather than the modal the social guides use. Those
+// are read once and closed; this one is worked through, comes back to be
+// finished later, and has to still be there when somebody returns from a
+// consent screen.
+const GuideStepView = ({
+  step,
+  busy,
+  onSave,
+  onConnect,
+}: {
+  step: PluginGuideStep
+  busy: boolean
+  onSave: (endpoint: string, value: string) => Promise<void>
+  onConnect: (endpoint: string, id: string) => void
+}) => {
+  // null means untouched, which is not the same as emptied — a stored value has
+  // to be clearable, and an input that falls back to it whenever the box is
+  // empty cannot be cleared at all.
+  const [typed, setTyped] = useState<string | null>(null)
+  const [chosen, setChosen] = useState<string | null>(null)
+
+  const input = step.input
+  const choices = step.choices
+  const connect = step.connect
+  const picked = chosen ?? choices?.selected ?? ""
+  // A secret is never echoed back, so its box starts empty however much is
+  // stored behind it.
+  const shown = typed ?? (input?.secret ? "" : (input?.value ?? ""))
+
+  return (
+    <li className={cx("guidestep", step.done === true && "isdone")}>
+      <b>
+        {step.done === undefined ? null : (
+          <span className={cx("stepmark", step.done && "ok")}>{step.done ? <Check size={11} /> : null}</span>
+        )}
+        {step.title}
+      </b>
+      <p>{emphasize(step.body)}</p>
+
+      {step.copy ? <code className="copyable">{step.copy}</code> : null}
+
+      {input ? (
+        <div className="guidechoice">
+          <input
+            type={input.secret ? "password" : "text"}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={input.placeholder ?? ""}
+            value={shown}
+            onChange={event => setTyped(event.target.value)}
+          />
+          <button
+            type="button"
+            className="btn sm primary"
+            disabled={busy || typed === null}
+            onClick={async () => {
+              await onSave(input.endpoint, shown)
+              // Dropped rather than kept, so the reloaded step decides what the
+              // box says — and a secret is not left sitting in the DOM.
+              setTyped(null)
+            }}
+          >
+            {input.action ?? "Save"}
+          </button>
+        </div>
+      ) : null}
+
+      {choices ? (
+        choices.options.length === 0 ? (
+          <p className="dim2">{choices.empty ?? "There is nothing to choose from yet."}</p>
+        ) : (
+          <div className="guidechoice">
+            <select value={picked} onChange={event => setChosen(event.target.value)}>
+              <option value="">Choose one…</option>
+              {choices.options.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.hint ? `${option.label} — ${option.hint}` : option.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn sm primary"
+              disabled={busy || picked === "" || picked === choices.selected}
+              onClick={() => onSave(choices.endpoint, picked)}
+            >
+              {picked !== "" && picked === choices.selected ? "In use" : "Use this one"}
+            </button>
+          </div>
+        )
+      ) : null}
+
+      {connect || step.link ? (
+        <div className="row">
+          {connect ? (
+            <button
+              type="button"
+              className="btn sm primary guidelink"
+              disabled={busy}
+              onClick={() => onConnect(connect.endpoint, connect.id)}
+            >
+              {connect.label}
+            </button>
+          ) : null}
+          {step.link ? (
+            <a className="btn sm guidelink" href={step.link.url} target="_blank" rel="noreferrer noopener">
+              {step.link.label} <ExternalLink size={13} />
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+const GuidePanel = ({ panel, toast }: { panel: PluginPanel; toast: (message: string, bad?: boolean) => void }) => {
+  const [payload, setPayload] = useState<PluginGuidePayload | null>(null)
+  const [busy, setBusy] = useState(true)
+  const [working, setWorking] = useState(false)
+
+  const endpoint = panel.endpoint
+
+  const load = useCallback(() => {
+    if (!endpoint) return
+    setBusy(true)
+    api
+      .pluginGuide(endpoint)
+      .then(setPayload)
+      .catch(error => toast(errorOf(error), true))
+      .finally(() => setBusy(false))
+  }, [endpoint, toast])
+
+  useEffect(load, [load])
+
+  // Where somebody lands coming back from a provider's consent screen, so it
+  // reads the same return leg a connections panel does. Said once, then wiped
+  // off the URL so a refresh does not re-announce it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const outcome = params.get("connected")
+    if (!outcome) return
+
+    const reason = params.get("reason") ?? ""
+    toast(
+      outcome === "ok" ? `Connected${reason ? ` as ${reason}` : ""}` : reason || "That did not finish",
+      outcome !== "ok",
+    )
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [toast])
+
+  const save = async (target: string, value: string) => {
+    setWorking(true)
+    try {
+      await api.pluginGuideChoose(target, value)
+      toast("Saved")
+      load()
+    } catch (error) {
+      toast(errorOf(error), true)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const connect = async (target: string, id: string) => {
+    setWorking(true)
+    try {
+      // A full-page navigation, not a popup: consent screens routinely refuse
+      // to render in one, and a blocked popup is indistinguishable from a
+      // button that does nothing.
+      window.location.href = (await api.pluginConnect(target, id)).url
+    } catch (error) {
+      toast(errorOf(error), true)
+      setWorking(false)
+    }
+  }
+
+  if (!endpoint) return <Note kind="warn">This panel does not declare an endpoint to read from.</Note>
+  if (busy && !payload) return <Spinner />
+  if (!payload) return <Empty title="Nothing to set up" hint={panel.description ?? ""} />
+
+  const required = payload.parts.filter(part => !part.optional).flatMap(part => part.steps)
+  const checkable = required.filter(step => step.done !== undefined)
+  const done = checkable.filter(step => step.done).length
+  const finished = checkable.length > 0 && done === checkable.length
+
+  return (
+    <>
+      <div className="card">
+        <div className="cardhead">
+          <h2>{panel.label}</h2>
+          {checkable.length > 0 ? (
+            <span className={cx("pill", finished && "ok")}>
+              {finished ? "All set" : `${done} of ${checkable.length} done`}
+            </span>
+          ) : null}
+        </div>
+        <div className="cardbody">
+          <p className="guidelead">{payload.summary}</p>
+        </div>
+      </div>
+
+      {payload.parts.map(part => {
+        const steps = part.steps.filter(step => step.done !== undefined)
+        const complete = steps.length > 0 && steps.every(step => step.done)
+
+        return (
+          <div className="card" key={part.title} style={{ marginTop: 16 }}>
+            <div className="cardhead">
+              <h2>{part.title}</h2>
+              {part.optional ? <span className="pill">Optional</span> : null}
+              {complete ? <span className="pill ok">Done</span> : null}
+            </div>
+            <div className="cardbody">
+              <div className="guide">
+                {part.summary ? <p className="guidelead">{emphasize(part.summary)}</p> : null}
+                {part.time ? (
+                  <div className="guidetime">
+                    <Clock size={13} /> {part.time}
+                  </div>
+                ) : null}
+
+                <ol className="guidesteps">
+                  {part.steps.map(step => (
+                    <GuideStepView key={step.title} step={step} busy={working} onSave={save} onConnect={connect} />
+                  ))}
+                </ol>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      {payload.gotchas && payload.gotchas.length > 0 ? (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="cardhead">
+            <h2>What usually goes wrong</h2>
+          </div>
+          <div className="cardbody">
+            <div className="guide">
+              <ul className="guidegotchas">
+                {payload.gotchas.map(gotcha => (
+                  <li key={gotcha.slice(0, 32)}>
+                    <AlertTriangle size={13} />
+                    <span>{emphasize(gotcha)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+// A `secret` plugin setting. The input is always empty and the stored value is
+// only ever a placeholder, because there is nothing here to edit — a credential
+// is replaced, not amended, and a box pre-filled with four bullets is one a
+// person has to clear before they can type. Saving an untouched field leaves
+// what is stored alone; Remove is the only way to empty one.
+const SecretInput = ({
+  setting,
+  hint,
+  value,
+  onChange,
+}: {
+  setting: PluginSetting
+  hint: string
+  value: unknown
+  onChange: (value: unknown) => void
+}) => {
+  const stored = hint !== ""
+  const cleared = value === null
+
+  return (
+    <fieldset className="f">
+      <legend className="fl">
+        {setting.label}
+        {stored && !cleared ? (
+          <span className="pill ok">
+            <Lock size={10} /> Saved
+          </span>
+        ) : null}
+      </legend>
+      <div className="row">
+        <input
+          id={`f-${setting.key}`}
+          aria-label={setting.label}
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={
+            cleared
+              ? "Removed — press Save settings to confirm"
+              : stored
+                ? `${hint} — paste a new one to replace it`
+                : ""
+          }
+          value={typeof value === "string" ? value : ""}
+          onChange={event => onChange(event.target.value)}
+        />
+        {stored && !cleared ? (
+          <button type="button" className="btn sm ghost danger" onClick={() => onChange(null)}>
+            Remove
+          </button>
+        ) : null}
+      </div>
+      {setting.help ? <span className="fh">{setting.help}</span> : null}
+      {setting.find ? <span className="fh">{emphasize(setting.find)}</span> : null}
+    </fieldset>
+  )
+}
+
 // Plugins cannot ship React into a bundle that was built before they existed,
 // so they describe panels declaratively and this renders them. See
 // src/plugins/define.ts#PluginPanel.
@@ -2989,6 +3324,8 @@ const PluginPanelView = ({
   if (panel.kind === "stats") return <StatsPanel panel={panel} toast={toast} />
 
   if (panel.kind === "connections") return <ConnectionsPanel panel={panel} toast={toast} />
+
+  if (panel.kind === "guide") return <GuidePanel panel={panel} toast={toast} />
 
   if (panel.kind === "table") {
     const columns = panel.columns ?? []
@@ -3043,20 +3380,37 @@ const PluginPanelView = ({
           <Empty title="No settings" hint="This plugin does not expose any options." />
         ) : (
           <>
-            {plugin.settings.map(setting => (
-              <FieldInput
-                key={setting.key}
-                field={{
-                  key: setting.key,
-                  type: setting.type,
-                  label: setting.label,
-                  help: setting.help,
-                  options: setting.options,
-                }}
-                value={values[setting.key] ?? setting.default}
-                onChange={value => setValues(current => ({ ...current, [setting.key]: value }))}
-              />
-            ))}
+            {plugin.settings.map(setting =>
+              setting.type === "secret" ? (
+                <SecretInput
+                  key={setting.key}
+                  setting={setting}
+                  // The API hands back four characters of a stored secret and
+                  // nothing else, so what arrived is the placeholder; what the
+                  // person types is the only thing that ever leaves as a value.
+                  hint={
+                    typeof plugin.settingsValues?.[setting.key] === "string"
+                      ? (plugin.settingsValues[setting.key] as string)
+                      : ""
+                  }
+                  value={values[setting.key] === plugin.settingsValues?.[setting.key] ? "" : values[setting.key]}
+                  onChange={value => setValues(current => ({ ...current, [setting.key]: value }))}
+                />
+              ) : (
+                <FieldInput
+                  key={setting.key}
+                  field={{
+                    key: setting.key,
+                    type: setting.type,
+                    label: setting.label,
+                    help: setting.help,
+                    options: setting.options,
+                  }}
+                  value={values[setting.key] ?? setting.default}
+                  onChange={value => setValues(current => ({ ...current, [setting.key]: value }))}
+                />
+              ),
+            )}
             <button
               type="button"
               className="btn primary"

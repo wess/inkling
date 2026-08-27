@@ -11,6 +11,66 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+## 1.9.0 — 2026-08-27
+
+### Added
+
+- **A `google` plugin, enabled by default.** One plugin for Google Analytics and
+  Google Ads, split in half because Google sells it as one thing and it is two.
+
+  Pasting a **Measurement ID** under **Google → Setup** puts Analytics on the
+  site. Five minutes, no Google Cloud project, no consent screen, nothing for
+  Google to approve. Inkling generates the snippet — preferring a Tag Manager
+  container when one is set, because a container almost always has Analytics
+  inside it and sending both is what makes every number read double — and
+  `GET /ext/google/tag` serves it to a front end holding a delivery key, so a
+  site can fetch its tag instead of hard-coding it. An Ads conversion ID rides
+  along in the same snippet.
+
+  Reading those numbers back into Inkling's own panels is a second, optional
+  part: connect a Google account and the **Traffic** panel fills in with people,
+  visits, most-read pages and how they arrived. **Ads** shows spend, clicks, cost
+  per click and per conversion, and the campaigns behind them. Neither panel is
+  needed to measure anything, and nothing in the first part mentions them.
+
+- **A `guide` panel kind: a setup walkthrough that knows how far along it is.**
+  Its endpoint returns numbered steps in `parts` — a cheap half and an expensive
+  half, because presenting them as one eleven-step list makes the cheap half look
+  like it needs the expensive one. A step ticks itself off, offers a value to
+  copy, collects the value it is asking for right there rather than sending
+  somebody to another screen, lists what only the connected account could know
+  (which Analytics property, which Ads account, so nobody hunts for a numeric id
+  in a console), and can start an OAuth flow. Every word belongs to the plugin.
+
+  `google`'s guide names the trap at each step rather than the happy path: the
+  redirect URI that has to match to the character, the test-user list without
+  which Google refuses an unverified app, the `UA-` id that has collected
+  nothing since 2023, the Ads developer token that returns zeros rather than an
+  error while it is on test access.
+
+- **A `secret` plugin setting type.** Declared like any other setting, sealed
+  with the same AES-GCM as every other stored credential. The plugin reads
+  plaintext from `getSetting` and does not know it was ever encrypted; the API
+  and the assistant's `list_plugins` both get four characters. Saving a form
+  that never showed the secret leaves it alone, and clearing one takes an
+  explicit Remove. This is what lets a Google client secret and an Ads developer
+  token be typed into the admin instead of edited into `.env` over SSH.
+
+- **A `stats` panel can carry a `note`.** A dashboard with nothing in it can now
+  say which step is missing instead of reading as broken — the Traffic panel
+  distinguishes "your site is not being measured yet" from "it is, and these
+  numbers are in Google's reports until you connect an account".
+
+- **A `connections` row can carry its own `hint`.** Previously an unconfigured
+  row always named the `SOCIAL_OAUTH_*` variables, which is right for a social
+  network and wrong for anything else.
+
+### Documentation
+
+- **A truncated paragraph in `docs/ARCHITECTURE.md` is repaired.** An earlier
+  edit left a half-finished "Bundled:" list running mid-sentence into the
+  paragraph after it.
+
 ## 1.8.2 — 2026-08-27
 
 ### Fixed

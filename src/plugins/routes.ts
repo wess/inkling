@@ -17,10 +17,11 @@ import {
 import { requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body, corsAll, preflight } from "../http/index.ts"
-import { readScope, writeSetting } from "../settings/index.ts"
+import { readScope } from "../settings/index.ts"
 import type { Hooks } from "./hooks.ts"
 import type { LoadedPlugin, Registry } from "./index.ts"
 import { uninstallPlugin } from "./index.ts"
+import { maskSecrets, writePluginSettings } from "./settings.ts"
 
 const summarize = (entry: LoadedPlugin) => ({
   name: entry.plugin.name,
@@ -121,7 +122,12 @@ export const pluginRoutes = (db: Connection, hooks: Hooks, registry: Registry, d
         const declared = Object.fromEntries((entry.plugin.settings ?? []).map(s => [s.key, s.default ?? null]))
         return json(c, 200, {
           ...summarize(entry),
-          settingsValues: { ...declared, ...(await readScope(db, entry.plugin.name)) },
+          // A `secret` setting comes back as its last four characters. Nothing
+          // above this line can hand one out, including to the assistant.
+          settingsValues: maskSecrets(entry.plugin.settings, {
+            ...declared,
+            ...(await readScope(db, entry.plugin.name)),
+          }),
         })
       }),
     ),
@@ -172,15 +178,13 @@ export const pluginRoutes = (db: Connection, hooks: Hooks, registry: Registry, d
           )
         }
 
-        await db.transaction(async tx => {
-          for (const [key, value] of Object.entries(input)) {
-            await writeSetting(tx, entry.plugin.name, key, value)
-          }
-        })
+        await writePluginSettings(db, entry.plugin, input)
         // Settings can change what a plugin registers, so re-register it.
         await registry.reload()
 
-        return json(c, 200, { data: await readScope(db, entry.plugin.name) })
+        return json(c, 200, {
+          data: maskSecrets(entry.plugin.settings, await readScope(db, entry.plugin.name)),
+        })
       }),
     ),
 
