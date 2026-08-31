@@ -1,0 +1,32 @@
+# Inkling
+
+> Inkling is a single-tenant headless CMS. One Bun process serves its admin,
+> APIs, media, plugins, realtime socket, and health endpoint; consuming sites
+> render published content from the delivery API.
+
+Use the credential for the audience you are acting as. A delivery key
+(`ink_…`) can only read published content. An agent key (`inkagt_…`) reaches the
+admin API within its explicit grants and the issuing account's current role.
+They are never interchangeable.
+
+For a coding task, read the architecture and changelog before editing. For a
+site-management task, start with the agent operations guide and discover the
+site's content types before reading or changing entries.
+
+## Start here
+
+- [Agent operations guide](https://wess.io/inkling/agent-guide.md): Connect an MCP client, choose safe grants, discover a site, make audited changes, and diagnose refusals.
+- [Delivery API guide](https://wess.io/inkling/delivery.md): Authentication, routes, response shapes, caching, realtime invalidation, and a complete fetch example.
+- [Full Inkling context](https://wess.io/inkling/llms-full.txt): The longer codebase and product reference when the focused guides are not enough.
+
+## Maintain Inkling
+
+- [Architecture](https://raw.githubusercontent.com/wess/inkling/main/docs/ARCHITECTURE.md): Composition root, route boundaries, persistence, plugins, security, realtime, and operational invariants.
+- [Repository guide](https://raw.githubusercontent.com/wess/inkling/main/README.md): Setup, capabilities, examples, commands, and release links.
+- [Changelog](https://raw.githubusercontent.com/wess/inkling/main/CHANGELOG.md): Current behavior, migrations, and release history.
+- [Configuration reference](https://raw.githubusercontent.com/wess/inkling/main/.env.example): Every runtime variable and its default or requirement.
+
+## Optional
+
+- [Human documentation](https://wess.io/inkling/): Start guide, concepts, tutorials, and reference pages.
+- [Source repository](https://github.com/wess/inkling): TypeScript source, tests, migrations, and bundled plugins.

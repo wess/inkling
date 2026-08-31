@@ -1,0 +1,539 @@
+/* ————————————————————————————————————————————————————————————————
+   Mid-century modern.
+
+   Three directions came before. A cutting room (near-black, austere), a
+   printing press (Technicolor, Bodoni), and cut paper (Bass, hot orange on
+   white). The first two were *editorial* — a serif display over a considered
+   neutral, which is the same shape as half the good websites on the internet
+   and, more to the point, the same shape as the sites Inkling itself powers.
+   A tool should not look like the thing it makes. The third fixed that but
+   shouted; every edge was a hard cut and every colour was at full voltage.
+
+   So: 1958. Futura and its descendants, an earth palette that has been left in
+   the sun — persimmon, harvest gold, a deep turquoise — laid on eggshell rather
+   than white. Herman Miller catalogues, Girard's textiles, a Braun dial. Still
+   no serif anywhere.
+
+   What changes from the cut: warmth, and the vocabulary of shapes. Mid-century
+   graphics are built from the circle, the arch, the lozenge, and the starburst
+   — geometry that curves. Blocks stay square-cornered because a panel is a
+   panel; the things you touch are fully round, because in 1958 they were.
+   Hairlines do the delicate structure and heavy rules do the shouting, and
+   there are far fewer of the second kind than there were.
+
+   And then 1962. The same designers, four years and one Sputnik later: the
+   atom with its orbits, the boomerang off a Formica counter, the four-pointed
+   spark, the upswept Googie roofline, and turquoise — the colour of every
+   motel sign on Route 66. Atomic-age futurism is mid-century modern that has
+   seen a rocket, so it is added on top of this rather than replacing it.
+
+   One rule keeps it from becoming a theme park: the atom is the only figure
+   allowed to move, and everything else holds still around it.
+   ———————————————————————————————————————————————————————————————— */
+
+:root {
+  /* Warm charcoal rather than black — walnut, not ink. */
+  --ink:    #26211C;
+  /* Eggshell. Pure white did not exist on a 1958 press and reads cold. */
+  --paper:  #F7F1E5;
+  /* Persimmon, not vermilion: the same heat with the voltage turned down. */
+  --flame:  #D2522B;
+  --sun:    #E5A82B;
+  --deep:   #2A7B75;
+  --olive:  #6E7C3A;
+  --aqua:   #2FAFBC;
+  --mist:   #EDE3CE;
+  --dim:    #6E6357;
+
+  /* Jost is a Futura revival, which is the typeface of the period and the
+     reason the headings read as drawn with a compass. */
+  --display: "Jost", "Futura", "Century Gothic", system-ui, sans-serif;
+  --sans: "Karla", system-ui, -apple-system, sans-serif;
+  --mono: "Space Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --gutter: clamp(1.25rem, 5vw, 5rem);
+  --frame: 1180px;
+  --reading: 66ch;
+  /* One radius, used only on the things a hand would touch. */
+  --pill: 999px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+
+::selection { background: var(--sun); color: var(--ink); }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: clamp(1rem, 0.96rem + 0.2vw, 1.06rem);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  font-weight: 600;
+  margin: 0;
+  line-height: 1;
+  /* Futura was set tight at display sizes and open at small ones. */
+  letter-spacing: -0.02em;
+}
+
+a { color: inherit; }
+
+.skip {
+  position: fixed;
+  top: 0;
+  left: var(--gutter);
+  z-index: 100;
+  padding: 0.7rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  text-decoration: none;
+  transform: translateY(-120%);
+  transition: transform 0.15s ease-out;
+}
+.skip:focus { transform: translateY(0.75rem); }
+
+:focus-visible {
+  outline: 2px solid var(--flame);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.wrap { width: min(100% - (var(--gutter) * 2), var(--frame)); margin-inline: auto; }
+
+/* ———————————————————— flooded sections ————————————————————
+   No blended edges anywhere. A section takes a whole colour and hands over
+   abruptly; the seam is the design. */
+
+.flood { background: var(--ink); color: var(--paper); }
+.flood-flame { background: var(--flame); color: var(--paper); }
+.flood-sun { background: var(--sun); color: var(--ink); }
+.flood-mist { background: var(--mist); }
+
+.flood .dim, .flood-flame .dim { color: rgba(255, 255, 255, 0.72); }
+.flood-sun .dim { color: rgba(20, 18, 26, 0.7); }
+.dim { color: var(--dim); }
+
+/* ———————————————————— navigation ———————————————————— */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink);
+}
+.nav-in { display: flex; align-items: center; gap: 1.5rem; padding-block: 0.9rem; }
+
+.wordmark {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  margin-right: auto;
+  /* The dot is a separate inline-block, so without this it wraps onto its own
+     line the moment the nav is tight — which reads as a stray bullet. */
+  white-space: nowrap;
+}
+/* The dot is the only mark on the page that is pure shape. */
+.wordmark b { color: var(--flame); font-weight: inherit; }
+
+.nav-links { display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: center; }
+.nav-links a {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-bottom: 3px solid transparent;
+  transition: border-color 0.15s;
+}
+.nav-links a:hover { border-bottom-color: var(--flame); }
+.nav-links a[aria-current="page"] { border-bottom-color: var(--ink); }
+
+@media (max-width: 720px) {
+  .nav-in { display: block; padding-block: 0.75rem; }
+  .wordmark { display: inline-block; margin-bottom: 0.65rem; }
+  .nav-links {
+    gap: 1.15rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(var(--gutter) * -1);
+    padding-inline: var(--gutter);
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+}
+/* The wordmark's dot becomes a drawn circle — the smallest instance of the
+   shape the whole page is built from. */
+.wordmark b {
+  display: inline-block;
+  width: 0.34em;
+  height: 0.34em;
+  border-radius: 50%;
+  background: var(--flame);
+  margin-left: 0.12em;
+  text-indent: -9999px;
+  overflow: hidden;
+}
+
+/* ———————————————————— type ———————————————————— */
+
+.eyebrow {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 0.72rem;
+  /* Wide tracking on small caps, tight on display: the inverse pairing every
+     Herman Miller catalogue used. */
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  margin: 0 0 1rem;
+}
+
+.lede {
+  font-size: clamp(1.15rem, 1rem + 0.6vw, 1.5rem);
+  line-height: 1.4;
+  max-width: 44ch;
+}
+
+section { padding-block: clamp(3.5rem, 9vh, 6.5rem); }
+
+/* The measure belongs on each part, not on the block. `ch` resolves against
+   the element's own font, so 46ch set here — at body size — is about 390px,
+   which a 4rem display face fills in two words. The headline broke to five
+   lines. Each element now carries the measure its own size implies. */
+.head { display: grid; gap: 1rem; margin-bottom: clamp(2rem, 5vh, 3rem); }
+.head h2 { font-size: clamp(2.3rem, 6vw, 4rem); max-width: 16ch; }
+.head p { margin: 0; max-width: 46ch; }
+
+/* ———————————————————— code ———————————————————— */
+
+.screen {
+  background: var(--ink);
+  color: #E9E4F0;
+  padding: 1.25rem clamp(1rem, 2.5vw, 1.6rem);
+  font-family: var(--mono);
+  font-size: clamp(0.74rem, 0.7rem + 0.2vw, 0.84rem);
+  line-height: 1.8;
+  overflow-x: auto;
+}
+.screen pre { font: inherit; margin: 0; }
+.screen .k { color: var(--sun); }
+.screen .s { color: #7FE7C4; }
+.screen .m { color: var(--flame); }
+.screen .g { color: #7FE7C4; }
+.screen .c { color: #877F94; font-style: italic; }
+.screen .w { color: #fff; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--mist);
+  padding: 0.1em 0.36em;
+}
+.flood code, .flood-flame code { background: rgba(255, 255, 255, 0.15); }
+/* --mist on a mist field is invisible; the ink wash reads on both light floods. */
+.flood-mist code, .flood-sun code { background: rgba(20, 18, 26, 0.1); }
+.screen code { background: none; padding: 0; }
+
+/* ———————————————————— docs ———————————————————— */
+
+.doc {
+  display: grid;
+  gap: clamp(2rem, 5vw, 4rem);
+  grid-template-columns: 1fr;
+  align-items: start;
+  padding-block: clamp(2.5rem, 6vh, 4rem) clamp(4rem, 10vh, 7rem);
+}
+@media (min-width: 1000px) { .doc { grid-template-columns: 15rem 1fr; } }
+
+.toc { position: static; }
+@media (min-width: 1000px) { .toc { position: sticky; top: 5.5rem; } }
+
+.toc h2 {
+  font-family: var(--display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 0.9rem;
+}
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.toc a {
+  display: block;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.35rem 0 0.35rem 0.85rem;
+  border-left: 2px solid var(--mist);
+  transition: border-color 0.15s, color 0.15s;
+}
+.toc a:hover { border-left-color: var(--flame); }
+.toc a.here { border-left-color: var(--ink); font-weight: 700; }
+
+.prose { max-width: var(--reading); min-width: 0; }
+.prose > h2 {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--ink);
+}
+.prose > h2:first-of-type { margin-top: 1rem; }
+.prose h3 { font-size: 1.3rem; margin-top: 2.25rem; }
+.prose p, .prose ul, .prose ol { margin: 1rem 0; }
+.prose ul, .prose ol { padding-left: 1.2rem; }
+.prose li { margin: 0.4rem 0; }
+.prose .screen { margin: 1.5rem 0; }
+.prose a { text-decoration-color: var(--flame); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.prose a:hover { color: var(--flame); }
+
+.page-title { font-size: clamp(2.6rem, 8vw, 5rem); margin-bottom: 1rem; }
+
+.missing {
+  min-height: calc(100vh - 12rem);
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  padding-block: clamp(4rem, 14vh, 9rem);
+}
+.missing .slate { width: min(100%, 42rem); }
+.missing h1 { max-width: 8ch; font-size: clamp(3.5rem, 12vw, 8rem); }
+.missing > p:not(.slate) { max-width: 42ch; margin: 1.5rem 0 0; font-size: 1.15rem; }
+
+/* ———————————————————— steps ———————————————————— */
+
+.steps { list-style: none; margin: 2rem 0 0; padding: 0; counter-reset: step; display: grid; gap: 2.5rem; }
+.step { counter-increment: step; display: grid; gap: 0.7rem; position: relative; padding-left: 3.5rem; }
+/* A numbered disc. The circle is the period's organising shape and this is
+   where it does real work — a step marker is exactly the sort of thing a 1958
+   diagram would set in one. */
+.step::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: -0.25rem;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+}
+.step:nth-child(3n+1)::before { background: var(--flame); }
+.step:nth-child(3n+2)::before { background: var(--deep); }
+.step:nth-child(3n+3)::before { background: var(--deep); }
+.step h3 { font-size: 1.4rem; }
+.step p { margin: 0; }
+.step .screen { margin: 0.35rem 0 0; }
+
+/* ———————————————————— cards ————————————————————
+   Hard edges, no radius, no shadow. A card is a piece of paper laid down. */
+
+/* A grid of panels held by hairlines. The cut used 3px gaps and a 3px frame,
+   which read as scaffolding; at 1px the grid recedes and the contents lead.
+   The backing colour shows through the gaps, which is what draws the lines —
+   and is also why the column count is explicit rather than `auto-fit`. Six
+   cells in an auto-fit four-column grid leave two empty slots, and those slots
+   are not blank, they are two panel-sized rectangles of backing colour. Six
+   divides by 1, 2, and 3, so those are the only counts offered. */
+.sheet {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+@media (min-width: 640px) { .sheet { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .sheet { grid-template-columns: repeat(3, 1fr); } }
+.cell {
+  background: var(--paper);
+  padding: clamp(1.5rem, 3vw, 2.1rem);
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+  transition: background 0.2s, color 0.2s;
+}
+.cell:hover { background: var(--mist); }
+.cell h3 { font-size: 1.35rem; }
+.cell p { margin: 0; font-size: 0.95rem; }
+/* A tag is a touchable-looking thing, so it is round like everything else in
+   that family, and it takes the third colour so a grid of them is not all
+   orange. */
+.cell .tag {
+  justify-self: start;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--deep);
+  border: 1px solid currentcolor;
+  border-radius: var(--pill);
+  padding: 0.15rem 0.6rem;
+}
+.cell:hover p { color: var(--ink); }
+
+/* Four doors, so 1, 2, or 4 columns — never 3, which would leave one slot of
+   bare backing beside the last one. See .sheet. */
+.doors { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--ink); border: 1px solid var(--ink); }
+@media (min-width: 640px) { .doors { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1040px) { .doors { grid-template-columns: repeat(4, 1fr); } }
+.door {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  text-decoration: none;
+  padding: 1.6rem;
+  background: var(--paper);
+  transition: background 0.2s;
+}
+.door:hover { background: var(--flame); color: var(--paper); }
+.door h3 { font-size: 1.35rem; }
+.door p { margin: 0; font-size: 0.92rem; color: var(--dim); }
+.door:hover p, .door:hover .go { color: rgba(255, 255, 255, 0.85); }
+.door .go { font-family: var(--display); font-weight: 600; font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--flame); }
+
+/* ———————————————————— tables ———————————————————— */
+
+.table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.92rem; display: block; overflow-x: auto; }
+.table th, .table td { text-align: left; padding: 0.7rem 0.9rem; border-bottom: 1px solid rgba(20, 18, 26, 0.14); vertical-align: top; }
+.table th {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 400;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ink);
+}
+.table td code { white-space: nowrap; }
+.flood .table th, .flood .table td { border-color: rgba(255, 255, 255, 0.2); }
+
+/* ———————————————————— callout ———————————————————— */
+
+.note {
+  border: 1px solid var(--ink);
+  border-top: 4px solid var(--sun);
+  background: var(--mist);
+  padding: 1.1rem 1.3rem;
+  margin: 1.75rem 0;
+}
+.note p { margin: 0.4rem 0 0; }
+.note p:first-child { margin-top: 0; }
+.note b { font-family: var(--display); font-weight: 600; font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; }
+.note.warn { border-top-color: var(--flame); }
+
+/* ———————————————————— buttons ———————————————————— */
+
+/* Fully round. The lozenge is the one shape the period put on everything a
+   hand was meant to touch — a dial, a switch, a button on an ad — and it is
+   the clearest signal that this is not the hard-cut version of the page. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  background: var(--flame);
+  color: var(--paper);
+  padding: 0.95rem 1.8rem;
+  border: 2px solid var(--flame);
+  border-radius: var(--pill);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.cta:hover { background: var(--ink); border-color: var(--ink); }
+/* Flame on sun is two hot colours fighting. Ink is the stronger cut anyway. */
+.flood-sun .cta { background: var(--ink); border-color: var(--ink); }
+.flood-sun .cta:hover { background: var(--flame); border-color: var(--flame); }
+.cta.ghost { background: transparent; color: inherit; border-color: currentColor; }
+.cta.ghost:hover { background: currentColor; color: var(--paper); }
+.flood .cta.ghost:hover, .flood-flame .cta.ghost:hover { color: var(--ink); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 2rem; }
+.onward { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; margin-top: 4rem; padding-top: 1.75rem; border-top: 1px solid var(--ink); }
+
+/* ———————————————————— footer ———————————————————— */
+
+.foot {
+  border-top: 1px solid var(--ink);
+  padding-block: 2.5rem 3.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  justify-content: space-between;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.foot a { text-decoration: none; }
+.foot a:hover { color: var(--flame); }
+.foot nav { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+
+/* ———————————————————— reveal ———————————————————— */
+
+.enter { opacity: 0; transform: translateY(1rem); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.enter.seen { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .enter { opacity: 1; transform: none; }
+}
+
+/* ———————————————————— atomic age ————————————————————
+   Two figures from 1962, drawn as clip paths so a box of any size becomes the
+   shape. They are decoration and nothing reads them, so every instance is
+   aria-hidden at the markup. */
+
+/* The Formica boomerang. Two tapered arms meeting off-centre — the shape that
+   was printed on every kitchen counter in America, and is still the fastest
+   way to say "space age" without a rocket. */
+.boomerang {
+  /* Two tapered arms meeting at a thick elbow, hollow above it. Traced tip →
+     outer edge → tip → back along the inner edge, which is the shallower of
+     the two — that difference is the whole taper, and getting it backwards
+     produces a chevron or a Y rather than a boomerang. */
+  clip-path: polygon(
+    0% 6%, 26% 44%, 50% 80%, 74% 44%, 100% 6%,
+    74% 26%, 50% 44%, 26% 26%
+  );
+}
+
+/* A four-pointed spark, concave between the points so it reads as light rather
+   than as a star. Scattered, never repeated on a grid. */
+.spark {
+  clip-path: polygon(
+    50% 0%, 59% 41%, 100% 50%, 59% 59%,
+    50% 100%, 41% 59%, 0% 50%, 41% 41%
+  );
+}
+
+/* The Googie roofline: an upswept edge where a section would otherwise butt
+   flat against the one above it. Used once, on the section that follows the
+   hero, so it reads as a deliberate cantilever and not a house style. */
+.upswept {
+  clip-path: polygon(0 0, 100% clamp(1.4rem, 4vw, 4rem), 100% 100%, 0 100%);
+  padding-top: clamp(4.5rem, 12vh, 8rem);
+}
