@@ -671,8 +671,10 @@ for its field.
 
 A `socialpost` here is a *commitment* — approved on a date, counted against a
 contract — and its `stage` records what happened to it. A post in the Social
-section is a thing that gets sent. An agency uses both; a solo operator only
-ever needs the second.
+section is a thing that gets sent. When a plan is ready, `publishPostId` links
+it to exactly one core `social_posts` record; the core publisher owns delivery,
+retries, and target outcomes, while the plugin mirrors the result back onto the
+plan. An agency uses both; a solo operator only ever needs the second.
 
 ### Analytics
 
@@ -793,7 +795,7 @@ a release.
 | `social_apps` | The developer app per network: client id, sealed secret, and whether it is switched on |
 | `social_accounts` | An authorized account. Sealed tokens, AES-GCM under `SECRET`, the same helper AI credentials use. Not a content type, because every content type is readable through an editor screen, a revision, the search index, and the delivery API, and a refresh token belongs in none of those |
 | `social_posts` | The copy. Written once and then *sent* |
-| `social_targets` | One row per (post, account): the wording that network got, what it did with it, and where it landed |
+| `social_targets` | One row per (post, account): the wording that network got, what it did with it, where it landed, and when a transient failure should be retried |
 
 The split between the last two is the design. A post to four networks has
 sixteen interesting outcomes and only one is "it worked"; a single `status`
@@ -813,6 +815,11 @@ Failure is an exception thrown by the publisher, carrying **the network's own
 words**. Every one of these fails for reasons only the network can explain
 ("the video is 63 minutes and the limit is 15"), that text is what an operator
 acts on, and a summary of ours would be strictly worse.
+
+Transient failures remain pending with an attempt count and increasing retry
+time. Permanent failures — including disconnected or invalid accounts — become
+failed and wait for an operator. A manual retry can override the retry time,
+but never reposts a target already marked posted.
 
 `publishDue` runs every 60s beside the entry sweep. It picks up scheduled posts
 whose time has come *and* anything left in `publishing` for over fifteen minutes

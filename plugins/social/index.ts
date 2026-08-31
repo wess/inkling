@@ -1,3 +1,4 @@
+import { from } from "atlas/db"
 import { get, json, parseJson, pipeline, post } from "atlas/server"
 import { requireAuth, requireCan } from "../../src/auth/guard.ts"
 import { can } from "../../src/auth/roles.ts"
@@ -5,6 +6,7 @@ import { corsAll } from "../../src/http/index.ts"
 import { decodeObject, encode } from "../../src/json/index.ts"
 import { requireApiKey } from "../../src/keys/index.ts"
 import { definePlugin } from "../../src/plugins/define.ts"
+import { entries } from "../../src/schema/index.ts"
 import { now } from "../../src/time/index.ts"
 import { byId, loadType, preview, refTitle, text } from "./entries.ts"
 import { contentTypes, OPEN_STAGES, taxonomies } from "./model.ts"
@@ -334,6 +336,27 @@ export default definePlugin({
       }
 
       return { entry: { ...entry, data: encode(next) }, type, identity }
+    })
+
+    ctx.on("social.posted", async payload => {
+      const planned = (await loadType(ctx.db, "socialpost")).find(item => text(item.data.publishPostId) === payload.id)
+      if (!planned) return
+
+      const errors = payload.targets.filter(target => target.error).map(target => `${target.network}: ${target.error}`)
+      const data = {
+        ...planned.data,
+        publishStatus: payload.status,
+        publishError: errors.join("\n"),
+        postedAt: payload.status === "posted" ? now() : text(planned.data.postedAt),
+        postedUrl: text(planned.data.postedUrl),
+        stage: payload.status === "posted" ? "posted" : text(planned.data.stage),
+      }
+
+      await ctx.db.execute(
+        from(entries)
+          .update({ data: encode(data), updated_at: now() })
+          .where(q => q("id").equals(planned.id)),
+      )
     })
   },
 

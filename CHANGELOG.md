@@ -11,6 +11,13 @@ content type; a minor for new surface; a patch for fixes alone.
 
 ## Unreleased
 
+### Added
+
+- **Social plans now connect to delivery.** A planned social post can reference
+  the core publisher record, and its status and errors stay synchronized there.
+  Delivery retries transient target failures with persisted backoff state while
+  permanent failures wait for an operator.
+
 ## 1.9.0 — 2026-08-27
 
 ### Added

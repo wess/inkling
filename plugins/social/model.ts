@@ -214,6 +214,15 @@ const post: PluginContentType = {
     { key: "assetBrief", type: "textarea", label: "Asset brief", help: "What still needs shooting or designing." },
     { key: "approvedBy", type: "text", label: "Approved by" },
     { key: "approvedOn", type: "datetime", label: "Approved on", help: "Stamped when the stage becomes Approved." },
+    {
+      key: "publishPostId",
+      type: "text",
+      label: "Publish post ID",
+      help: "The core Social post that sends this plan. Leave blank until it is ready to publish.",
+    },
+    { key: "publishStatus", type: "text", label: "Publish status" },
+    { key: "publishError", type: "textarea", label: "Publish error" },
+    { key: "postedAt", type: "datetime", label: "Posted on" },
     { key: "postedUrl", type: "url", label: "Live post URL" },
   ],
 }

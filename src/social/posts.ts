@@ -42,7 +42,9 @@ export type TargetRow = {
   remote_id: string | null
   remote_url: string | null
   error: string | null
+  error_code: string | null
   attempts: number
+  next_attempt_at: string | null
   posted_at: string | null
   created_at: string
   updated_at: string
@@ -88,7 +90,9 @@ const presentTarget = (row: TargetRow, account?: AccountRow) => ({
   remoteId: row.remote_id,
   url: row.remote_url,
   error: row.error,
+  errorCode: row.error_code,
   attempts: row.attempts,
+  nextAttemptAt: row.next_attempt_at,
   postedAt: row.posted_at,
 })
 

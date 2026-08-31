@@ -266,7 +266,7 @@ export const socialRoutes = (db: Connection, store: StorageDriver, hooks: Hooks)
         const claimed = await claim(db, row.id, ["draft", "scheduled", "posted", "partial", "failed"])
         if (!claimed) throw badRequest("This post is already going out", { code: "SOCIAL_BUSY" })
 
-        const outcome = await send(db, store, claimed, hooks)
+        const outcome = await send(db, store, claimed, hooks, true)
         return json(c, 200, { data: outcome, post: await one(db, await load(db, row.id)) })
       }),
     ),

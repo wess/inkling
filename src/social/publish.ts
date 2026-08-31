@@ -65,6 +65,7 @@ const stamp = async (db: Connection, id: string, fields: Record<string, unknown>
 export const rollUp = (targets: readonly Pick<TargetRow, "status">[]): string => {
   const relevant = targets.filter(target => target.status !== "skipped")
   if (relevant.length === 0) return "failed"
+  if (relevant.some(target => target.status === "pending" || target.status === "publishing")) return "scheduled"
   const posted = relevant.filter(target => target.status === "posted").length
   if (posted === relevant.length) return "posted"
   if (posted === 0) return "failed"
@@ -82,9 +83,35 @@ export type Outcome = {
   }[]
 }
 
+const BACKOFF_MINUTES = [1, 5, 15, 60]
+const MAX_ATTEMPTS = BACKOFF_MINUTES.length + 1
+const PERMANENT = [
+  /invalid[_ ]?(request|payload|parameter)/i,
+  /duplicate|already (exists|published|posted)/i,
+  /not authorized|unauthorized|forbidden|permission/i,
+  /token (is )?(expired|invalid|revoked)/i,
+  /too long|exceeds maximum|character limit/i,
+  /unsupported (media|format)/i,
+  /rejected/i,
+  /no longer connected|reconnect|could not be renewed/i,
+]
+
+const isPermanent = (message: string): boolean => PERMANENT.some(pattern => pattern.test(message))
+
+const retryAt = (attempt: number): string =>
+  new Date(
+    Date.now() + (BACKOFF_MINUTES[attempt - 1] ?? BACKOFF_MINUTES[BACKOFF_MINUTES.length - 1] ?? 1) * 60_000,
+  ).toISOString()
+
 // Runs every pending target on one post. Safe to call on a post whose status is
 // already `publishing` only because the caller claimed it — see `claim` below.
-export const send = async (db: Connection, store: StorageDriver, post: PostRow, hooks?: Hooks): Promise<Outcome> => {
+export const send = async (
+  db: Connection,
+  store: StorageDriver,
+  post: PostRow,
+  hooks?: Hooks,
+  force = false,
+): Promise<Outcome> => {
   const [targets, accounts] = await Promise.all([targetsFor(db, [post.id]), listAccounts(db)])
   const byId = new Map<string, AccountRow>(accounts.map(account => [account.id, account]))
   const media = await attachments(db, store, decodeArray<string>(post.media))
@@ -92,6 +119,10 @@ export const send = async (db: Connection, store: StorageDriver, post: PostRow, 
   const results: Outcome["targets"] = []
 
   for (const target of targets) {
+    if (!force && target.status === "pending" && target.next_attempt_at && target.next_attempt_at > now()) {
+      results.push({ id: target.id, network: target.network, status: "pending", error: target.error })
+      continue
+    }
     // Already sent. Re-running a post — after fixing the one network that
     // refused it — must not post twice to the three that did not.
     if (target.status === "posted") {
@@ -103,8 +134,18 @@ export const send = async (db: Connection, store: StorageDriver, post: PostRow, 
     const publisher = PUBLISHERS[target.network]
 
     const refuse = async (message: string) => {
-      await stamp(db, target.id, { status: "failed", error: message, attempts: target.attempts + 1 })
-      results.push({ id: target.id, network: target.network, status: "failed", error: message })
+      const attempts = target.attempts + 1
+      const permanent = isPermanent(message)
+      const exhausted = permanent || attempts >= MAX_ATTEMPTS
+      const status = exhausted ? "failed" : "pending"
+      await stamp(db, target.id, {
+        status,
+        error: message,
+        error_code: permanent ? "permanent" : exhausted ? "exhausted" : "transient",
+        attempts,
+        next_attempt_at: exhausted ? null : retryAt(attempts),
+      })
+      results.push({ id: target.id, network: target.network, status, error: message })
     }
 
     if (!account) {
@@ -140,7 +181,9 @@ export const send = async (db: Connection, store: StorageDriver, post: PostRow, 
         remote_id: landed.remoteId,
         remote_url: landed.url,
         error: null,
+        error_code: null,
         attempts: target.attempts + 1,
+        next_attempt_at: null,
         posted_at: now(),
       })
       results.push({ id: target.id, network: target.network, status: "posted", error: null })
