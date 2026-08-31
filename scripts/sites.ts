@@ -45,7 +45,7 @@ const SITES: readonly Site[] = [
   },
   {
     name: "inkling",
-    url: "https://inkling.wess.dev",
+    url: "https://inkling.host",
     admin: "/admin",
     host: "gohan",
     container: "inkling",

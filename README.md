@@ -1,14 +1,14 @@
 # Inkling
 
 [![Check](https://github.com/wess/inkling/actions/workflows/check.yml/badge.svg)](https://github.com/wess/inkling/actions/workflows/check.yml)
-[Live School](https://inkling.wess.dev/) · [Documentation](https://wess.io/inkling/) · [MIT License](LICENSE)
+[Live School](https://inkling.host/) · [Documentation](https://wess.io/inkling/) · [MIT License](LICENSE)
 
 A headless CMS with a plugin system and an agent that can work the whole of it,
 built on [Atlas](https://github.com/wess/atlas).
 
-The live Inkling School is at [inkling.wess.dev](https://inkling.wess.dev/).
+The live Inkling School is at [inkling.host](https://inkling.host/).
 It is the public test site for Inkling itself; the admin is at
-[`/admin`](https://inkling.wess.dev/admin).
+[`/admin`](https://inkling.host/admin).
 
 Content lives here; your websites read it over an HTTP delivery API. One process
 on one port, running on Postgres, with no build step for the API.

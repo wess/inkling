@@ -9,11 +9,12 @@ a redeploy. Nothing is published to npm.
 |---|---|---|---|---|
 | apothecary | https://apothecary.wess.dev | `/admin` | `wess/apothecary` (private) | gohan |
 | 803media | https://803media.wess.dev | `/studio` | `wess/803media` (private) | gohan |
-| inkling | https://inkling.wess.dev | `/admin` | `inkling-site` (local) | gohan |
+| inkling | https://inkling.host | `/admin` | `inkling-site` (local) | gohan |
 | warren | https://warren.wess.dev | `/admin` | `warrenpublishing` (local) | gohan |
 
-`inkling.wess.dev` is the School — this project's own documentation, running on
-this project. Its lessons are content in its Inkling, so a deploy that changes
+`inkling.host` is the School — this project's own documentation, running on
+this project. `inkling.wess.dev` still serves the same container as a fallback
+name, but `inkling.host` is the canonical one and the site's `PUBLIC_URL`. Its lessons are content in its Inkling, so a deploy that changes
 them needs a seed afterwards:
 
 ```sh
@@ -59,7 +60,7 @@ Exits non-zero if anything is down or behind, so it can gate a deploy.
    ```
 
 Anything under `docs/` publishes to GitHub Pages on push — check
-https://wess.io/inkling/ afterwards. The School at `inkling.wess.dev` is a
+https://wess.io/inkling/ afterwards. The School at `inkling.host` is a
 separate Inkling-powered surface and is seeded through its own deploy path.
 
 ## Rolling it to a site
