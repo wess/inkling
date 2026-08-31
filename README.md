@@ -1,10 +1,14 @@
 # Inkling
 
 [![Check](https://github.com/wess/inkling/actions/workflows/check.yml/badge.svg)](https://github.com/wess/inkling/actions/workflows/check.yml)
-[Documentation](https://wess.io/inkling/) · [MIT license](LICENSE)
+[Live School](https://inkling.wess.dev/) · [Documentation](https://wess.io/inkling/) · [MIT License](LICENSE)
 
 A headless CMS with a plugin system and an agent that can work the whole of it,
 built on [Atlas](https://github.com/wess/atlas).
+
+The live Inkling School is at [inkling.wess.dev](https://inkling.wess.dev/).
+It is the public test site for Inkling itself; the admin is at
+[`/admin`](https://inkling.wess.dev/admin).
 
 Content lives here; your websites read it over an HTTP delivery API. One process
 on one port, running on Postgres, with no build step for the API.
@@ -244,6 +248,11 @@ row, with that network's own error next to it — so a post X took and TikTok
 refused reads as *part posted*, not as a success or a failure. Press send again
 and only the failures are retried; what already went out is never posted twice.
 
+For agency workflows, the optional `social` plugin adds client and campaign
+planning around these core posts. A plan links to one core post through
+`publishPostId`; delivery, retries, per-network outcomes, and error state stay
+owned by core, while the plan mirrors the result.
+
 Three roles, because sending is irreversible in a way publishing a page is not:
 an author writes a post, an editor decides when it goes out, an admin connects
 the accounts.
@@ -277,7 +286,7 @@ Drop a directory into `plugins/` and enable it in the admin. Eight ship with it:
 | `commerce` | Content type + taxonomy + settings + a convenience route |
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
 | `assistant` | A public, page-aware assistant answering from published content only |
-| `social` | Client-side social planning — a queue, a calendar, and a performance report, built out of four content types and one of its own tables. Posting itself is core; see below |
+| `social` | Agency social planning — clients, campaigns, a queue, a calendar, performance reporting, and a link from each plan to its core delivery post |
 | `google` | Google Analytics and Google Ads. A `guide` panel that walks a non-technical operator through setup and ticks itself off as they go, two `stats` panels, and a `secret` setting whose value the API can never hand back |
 
 ```ts
@@ -388,7 +397,7 @@ A site that would rather not deploy a second service can mount Inkling in its ow
 process. Install it from GitHub — there is no npm release:
 
 ```bash
-bun add github:wess/inkling#v1.8.1   # pin to a release
+bun add github:wess/inkling#v1.10.0   # pin to a release
 bun add github:wess/inkling          # or follow main
 ```
 

@@ -360,7 +360,7 @@
         <tr><td><code>PUT /api/social/posts/:id</code></td><td>author</td><td>A target that already posted keeps its copy and its link; the rest are rewritten.</td></tr>
         <tr><td><code>DELETE /api/social/posts/:id</code></td><td>author</td><td>Soft delete. What has already gone out stays on the networks.</td></tr>
         <tr><td><code>POST /api/social/posts/:id/schedule</code></td><td>editor</td><td>Takes <code>{ at }</code>. Refuses a time that has passed.</td></tr>
-        <tr><td><code>POST /api/social/posts/:id/publish</code></td><td>editor</td><td>Sends now, and is also the retry — targets that already posted are skipped, so calling it twice does not post twice.</td></tr>
+        <tr><td><code>POST /api/social/posts/:id/publish</code></td><td>editor</td><td>Sends now, and is also the retry — targets that already posted are skipped, transient failures back off automatically, and a manual retry overrides the backoff.</td></tr>
         <tr><td><code>POST /api/social/posts/:id/cancel</code></td><td>editor</td><td>Calls a scheduled post back to draft.</td></tr>
         <tr><td><code>GET /api/social/calendar</code></td><td>author</td><td>Everything scheduled in a window, from <code>?from=</code> for <code>?days=</code>.</td></tr>
         <tr><td><code>GET /api/social/settings</code></td><td>admin</td><td>Every network's developer app, where its credentials came from, and the walkthrough for its console. The secret is never in this payload — only its last four characters.</td></tr>
@@ -404,6 +404,16 @@
         took and TikTok refused is <code>partial</code> — neither a success nor a
         failure, and the most common real result. The post's <code>status</code>
         is a roll-up of its targets rather than something that is set.
+      </p>
+    </div>
+
+    <div class="note">
+      <b>Plans and delivery have one boundary</b>
+      <p>
+        The optional <code>social</code> plugin plans client work. Set a plan's
+        <code>publishPostId</code> to its core Social post; core owns scheduling,
+        delivery, retries, and target outcomes, while the plan mirrors the
+        resulting status and errors.
       </p>
     </div>
 

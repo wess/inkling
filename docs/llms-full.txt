@@ -238,8 +238,9 @@ assistant proposal — goes through `writePluginSettings`, where `null` clears,
 `""` or the mask leaves it alone, and anything else is sealed.
 
 Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`,
-`social` (client-side planning — four content types, an `entry.beforeSave`
-filter, two `stats` panels, and its own `social_results` table), `google`.
+`social` (agency planning — four content types, an `entry.beforeSave` filter,
+two `stats` panels, a `social_results` table, and a link from each plan to its
+core delivery post), `google`.
 Posting is not a plugin; see Social below.
 
 `google` is deliberately split in half, because Google sells it as one thing and
@@ -292,12 +293,15 @@ That split is the design. A post's `status` is a *roll-up* of its targets, and
 and neither success nor failure describes it. `publish.ts#send` runs each target
 independently, skips any already `posted` (so a retry never double-posts), and
 records the network's own error text verbatim — that sentence is the whole
-diagnosis and a summary of ours would be strictly worse. `network` is
+diagnosis and a summary of ours would be strictly worse. Transient failures
+remain pending with persisted attempt counts and backoff times; permanent
+failures wait for an operator. `network` is
 denormalized onto the target so a disconnected account cannot take the record of
 where a post went with it.
 
 `publishDue` runs every 60s: scheduled posts whose time has come, plus anything
-stuck in `publishing` for 15 minutes by a process that died. `claim` is the lock
+stuck in `publishing` for 15 minutes by a process that died. Manual publish can
+override a target's backoff, while automatic sweeps respect it. `claim` is the lock
 — an UPDATE matching on the status it expects to replace.
 
 Per-network in `src/social/publishers/`: X chunks and polls a video transcode
