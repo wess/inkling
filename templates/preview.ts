@@ -246,8 +246,6 @@ const page = (template: Template, palette: Palette): string => {
   return `<section class="t" ${attrs}>${inner}</section>`
 }
 
-// ---------------------------------------------------------------------------
-
 const loaded = await loadTemplates()
 for (const entry of loaded.filter(e => e.error)) console.error(`  ${entry.name}: ${entry.error}`)
 const ok = loaded.map(entry => entry.template).filter((t): t is Template => Boolean(t))

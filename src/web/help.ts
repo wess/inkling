@@ -189,7 +189,7 @@ const ENTRIES = {
       "It stays working as long as the file is here. Deleting the file breaks every page using this address, including anywhere outside this site you pasted it.",
   },
 
-  // ─── how content is shaped ────────────────────────────────────────────────
+  // how content is shaped
 
   "types.what": {
     title: "Content types",
@@ -313,7 +313,7 @@ const ENTRIES = {
     what: "What this field starts as when somebody creates new content. They can change it.",
   },
 
-  // ─── grouping ─────────────────────────────────────────────────────────────
+  // grouping
 
   "taxonomy.what": {
     title: "Taxonomies",
@@ -353,7 +353,7 @@ const ENTRIES = {
     careful: "Your website asks for a menu by its name, so renaming one means the site stops finding it.",
   },
 
-  // ─── the site itself ──────────────────────────────────────────────────────
+  // the site itself
 
   "settings.title": {
     title: "Site title",
@@ -409,7 +409,7 @@ const ENTRIES = {
     what: "The tiny icon in the browser tab, next to the page title. Square, and it has to read clearly at about the size of a full stop.",
   },
 
-  // ─── people ───────────────────────────────────────────────────────────────
+  // people
 
   "users.role": {
     title: "Role",
@@ -424,7 +424,7 @@ const ENTRIES = {
     careful: "Send it to them some way other than the same email address the account uses.",
   },
 
-  // ─── connecting other systems ─────────────────────────────────────────────
+  // connecting other systems
 
   "keys.what": {
     title: "Delivery keys",
@@ -504,7 +504,7 @@ const ENTRIES = {
       "Turning one on takes effect immediately: nothing restarts and nothing has to be rebuilt. Turning it off stops it just as quickly.",
   },
 
-  // ─── AI ───────────────────────────────────────────────────────────────────
+  // AI
 
   "ai.provider": {
     title: "Provider",
@@ -549,7 +549,7 @@ const ENTRIES = {
     careful: "Leave it alone unless you are running the model yourself and know the address.",
   },
 
-  // ─── social ───────────────────────────────────────────────────────────────
+  // social
 
   "social.caption": {
     title: "Caption",

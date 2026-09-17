@@ -49,7 +49,7 @@ const stub = (routes: Record<string, () => Response>) => {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
 
-// --------------------------------------------------------------------- the tag
+// the tag
 
 test("a measurement id on its own produces a working snippet", () => {
   const tag = tagFor(settings({ measurementId: "G-ABCD1234" }))
@@ -108,7 +108,7 @@ test("the ads permission is only requested once there is a token to use it with"
   expect(scopesFor(settings({ adsDeveloperToken: "abc" }))).toContain("https://www.googleapis.com/auth/adwords")
 })
 
-// ------------------------------------------------------------------- the guide
+// the guide
 
 const guideState = (patch: Partial<State> = {}): State => ({
   settings: settings(),
@@ -172,7 +172,7 @@ test("the tag snippet appears in the guide once there is one", () => {
   expect(paste?.copy).toContain("G-ABCD1234")
 })
 
-// ------------------------------------------------------------------- reporting
+// reporting
 
 test("a ga4 report becomes tiles a person can read", async () => {
   stub({
@@ -283,7 +283,7 @@ test("google's deepest error message is the one that survives", () => {
   expect(detail("not json at all")).toBe("not json at all")
 })
 
-// ------------------------------------------------------- secret plugin settings
+// secret plugin settings
 
 const declared: PluginSetting[] = [
   { key: "measurementId", label: "Measurement ID", type: "text" },
@@ -343,7 +343,7 @@ test("clearing a secret takes an explicit null, and works", async () => {
   expect(maskSecrets(declared, { clientSecret: await readRaw(connection, "clientSecret") }).clientSecret).toBe("")
 })
 
-// ------------------------------------------------------------- the real routes
+// the real routes
 //
 // The plugin loaded off disk, enabled through the real registry, and driven
 // through the same /ext dispatch a browser hits. Everything above is a unit;

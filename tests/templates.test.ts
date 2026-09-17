@@ -109,7 +109,7 @@ test("two tokens cannot claim the same custom property", () => {
   }, "twice")
 })
 
-// ------------------------------------------------------------------ compiler
+// compiler
 
 const sample = (): Template => (validateTemplate(base()) as { ok: true; template: Template }).template
 
@@ -186,7 +186,7 @@ test("the font link asks for exactly the weights declared", () => {
   expect(fontHref([])).toBeNull()
 })
 
-// --------------------------------------------------------------- the shipped five
+// the shipped five
 
 test("every template in the registry loads and validates", async () => {
   const loaded = await loadTemplates()
@@ -245,7 +245,7 @@ test("theme tokens map onto field types the settings editor already renders", as
   }
 })
 
-// ------------------------------------------------------------ designs, not skins
+// designs, not skins
 
 test("no two designs share a layout", async () => {
   // The property this whole distinction exists for. Two templates with the same

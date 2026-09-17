@@ -34,7 +34,7 @@ export const option = (options: Record<string, unknown>, key: string, fallback =
 
 export const flagged = (options: Record<string, unknown>, key: string): boolean => options[key] === true
 
-// ------------------------------------------------------------------- http
+// http
 
 export type Json = Record<string, unknown>
 

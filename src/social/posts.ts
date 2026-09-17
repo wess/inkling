@@ -67,7 +67,7 @@ export type PostInput = {
   }[]
 }
 
-// --------------------------------------------------------------- presenting
+// presenting
 
 export const captionFor = (post: Pick<PostRow, "caption">, target: Pick<TargetRow, "caption">): string =>
   // NULL means "follow the post", empty string means "this network gets none".
@@ -115,7 +115,7 @@ export const present = (row: PostRow, targets: readonly TargetRow[], accounts: R
 
 export type PostView = ReturnType<typeof present>
 
-// ----------------------------------------------------------------- reading
+// reading
 
 export const byId = (db: Connection, id: string): Promise<PostRow | null> =>
   one<PostRow>(
@@ -178,7 +178,7 @@ export const timeline = async (db: Connection, fromIso: string, toIso: string): 
       .limit(500),
   )
 
-// ----------------------------------------------------------------- writing
+// writing
 
 const titleFrom = (title: string, caption: string): string => {
   const supplied = title.trim()

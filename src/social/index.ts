@@ -295,7 +295,7 @@ export const socialRoutes = (db: Connection, store: StorageDriver, hooks: Hooks)
       }),
     ),
 
-    // ------------------------------------------------------------- settings
+    // settings
 
     // The developer app per network: what is set up, what it came from, and
     // what the operator still has to do at that network's end. The secret is
@@ -387,7 +387,7 @@ export const socialRoutes = (db: Connection, store: StorageDriver, hooks: Hooks)
       }),
     ),
 
-    // ------------------------------------------------------------- accounts
+    // accounts
 
     get(
       "/social/accounts",

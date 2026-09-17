@@ -264,7 +264,7 @@ export type MenuItem = {
 
 export type Menu = { id: string; name: string; label: string; items: MenuItem[] }
 
-// ---------------------------------------------------------------- social
+// social
 
 export type SocialAccount = {
   id: string

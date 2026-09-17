@@ -93,7 +93,7 @@ a {
   text-decoration: none;
 }
 
-/* ---------- shell ---------- */
+/* shell */
 
 .shell {
   display: grid;
@@ -416,7 +416,7 @@ a {
   text-transform: capitalize;
 }
 
-/* ---------- main ---------- */
+/* main */
 
 .main {
   display: flex;
@@ -450,7 +450,7 @@ a {
   max-width: none;
 }
 
-/* ---------- controls ---------- */
+/* controls */
 
 .btn {
   display: inline-flex;
@@ -861,7 +861,7 @@ select {
   cursor: pointer;
 }
 
-/* ---------- surfaces ---------- */
+/* surfaces */
 
 .card {
   background: var(--paper);
@@ -1159,7 +1159,7 @@ tbody tr.click:hover {
   color: var(--warn);
 }
 
-/* ---------- login ---------- */
+/* login */
 
 .login {
   min-height: 100vh;
@@ -1189,7 +1189,7 @@ tbody tr.click:hover {
   margin-top: 4px;
 }
 
-/* ---------- editor ---------- */
+/* editor */
 
 .editor {
   display: grid;
@@ -1346,7 +1346,7 @@ tbody tr.click:hover {
   font: 12px / 1.55 var(--mono);
 }
 
-/* ---------- categories and menus ---------- */
+/* categories and menus */
 
 .configsplit {
   display: grid;
@@ -1528,7 +1528,7 @@ tbody tr.click:hover {
   }
 }
 
-/* ---------- content model builder ---------- */
+/* content model builder */
 
 .buildertop {
   display: flex;
@@ -1805,7 +1805,7 @@ tbody tr.click:hover {
   }
 }
 
-/* ---------- media ---------- */
+/* media */
 
 .mediagrid {
   display: grid;
@@ -1902,7 +1902,7 @@ tbody tr.click:hover {
   background: var(--paper2);
 }
 
-/* ---------- modal ---------- */
+/* modal */
 
 .scrim {
   position: fixed;
@@ -2115,7 +2115,7 @@ tbody tr.click:hover {
   }
 }
 
-/* ---------- ai ---------- */
+/* ai */
 
 .agent {
   display: flex;
@@ -2286,7 +2286,7 @@ tbody tr.click:hover {
   text-decoration: underline;
 }
 
-/* ---------------------------------------------------------------- inky dock */
+/* inky dock */
 /* Inky, reachable from wherever you already are. The AI screen is the same
    panel at full size; this is the version you can open without leaving the page
    you are asking about — which is the whole reason it knows what "this" means. */
@@ -2579,7 +2579,7 @@ legend > .hintdot {
   margin: 0;
 }
 
-/* ------------------------------------------------------------------ social */
+/* social */
 
 /* The composer is a post on the left and everything about where it goes on the
    right, because those are two different kinds of decision and mixing them put
@@ -2916,7 +2916,7 @@ legend > .hintdot {
   font-variant-numeric: tabular-nums;
 }
 
-/* ------------------------------------------------- social settings + guides */
+/* social settings + guides */
 
 /* A network's app form lives inside the row it belongs to rather than in a
    dialog, so what you are editing stays under its own name and status. */

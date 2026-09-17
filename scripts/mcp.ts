@@ -19,7 +19,7 @@
 // for different rooms: Inky asks a person to press the button, this asks a
 // person for a credential and then holds them to what that credential says.
 //
-// ─── WHERE THE BOUNDARY IS ──────────────────────────────────────────────────
+// where the boundary is
 //
 // Not here. This process is a convenience, not a guard: it holds a secret, and
 // anything that can read its environment can call whatever the secret allows,
@@ -75,7 +75,7 @@ const log = (message: string): void => {
   console.error(`[inkling-mcp] ${message}`)
 }
 
-// ─── the admin API ──────────────────────────────────────────────────────────
+// the admin API
 
 // Everything that needs a credential lives under /api. A bare path is an *admin
 // screen*, which answers 200 with a page of HTML rather than 404ing — so a
@@ -122,7 +122,7 @@ const call = async <T>(path: string, init: CallInit = {}): Promise<T> => {
   }
 }
 
-// ─── tools ──────────────────────────────────────────────────────────────────
+// tools
 
 // The capability names in src/auth/roles.ts. Spelled out per tool so the filter
 // below is the same vocabulary the server refuses in, rather than a second
@@ -298,7 +298,7 @@ const TOOLS: readonly Tool[] = [
     run: () => call("/taxonomies"),
   },
 
-  // ─── writes ───────────────────────────────────────────────────────────────
+  // writes
 
   {
     name: "create_entry",
@@ -486,7 +486,7 @@ const TOOLS: readonly Tool[] = [
   },
 ]
 
-// ─── what this key can actually do ──────────────────────────────────────────
+// what this key can actually do
 
 type Whoami = { data: { kind: string; name: string; email: string; role: string; grants: string[] } }
 
@@ -515,7 +515,7 @@ const held = new Set(me.grants)
 const available = TOOLS.filter(tool => held.has(tool.needs) && !(READONLY && WRITES.has(tool.needs)))
 const byName = new Map(available.map(tool => [tool.name, tool]))
 
-// ─── JSON-RPC over stdio ────────────────────────────────────────────────────
+// JSON-RPC over stdio
 
 type Request = { jsonrpc: "2.0"; id?: number | string; method: string; params?: any }
 

@@ -41,7 +41,7 @@ export type OAuthTokens = {
   readonly payload: Record<string, unknown>
 }
 
-// --------------------------------------------------------------------- PKCE
+// PKCE
 
 export const base64url = (bytes: Uint8Array): string =>
   btoa(String.fromCharCode(...bytes))
@@ -54,7 +54,7 @@ const verifier = (): string => base64url(crypto.getRandomValues(new Uint8Array(3
 const challengeFor = async (value: string): Promise<string> =>
   base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))))
 
-// ---------------------------------------------------------------- the state
+// the state
 
 // The `state` parameter travels through the provider and back through the
 // user's browser, so it is sealed rather than stored: it carries the PKCE
@@ -107,7 +107,7 @@ export const readState = async <T>(raw: string): Promise<StateEnvelope<T> | null
   }
 }
 
-// ------------------------------------------------------------------- consent
+// consent
 
 export const consentUrl = async <T extends object>(
   client: OAuthClient,
@@ -131,7 +131,7 @@ export const consentUrl = async <T extends object>(
   return { url: url.toString(), expiresAt: new Date(expires).toISOString() }
 }
 
-// ------------------------------------------------------------------- tokens
+// tokens
 
 // RFC 6749 says the token request is form-encoded, and that is what we send.
 // Several large providers accept only JSON, though, and an operator hitting

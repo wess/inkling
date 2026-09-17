@@ -92,7 +92,7 @@ import { HelpContent, HelpScreen } from "./helpview.tsx"
 // small hash-free history reader — the admin has ~10 screens and a router
 // library would be more surface than the thing it routes.
 
-// ---------------------------------------------------------------- utilities
+// utilities
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(" ")
 
@@ -182,7 +182,7 @@ const useUnsavedWarning = (dirty: boolean): void => {
   }, [dirty])
 }
 
-// ---------------------------------------------------------------- routing
+// routing
 
 type Route =
   | { name: "dashboard" }
@@ -301,7 +301,7 @@ const useRoute = (): [Route, (route: Route) => void] => {
   return [useMemo(() => parse(path), [path]), go]
 }
 
-// ---------------------------------------------------------------- primitives
+// primitives
 
 const Spinner = () => (
   <div className="loading">
@@ -466,7 +466,7 @@ const Empty = ({ title, hint, action }: { title: string; hint: string; action?: 
   </div>
 )
 
-// ---------------------------------------------------------------- media picker
+// media picker
 
 const MediaPicker = ({
   value,
@@ -617,7 +617,7 @@ const MediaPicker = ({
   )
 }
 
-// ---------------------------------------------------------------- field inputs
+// field inputs
 
 const MediaField = ({
   value,
@@ -1405,7 +1405,7 @@ const ListField = ({
   )
 }
 
-// ---------------------------------------------------------------- screens
+// screens
 
 const Dashboard = ({ go, types, role }: { go: (route: Route) => void; types: ContentType[]; role: string }) => {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -6288,7 +6288,7 @@ const TypesScreen = ({
   )
 }
 
-// ---------------------------------------------------------------- login
+// login
 
 const Login = ({ onDone }: { onDone: (identity: Identity) => void }) => {
   // Focused on mount rather than with autoFocus: same result on a dedicated
@@ -6397,7 +6397,7 @@ const Login = ({ onDone }: { onDone: (identity: Identity) => void }) => {
   )
 }
 
-// ---------------------------------------------------------------- shell
+// shell
 
 const GlobalSearch = ({ go }: { go: (route: Route) => void }) => {
   const input = useRef<HTMLInputElement>(null)
@@ -6611,7 +6611,7 @@ const ChangePassword = ({ onClose, toast }: { onClose: () => void; toast: (text:
   )
 }
 
-// ------------------------------------------------------------------------ ai
+// ai
 
 const brief = (value: unknown, length = 220): string => {
   if (value === null || value === undefined || value === "") return "—"
@@ -7774,7 +7774,7 @@ const AiScreen = ({
   )
 }
 
-// ---------------------------------------------------------------- social
+// social
 
 // A post's status maps onto the pill colours entries already use, because they
 // mean the same things to the eye: green is out, blue is coming, amber wants

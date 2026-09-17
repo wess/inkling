@@ -154,7 +154,7 @@ export const clientIp = (req: Request & { peerIp?: string }): string => {
 
 export const userAgent = (req: Request): string => (req.headers.get("user-agent") ?? "").slice(0, 512)
 
-// ─── outbound requests ──────────────────────────────────────────────────────
+// outbound requests
 
 // Anywhere Inkling fetches a URL somebody else chose, it is a request made from
 // inside the network Inkling runs in. On a box like ours that reaches the

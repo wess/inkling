@@ -232,7 +232,7 @@ test("the report measures cadence against what was sold", async () => {
   expect(withNumbers.tiles.find(item => item.label === "Engagement")?.value).toBe("5.0%")
 })
 
-// ------------------------------------------------------------ connections
+// connections
 
 test("a connected account round-trips its tokens and never stores them in the clear", async () => {
   const db = await ready()

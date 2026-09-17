@@ -187,7 +187,7 @@ test("the widget script is served once enabled, and carries the operator's greet
   await db.close()
 })
 
-// ─── what reaches the model, and what it is allowed to say ──────────────────
+// what reaches the model, and what it is allowed to say
 //
 // The gate tests above prove a stranger cannot get in. These prove what happens
 // once an operator has deliberately let them: which content can be read, whose

@@ -64,7 +64,7 @@ const bearer = (tokens: OAuthTokens): Record<string, string> => ({ authorization
 
 const GRAPH = "https://graph.facebook.com/v21.0"
 
-// ------------------------------------------------------------------ meta
+// meta
 
 // A Page token minted from a long-lived user token does not expire, which is
 // the only reason this exchange happens at connect time rather than per post:
@@ -162,7 +162,7 @@ const threads = async (tokens: OAuthTokens): Promise<Identified> => {
   }
 }
 
-// ---------------------------------------------------------------- the rest
+// the rest
 
 const youtube = async (tokens: OAuthTokens): Promise<Identified> => {
   const url = new URL("https://www.googleapis.com/youtube/v3/channels")

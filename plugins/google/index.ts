@@ -213,7 +213,7 @@ export default definePlugin({
     }
 
     return [
-      // ------------------------------------------------------------- the tag
+      // the tag
       //
       // What a website asks for. Key-authenticated like every other read from
       // beyond the admin, and cheap enough to fetch on every build.
@@ -239,7 +239,7 @@ export default definePlugin({
         }),
       ),
 
-      // ----------------------------------------------------------- the guide
+      // the guide
       get(
         "/setup",
         configuring(async c => {
@@ -336,7 +336,7 @@ export default definePlugin({
         }),
       ),
 
-      // ------------------------------------------------------ the connection
+      // the connection
       get(
         "/connections",
         configuring(async c => {
@@ -477,7 +477,7 @@ export default definePlugin({
         }
       }),
 
-      // ---------------------------------------------------------- the panels
+      // the panels
       get(
         "/analytics",
         reading(async c => {
