@@ -12,7 +12,7 @@
   --paper3: #eff1f5;
   --text: #14161a;
   --text2: #5b616e;
-  --text3: #878d9a;
+  --text3: #697181;
   --accent: #3d5afe;
   --accent2: #2f49d8;
   --accentwash: #eef1ff;
@@ -39,7 +39,7 @@
     --paper3: #23262d;
     --text: #edeef1;
     --text2: #a2a8b5;
-    --text3: #757c8a;
+    --text3: #9aa1af;
     --accent: #7d90ff;
     --accent2: #93a3ff;
     --accentwash: #1e2340;
@@ -137,6 +137,110 @@ a {
 
 .navgroup {
   padding: 6px 10px;
+}
+.btn.mobilenav {
+  display: none;
+}
+.navsection > summary {
+  padding: 10px 8px;
+  font-weight: 550;
+  color: var(--text2);
+  cursor: pointer;
+}
+.navexplain {
+  padding: 0 8px 10px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.navsection[open] > summary {
+  color: var(--text);
+}
+.home {
+  display: grid;
+  gap: 28px;
+  max-width: 960px;
+}
+.home > * {
+  min-width: 0;
+}
+.home h1,
+.home h2 {
+  margin-bottom: 8px;
+}
+.homecontent {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+.contentchoice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 18px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.contentchoice:hover {
+  background: var(--paper3);
+}
+.contentchoice svg {
+  flex: none;
+  color: var(--text2);
+}
+.contentchoice > span:first-of-type {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.contentchoice strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.contentdescription {
+  color: var(--text2);
+  font-size: 13px;
+}
+.contentopen {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 13px;
+}
+.homeactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.homehelp {
+  flex-basis: 100%;
+  font-size: 13px;
+}
+.homesummary {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.homesummary summary,
+.editdetails > summary {
+  cursor: pointer;
+  font-weight: 550;
+}
+.homesummary p {
+  margin-top: 8px;
+}
+.editdetails > summary {
+  padding: 14px 18px;
+}
+:where(button, summary, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .navlabel {
   padding: 10px 8px 5px;
@@ -1858,22 +1962,47 @@ tbody tr.click:hover {
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
   }
   .side {
     position: static;
     height: auto;
-    flex-direction: row;
-    overflow-x: auto;
-    align-items: center;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
-  .navgroup {
-    display: flex;
-    padding: 6px;
+  .brand {
+    padding: 12px 16px;
   }
-  .navlabel,
-  .sidefoot,
-  .navcount {
+  .btn.mobilenav {
+    display: inline-flex;
+    margin-left: auto;
+  }
+  .navigation,
+  .sidefoot {
     display: none;
+  }
+  .navigation.open,
+  .navigation.open + .sidefoot {
+    display: block;
+  }
+  .navitem {
+    min-height: 44px;
+  }
+  .homecontent {
+    grid-template-columns: 1fr;
+  }
+  .collectionhead {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .collectionhead > .rowend {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .collectionhead .search {
+    flex-basis: 100%;
   }
   .body {
     padding: 16px;
@@ -2268,15 +2397,15 @@ code.copyable {
    no hover at all, and it has room for an example — which is what a reader who
    is not technical actually needs. See the Hint component. */
 .hintdot {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   margin-left: 5px;
   padding: 0;
   border: 1px solid var(--line2);
   border-radius: 50%;
   background: var(--paper3);
   color: var(--text2);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -2313,6 +2442,13 @@ legend > .hintdot {
 }
 .helpbody p {
   margin: 0;
+}
+.helpbody ol {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+.helpbody :where(li + li) {
+  margin-top: 8px;
 }
 .helpbody code {
   font-size: 0.92em;

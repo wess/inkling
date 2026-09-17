@@ -11,6 +11,9 @@ a redeploy. Nothing is published to npm.
 | 803media | https://803media.wess.dev | `/studio` | `wess/803media` (private) | gohan |
 | inkling | https://inkling.host | `/admin` | `inkling-site` (local) | gohan |
 | warren | https://warren.wess.dev | `/admin` | `warrenpublishing` (local) | gohan |
+| undercover | https://undercover.wess.dev | `/backroom` | `undercover` (local) | gohan |
+| schorror | https://schorror.wess.dev | `/admin` | `schorror` (local) | gohan |
+| aaa | https://aaa.wess.dev | `/admin` | `aaa` (local) | gohan |
 
 `inkling.host` is the School — this project's own documentation, running on
 this project. `inkling.wess.dev` still serves the same container as a fallback
@@ -67,6 +70,12 @@ separate Inkling-powered surface and is seeded through its own deploy path.
 
 One site at a time, verified before the next. They share a database server and a
 967MB box; two simultaneous image builds is not worth finding out about.
+
+Check each site's worktree before staging it. When it contains unrelated work,
+use an isolated copy of its currently deployed source for the dependency update.
+The deploy script accepts `GOHAN_APP_SOURCE` for a single named app, so that copy
+can be deployed without publishing unfinished local changes. Never run content
+seeds as part of a dependency-only rollout.
 
 1. **Pin it.** In the site's `package.json`:
 

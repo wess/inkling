@@ -375,6 +375,16 @@ const Hint = ({ id, text, wide }: { id?: HelpId; text?: React.ReactNode; wide?: 
               {entry ? (
                 <div className="helpbody">
                   <p>{entry.what}</p>
+                  {entry.steps ? (
+                    <div>
+                      <h3>What to do</h3>
+                      <ol>
+                        {entry.steps.map(step => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
                   {entry.example ? (
                     <p className="helpeg">
                       <b>For example: </b>
@@ -1425,78 +1435,129 @@ const ListField = ({
 
 // ---------------------------------------------------------------- screens
 
-const Dashboard = ({ go }: { go: (route: Route) => void }) => {
+const Dashboard = ({ go, types, role }: { go: (route: Route) => void; types: ContentType[]; role: string }) => {
   const [stats, setStats] = useState<Stats | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     api
       .stats()
       .then(setStats)
-      .catch(() => {})
+      .catch(() => setError(true))
   }, [])
 
-  if (!stats) return <Spinner />
-
-  const tiles = [
-    { label: "Entries", value: stats.entries },
-    { label: "Published", value: stats.published },
-    { label: "Needs review", value: stats.review },
-    { label: "Scheduled", value: stats.scheduled },
-    { label: "Drafts", value: stats.drafts },
-    { label: "Media", value: stats.media },
-  ]
+  const content = types.filter(type => !type.ownerPlugin || type.kind === "collection")
 
   return (
-    <>
-      <div className="grid g4" style={{ marginBottom: 20 }}>
-        {tiles.map(tile => (
-          <div className="card stat" key={tile.label}>
-            <div className="statnum">{tile.value}</div>
-            <div className="statlabel">{tile.label}</div>
-          </div>
-        ))}
+    <div className="home">
+      <div>
+        <h1>
+          Your website <Hint id="home.start" />
+        </h1>
+        <p className="dim">Choose what you want to update. You can return here any time.</p>
       </div>
-
-      <div className="card">
-        <div className="cardhead">
-          <h2>Recently edited</h2>
+      <section aria-labelledby="homecontent">
+        <h2 id="homecontent">Website content</h2>
+        <div className="homecontent">
+          {content.map(type => (
+            <button
+              type="button"
+              className="contentchoice"
+              key={type.id}
+              onClick={() => go({ name: "collection", type: type.name })}
+            >
+              <FileText size={20} aria-hidden="true" />
+              <span>
+                <strong>{type.kind === "single" ? type.label : type.pluralLabel}</strong>
+                <span className="contentdescription">
+                  {type.description ||
+                    (type.kind === "single"
+                      ? `View and update your ${type.label.toLowerCase()}.`
+                      : `Browse your ${type.pluralLabel.toLowerCase()} or add something new.`)}
+                </span>
+              </span>
+              <span className="contentopen">Open</span>
+            </button>
+          ))}
         </div>
-        {stats.recent.length === 0 ? (
-          <Empty title="Nothing here yet" hint="Content you create will show up here." />
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.recent.map(row => (
-                <tr key={row.id}>
-                  <td>
-                    <button
-                      type="button"
-                      className="tablelink"
-                      onClick={() => go({ name: "editor", type: row.type, id: row.id })}
-                    >
-                      {row.title || "Untitled"}
-                    </button>
-                  </td>
-                  <td className="dim">{row.type}</td>
-                  <td>
-                    <Pill status={row.status} />
-                  </td>
-                  <td className="dim2">{ago(row.updatedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {content.length === 0 ? (
+          <p className="dim">
+            Your website sections will appear here once they are set up.
+            {hasRole(role, "admin")
+              ? " Open Advanced setup to manage your content types, or ask the person who built your site."
+              : " Ask the person who manages your site to set them up."}
+          </p>
+        ) : null}
+      </section>
+      <div className="homeactions">
+        <button type="button" className="btn" onClick={() => go({ name: "media" })}>
+          <ImageIcon size={16} /> Photos & files
+        </button>
+        {hasRole(role, "author") ? (
+          <button type="button" className="btn" onClick={() => go({ name: "socialcompose", id: null })}>
+            <Send size={16} /> Write a social post
+          </button>
+        ) : null}
+        <span className="homehelp dim">Need a hand? The (?) buttons explain each choice.</span>
       </div>
-    </>
+      <section aria-labelledby="homerecent">
+        <h2 id="homerecent">Pick up where you left off</h2>
+        {error ? (
+          <Note kind="err">
+            Recent content could not load. You can still open a section above, or reload this page to try again.
+          </Note>
+        ) : !stats ? (
+          <Spinner />
+        ) : stats.recent.length === 0 ? (
+          <p className="dim">Your recently edited content will appear here. Start with a website section above.</p>
+        ) : (
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Section</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.recent.map(row => (
+                  <tr key={row.id}>
+                    <td>
+                      <button
+                        type="button"
+                        className="tablelink"
+                        onClick={() => go({ name: "editor", type: row.type, id: row.id })}
+                      >
+                        {row.title || "Untitled"}
+                      </button>
+                    </td>
+                    <td className="dim">{types.find(type => type.name === row.type)?.label ?? row.type}</td>
+                    <td>
+                      <Pill status={row.status} />
+                    </td>
+                    <td className="dim2">{ago(row.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      {stats ? (
+        <details className="homesummary">
+          <summary>Content at a glance</summary>
+          <p className="dim">
+            {stats.published} published · {stats.drafts} drafts · {stats.review} awaiting review · {stats.scheduled}{" "}
+            scheduled
+          </p>
+          <p className="dim">
+            Drafts stay off your website until published. <Hint id="entry.status" />
+          </p>
+        </details>
+      ) : null}
+    </div>
   )
 }
 
@@ -1528,7 +1589,7 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 18 }}>
+      <div className="row collectionhead" style={{ marginBottom: 18 }}>
         <div>
           <h1>{type.pluralLabel}</h1>
           {type.description ? <p className="dim2">{type.description}</p> : null}
@@ -1538,6 +1599,7 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
             <Search size={14} />
             <input
               type="search"
+              aria-label="Search titles"
               placeholder="Search titles…"
               value={q}
               onChange={event => {
@@ -1547,6 +1609,7 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
             />
           </div>
           <select
+            aria-label="Filter by publishing status"
             value={status}
             onChange={event => {
               setStatus(event.target.value)
@@ -1567,7 +1630,7 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
               className="btn primary"
               onClick={() => go({ name: "editor", type: type.name, id: null })}
             >
-              <Plus size={14} /> New
+              <Plus size={14} /> Add {type.label.toLowerCase()}
             </button>
           ) : null}
         </div>
@@ -1578,10 +1641,16 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
           <Spinner />
         ) : entries.length === 0 ? (
           <Empty
-            title={`No ${type.pluralLabel.toLowerCase()} yet`}
-            hint={`Create the first ${type.label.toLowerCase()}.`}
+            title={q || status !== "all" ? "No matching content" : `No ${type.pluralLabel.toLowerCase()} yet`}
+            hint={
+              q || status !== "all"
+                ? "Try another search or choose All statuses."
+                : canWrite
+                  ? `Add your first ${type.label.toLowerCase()}. It starts as a draft.`
+                  : "Content will appear here when your team adds it."
+            }
             action={
-              canWrite ? (
+              canWrite && !q && status === "all" ? (
                 <button
                   type="button"
                   className="btn primary"
@@ -1599,7 +1668,6 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
                 <thead>
                   <tr>
                     <th>Title</th>
-                    <th style={{ width: 200 }}>Slug</th>
                     <th style={{ width: 110 }}>Status</th>
                     <th style={{ width: 120 }}>Updated</th>
                   </tr>
@@ -1616,7 +1684,6 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
                           {entry.title || "Untitled"}
                         </button>
                       </td>
-                      <td className="mono dim">{entry.slug}</td>
                       <td>
                         <Pill status={entry.status} />
                       </td>
@@ -1897,7 +1964,15 @@ const Editor = ({
           {mayEdit ? (
             <button type="button" className="btn primary" onClick={save} disabled={saving || (!dirty && !!entry)}>
               {saving ? <span className="spin" /> : null}
-              {saving ? "Saving" : dirty || !entry ? "Save" : "Saved"}
+              {saving
+                ? "Saving…"
+                : !dirty && entry
+                  ? "Saved"
+                  : entry?.status === "published"
+                    ? "Save live changes"
+                    : !entry || entry.status === "draft"
+                      ? "Save draft"
+                      : "Save changes"}
             </button>
           ) : null}
         </div>
@@ -1909,6 +1984,7 @@ const Editor = ({
             <div className="cardbody">
               <input
                 className="titleinput"
+                aria-label={`${type.label} title`}
                 placeholder={`${type.label} title`}
                 value={title}
                 onChange={event => {
@@ -1961,6 +2037,14 @@ const Editor = ({
               </h3>
             </div>
             <div className="cardbody stack">
+              <p className="dim">
+                {entry?.status === "published"
+                  ? "This content is published. Saving changes updates the published version."
+                  : entry?.status === "scheduled"
+                    ? "This content will publish at its scheduled time. Saving updates what will be published."
+                    : "This content is not on your website. Save your work, then publish when it is ready."}
+                <Hint id="entry.save" />
+              </p>
               {entry ? (
                 <>
                   <div className="dim2">
@@ -2012,7 +2096,7 @@ const Editor = ({
                   {mayEdit ? (
                     canPublish && entry.status === "published" ? (
                       <button type="button" className="btn" onClick={() => setStatus(false)}>
-                        Move to draft
+                        Take off website
                       </button>
                     ) : canPublish ? (
                       <>
@@ -2095,10 +2179,8 @@ const Editor = ({
             </div>
           </div>
 
-          <div className="card">
-            <div className="cardhead">
-              <h3>Details</h3>
-            </div>
+          <details className="card editdetails">
+            <summary>More options</summary>
             <div className="cardbody">
               <label className="f">
                 <span className="fl">
@@ -2134,7 +2216,7 @@ const Editor = ({
                 <span className="fh">Lower numbers appear first when a site sorts by display order.</span>
               </label>
             </div>
-          </div>
+          </details>
 
           {entry ? <EntryTaxonomies entryId={entry.id} canEdit={mayEdit} toast={toast} /> : null}
           {entry ? (
@@ -2182,7 +2264,9 @@ const Revisions = ({
   return (
     <div className="card">
       <div className="cardhead">
-        <h3>History</h3>
+        <h3>
+          History <Hint id="entry.revisions" />
+        </h3>
       </div>
       <div className="cardbody stack" style={{ gap: 9 }}>
         {items.slice(0, 8).map(item => (
@@ -2296,7 +2380,9 @@ const MediaLibrary = ({
   return (
     <>
       <div className="row" style={{ marginBottom: 18 }}>
-        <h1>Media</h1>
+        <h1>
+          Photos &amp; files <Hint id="media.library" />
+        </h1>
         <div className="rowend">
           <div className="search">
             <Search size={14} />
@@ -2358,7 +2444,14 @@ const MediaLibrary = ({
         <Spinner />
       ) : items.length === 0 ? (
         <div className="card">
-          <Empty title="No media yet" hint="Upload images and files to use across your content." />
+          <Empty
+            title={q || type ? "No matching files" : "No photos or files yet"}
+            hint={
+              q || type
+                ? "Try another search or choose All files."
+                : "Upload pictures and documents, then choose them when editing your website content."
+            }
+          />
         </div>
       ) : (
         <>
@@ -9404,9 +9497,18 @@ const App = () => {
   const [booted, setBooted] = useState(false)
   const [types, setTypes] = useState<ContentType[]>([])
   const [plugins, setPlugins] = useState<Plugin[]>([])
-  const [route, go] = useRoute()
+  const [route, navigate] = useRoute()
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [navigationOpen, setNavigationOpen] = useState(false)
+
+  const go = useCallback(
+    (target: Route) => {
+      navigate(target)
+      setNavigationOpen(false)
+    },
+    [navigate],
+  )
 
   const toast = useCallback((text: string, bad = false) => {
     setMessage({ text, bad })
@@ -9446,12 +9548,13 @@ const App = () => {
       />
     )
 
-  const collections = types.filter(t => !t.ownerPlugin || t.kind === "collection")
+  const collections = types.filter(t => !t.ownerPlugin)
+  const pluginCollections = types.filter(t => t.ownerPlugin && t.kind === "collection")
   const enabledPlugins = plugins.filter(p => p.enabled && p.panels.length > 0)
 
   const nav = (target: Route, label: string, Icon: typeof FileText, count?: number) => {
     const on =
-      route.name === target.name &&
+      (route.name === target.name || (route.name === "editor" && target.name === "collection")) &&
       (target.name !== "collection" || (route as { type: string }).type === target.type) &&
       // Both halves: a plugin with four panels lit all four at once, because
       // only the plugin name was compared.
@@ -9459,7 +9562,13 @@ const App = () => {
         ((route as { plugin: string }).plugin === (target as { plugin: string }).plugin &&
           (route as { panel: string }).panel === (target as { panel: string }).panel))
     return (
-      <button type="button" key={label} className={cx("navitem", on && "on")} onClick={() => go(target)}>
+      <button
+        type="button"
+        key={label}
+        className={cx("navitem", on && "on")}
+        aria-current={on ? "page" : undefined}
+        onClick={() => go(target)}
+      >
         <Icon size={15} />
         <span>{label}</span>
         {count !== undefined ? <span className="navcount">{count}</span> : null}
@@ -9583,7 +9692,7 @@ const App = () => {
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin sets up social networks.</Note>
         return <SocialSettings go={go} toast={toast} />
       default:
-        return <Dashboard go={go} />
+        return <Dashboard go={go} types={types} role={me.role} />
     }
   })()
 
@@ -9593,66 +9702,106 @@ const App = () => {
         <div className="brand">
           <div className="brandmark">I</div>
           <span>Inkling</span>
+          <button
+            type="button"
+            className="btn ghost mobilenav"
+            aria-expanded={navigationOpen}
+            aria-controls="navigation"
+            onClick={() => setNavigationOpen(!navigationOpen)}
+          >
+            {navigationOpen ? <X size={18} /> : <MenuIcon size={18} />} Menu
+          </button>
         </div>
 
-        <div className="navgroup">
-          {nav({ name: "dashboard" }, "Dashboard", LayoutGrid)}
-          {nav({ name: "media" }, "Media", ImageIcon)}
-          {hasRole(me.role, "author") ? nav({ name: "ai" }, "AI", Sparkles) : null}
-          {hasRole(me.role, "author") ? nav({ name: "trash" }, "Trash", Trash2) : null}
-        </div>
-
-        {collections.length > 0 ? (
+        <nav id="navigation" aria-label="Main navigation" className={cx("navigation", navigationOpen && "open")}>
           <div className="navgroup">
-            <div className="navlabel">Content</div>
-            {collections.map(type => nav({ name: "collection", type: type.name }, type.pluralLabel, FileText))}
+            {nav({ name: "dashboard" }, "Home", LayoutGrid)}
+            {nav({ name: "media" }, "Photos & files", ImageIcon)}
+            {hasRole(me.role, "author") ? nav({ name: "ai" }, "Ask Inky", Sparkles) : null}
           </div>
-        ) : null}
 
-        {hasRole(me.role, "author") ? (
-          <div className="navgroup">
-            <div className="navlabel">Social</div>
-            {nav({ name: "social" }, "Overview", Megaphone)}
-            {nav({ name: "socialposts" }, "Posts", Send)}
-            {nav({ name: "socialcalendar" }, "Calendar", CalendarDays)}
-            {hasRole(me.role, "admin") ? nav({ name: "socialaccounts" }, "Accounts", Link) : null}
-            {hasRole(me.role, "admin") ? nav({ name: "socialsettings" }, "Settings", Sliders) : null}
-          </div>
-        ) : null}
+          {collections.length > 0 ? (
+            <div className="navgroup">
+              <div className="navlabel">Your website</div>
+              {collections.map(type => nav({ name: "collection", type: type.name }, type.pluralLabel, FileText))}
+            </div>
+          ) : null}
 
-        {enabledPlugins.length > 0 ? (
-          <div className="navgroup">
-            <div className="navlabel">Plugins</div>
-            {enabledPlugins.flatMap(plugin =>
-              plugin.panels
-                // Collection panels already appear under Content.
-                .filter(panel => panel.kind !== "collection")
-                .map(panel =>
-                  nav(
-                    { name: "plugin", plugin: plugin.name, panel: panel.id },
-                    panel.label,
-                    ICONS[panel.icon ?? ""] ?? Blocks,
-                  ),
-                ),
-            )}
-          </div>
-        ) : null}
+          {hasRole(me.role, "author") ? (
+            <details
+              className="navgroup navsection"
+              key={`social-${route.name.startsWith("social")}`}
+              open={route.name.startsWith("social")}
+            >
+              <summary>Social media</summary>
+              {nav({ name: "social" }, "Overview", Megaphone)}
+              {nav({ name: "socialposts" }, "Posts", Send)}
+              {nav({ name: "socialcalendar" }, "Calendar", CalendarDays)}
+              {hasRole(me.role, "admin") ? nav({ name: "socialaccounts" }, "Connected accounts", Link) : null}
+              {hasRole(me.role, "admin") ? nav({ name: "socialsettings" }, "Network setup", Sliders) : null}
+            </details>
+          ) : null}
 
-        <div className="navgroup">
-          {hasRole(me.role, "editor") ? <div className="navlabel">Configure</div> : null}
-          {hasRole(me.role, "admin") ? nav({ name: "types" }, "Content types", Shapes) : null}
-          {hasRole(me.role, "editor") ? nav({ name: "taxonomy" }, "Categories", ListTree) : null}
-          {hasRole(me.role, "editor") ? nav({ name: "menus" }, "Menus", MenuIcon) : null}
-          {hasRole(me.role, "admin")
-            ? nav({ name: "plugins" }, "Plugins", Blocks, plugins.filter(p => p.enabled).length)
-            : null}
-          {hasRole(me.role, "admin") ? nav({ name: "keys" }, "API keys", Key) : null}
-          {nav({ name: "agents" }, "Agent keys", Bot)}
-          {hasRole(me.role, "admin") ? nav({ name: "webhooks" }, "Webhooks", WebhookIcon) : null}
-          {hasRole(me.role, "admin") ? nav({ name: "activity" }, "Activity", Activity) : null}
-          {hasRole(me.role, "admin") ? nav({ name: "users" }, "Users", Users) : null}
-          {hasRole(me.role, "admin") ? nav({ name: "settings" }, "Settings", Settings) : null}
-        </div>
+          {(hasRole(me.role, "admin") && enabledPlugins.length > 0) || pluginCollections.length > 0 ? (
+            <details
+              className="navgroup navsection"
+              key={`tools-${route.name === "plugin" || ((route.name === "collection" || route.name === "editor") && pluginCollections.some(type => type.name === route.type))}`}
+              open={
+                route.name === "plugin" ||
+                ((route.name === "collection" || route.name === "editor") &&
+                  pluginCollections.some(type => type.name === route.type))
+              }
+            >
+              <summary>More tools</summary>
+              {pluginCollections.map(type => nav({ name: "collection", type: type.name }, type.pluralLabel, FileText))}
+              {hasRole(me.role, "admin")
+                ? enabledPlugins.flatMap(plugin =>
+                    plugin.panels
+                      // collection panels are listed above by content type.
+                      .filter(panel => panel.kind !== "collection")
+                      .map(panel =>
+                        nav(
+                          { name: "plugin", plugin: plugin.name, panel: panel.id },
+                          `${plugin.label}: ${panel.label}`,
+                          ICONS[panel.icon ?? ""] ?? Blocks,
+                        ),
+                      ),
+                  )
+                : null}
+            </details>
+          ) : null}
+
+          {hasRole(me.role, "author") ? (
+            <details
+              className="navgroup navsection"
+              key={`manage-${["taxonomy", "menus", "trash", "activity", "users", "settings"].includes(route.name)}`}
+              open={["taxonomy", "menus", "trash", "activity", "users", "settings"].includes(route.name)}
+            >
+              <summary>Manage website</summary>
+              {hasRole(me.role, "editor") ? nav({ name: "taxonomy" }, "Categories", ListTree) : null}
+              {hasRole(me.role, "editor") ? nav({ name: "menus" }, "Website menus", MenuIcon) : null}
+              {hasRole(me.role, "author") ? nav({ name: "trash" }, "Trash", Trash2) : null}
+              {hasRole(me.role, "admin") ? nav({ name: "activity" }, "Activity", Activity) : null}
+              {hasRole(me.role, "admin") ? nav({ name: "users" }, "People & access", Users) : null}
+              {hasRole(me.role, "admin") ? nav({ name: "settings" }, "Site settings", Settings) : null}
+            </details>
+          ) : null}
+          <details
+            className="navgroup navsection"
+            key={`advanced-${["types", "plugins", "keys", "agents", "webhooks"].includes(route.name)}`}
+            open={["types", "plugins", "keys", "agents", "webhooks"].includes(route.name)}
+          >
+            <summary>Advanced setup</summary>
+            <p className="navexplain">For the person who connects and builds your site.</p>
+            {hasRole(me.role, "admin") ? nav({ name: "types" }, "Content types", Shapes) : null}
+            {hasRole(me.role, "admin")
+              ? nav({ name: "plugins" }, "Plugins", Blocks, plugins.filter(p => p.enabled).length)
+              : null}
+            {hasRole(me.role, "admin") ? nav({ name: "keys" }, "API keys", Key) : null}
+            {nav({ name: "agents" }, "Agent keys", Bot)}
+            {hasRole(me.role, "admin") ? nav({ name: "webhooks" }, "Webhooks", WebhookIcon) : null}
+          </details>
+        </nav>
 
         <div className="sidefoot">
           <div className="who">

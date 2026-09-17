@@ -30,6 +30,27 @@ type Site = {
 // Adding a site is a line here. Everything below is generic.
 const SITES: readonly Site[] = [
   {
+    name: "undercover",
+    url: "https://undercover.wess.dev",
+    admin: "/backroom",
+    host: "gohan",
+    container: "undercover",
+  },
+  {
+    name: "schorror",
+    url: "https://schorror.wess.dev",
+    admin: "/admin",
+    host: "gohan",
+    container: "schorror",
+  },
+  {
+    name: "aaa",
+    url: "https://aaa.wess.dev",
+    admin: "/admin",
+    host: "gohan",
+    container: "aaa",
+  },
+  {
     name: "apothecary",
     url: "https://apothecary.wess.dev",
     admin: "/admin",

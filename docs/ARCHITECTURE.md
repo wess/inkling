@@ -1009,6 +1009,19 @@ formatting surface that stores portable, cleaned HTML; entry history can be
 inspected before restore. Content and media lists paginate rather than silently
 stopping at a fixed first page.
 
+Home leads with the site's own content sections and recently edited items.
+Counts are secondary, under an expandable summary. The sidebar separates everyday
+content from Social media, More tools (plugin content and panels), Manage website,
+and Advanced setup. Secondary groups start collapsed and open for their active
+route; editors highlight their parent collection. Role checks still apply to
+every destination. On small screens a labeled Menu button exposes the navigation.
+
+The editor distinguishes Save draft from Save live changes: saving a published
+entry updates its published payload immediately. Scheduling keeps using the
+device's local time, converted to UTC before submission; the site timezone
+setting does not change that conversion. Language and ordering live under More
+options. Collection tables use business labels and leave URL editing to the editor.
+
 `src/web/help.ts` is the prose behind every `?` in that SPA, keyed by id and
 checked at build time, so a control pointing at help that does not exist is a
 type error rather than an empty modal. It is a separate file because help text is
@@ -1020,6 +1033,9 @@ happens to everything else if I change this", which does not fit in a caption.
 The modal renders through a portal: a `?` sits wherever its field sits, and some
 of those fields are inside a collapsed `<details>` that would otherwise hide the
 dialog along with itself.
+Help entries can include ordered steps alongside the explanation, example, and
+consequences. Publishing, scheduling, media uploads, and website menus explain
+the action to take as well as what the control means.
 
 `src/web/serve.ts` bundles it with `Bun.build` and hands back a *handler*, not a
 server. `src/server.ts` calls it once at boot and falls through to it for

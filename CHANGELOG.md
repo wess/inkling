@@ -9,6 +9,23 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.11.0 — 2026-09-17
+
+### Changed
+
+- Home now starts with website sections and recently edited content. Content
+  counts, social tools, site management, and advanced setup expand when needed.
+  Plugin screens include their plugin name, and phone navigation has a Menu button.
+- Everyday labels describe the task: Photos & files, People & access, and Website
+  menus. Collection lists use fewer columns and distinguish an empty section from
+  a search with no matches.
+- The editor says Save draft or Save live changes to make the publishing consequence
+  clear. Language and display order are under More options.
+- Help buttons are easier to tap and include practical steps, business examples,
+  and consequences for publishing, scheduling, uploads, and menus. Scheduling help
+  correctly explains device-local time rather than claiming to use the site timezone.
+- Fleet checks now include Undercover, SCHorror, and AAA alongside the original sites.
+
 ## 1.10.0 — 2026-08-31
 
 ### Added

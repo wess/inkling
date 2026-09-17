@@ -28,10 +28,39 @@ export type HelpEntry = {
   readonly what: string
   readonly example?: string
   readonly careful?: string
+  readonly steps?: readonly string[]
 }
 
 const ENTRIES = {
-  // ─── writing and publishing ───────────────────────────────────────────────
+  "home.start": {
+    title: "Keeping your website up to date",
+    what: "Home is your starting point for changing what your website says. Each section uses the names chosen for your business, such as Pages, Events, or Products.",
+    steps: [
+      "Choose a website section, then open the item you want to change.",
+      "Edit the words or pictures and save your work. New content starts as a draft.",
+      "When a draft is ready for visitors, choose Publish now. If you cannot publish, send it for review.",
+    ],
+    example:
+      "For a comic signing, open Events and add the date, guest, and details. For new opening hours, open the page that displays your hours.",
+    careful:
+      "Saving an already published item updates its published version. Social posts are separate from website content. Fonts and page layout are managed by the person who built your website.",
+  },
+
+  "entry.save": {
+    title: "Saving and publishing",
+    what: "Saving keeps your work in Inkling. Whether visitors can see it depends on the item's publishing status.",
+    steps: [
+      "For new content, choose Save draft. It stays off the public website.",
+      "Choose Publish now to make it available to your website, or Schedule for later to pick a time.",
+      "For published content, Save live changes updates the published version immediately. Take off website returns it to a draft.",
+    ],
+    example:
+      "You can prepare next week's coffee tasting as a draft. Correcting the time on an already published event changes the version your website reads as soon as you save.",
+    careful:
+      "Your website may take a little time to refresh. Saving a scheduled item keeps its schedule. Sending for review asks an editor to check it; it does not publish it.",
+  },
+
+  // writing and publishing
 
   "entry.title": {
     title: "Title",
@@ -48,10 +77,18 @@ const ENTRIES = {
   },
 
   "entry.status": {
-    title: "Draft, in review, published, archived",
-    what: "Where this content is up to. Draft means only people signed in here can see it. In review means you would like somebody to check it. Published means it is live on the website. Archived means it is off the site but kept.",
+    title: "Publishing status",
+    what: "The status tells you whether this content is ready for visitors. Your website reads published content; the other statuses keep it off the public website.",
+    steps: [
+      "Draft: work in progress. Save it now and come back later.",
+      "In review: waiting for an editor to check and publish it.",
+      "Scheduled: saved for a future publishing time. Check the date before leaving it.",
+      "Published: available to your website. Saving edits updates this version.",
+      "Archived: kept in Inkling, but no longer published.",
+    ],
+    example: "Draft a weekend special on Tuesday, then schedule it for Friday morning.",
     careful:
-      "Publishing is the moment it becomes public. Everything before that is private to this admin, so a half-finished draft is safe to leave.",
+      "A shared preview link can also show a draft. Taking published content off the website can affect pages or links that use it. Your website may take time to refresh after a change.",
   },
 
   "entry.author": {
@@ -64,10 +101,15 @@ const ENTRIES = {
 
   "entry.schedule": {
     title: "Publish at",
-    what: "Set a date and time and this goes live on its own, without anybody being at a computer.",
+    what: "Choose a future date and time to publish this content automatically. The time you enter uses your device's time zone.",
+    steps: [
+      "Save the content first, then open Schedule for later.",
+      "Choose a date and time in the future and press Schedule.",
+      "Check that the status says Scheduled. The server checks for due content about once a minute.",
+    ],
     example: "A sale that should appear at 9am on Friday.",
     careful:
-      "If the content no longer fits its content type by the time the moment arrives — a required field was removed, say — it comes back to review instead of going out broken.",
+      "Keep the site running for the scheduled time. Saving edits keeps the schedule. If required information is missing when publishing is due, the content moves to review instead. Check it and publish again when ready.",
   },
 
   "entry.locale": {
@@ -88,11 +130,26 @@ const ENTRIES = {
 
   "entry.revisions": {
     title: "History",
-    what: "Every saved version of this content, oldest to newest, with who saved it. You can look at an old version and put it back.",
-    careful: "Restoring an old version does not delete the newer ones — it adds the old text back as a new version.",
+    what: "Previous saved versions of this content. Open a version to check what it contained before deciding to restore it.",
+    example: "If yesterday's opening hours were correct, open that version and check the details before restoring it.",
+    careful:
+      "Restoring replaces the current content with the selected version. The current content is saved in history first. Check the publishing status afterward, especially if the page was live.",
   },
 
-  // ─── media ────────────────────────────────────────────────────────────────
+  // media
+
+  "media.library": {
+    title: "Photos & files",
+    what: "This is your library of pictures, documents, and other uploads. Upload a file once, then choose it wherever your website content asks for a picture or file.",
+    steps: [
+      "Choose Upload or drop files into the upload area.",
+      "Open a picture and add alt text describing what it shows.",
+      "Return to your page or product and choose the uploaded file in its picture field, then save the content.",
+    ],
+    example: "Upload a photo of this week's featured comic, then select it when editing the announcement.",
+    careful:
+      "Uploading alone does not add a picture to a page. Uploaded files have public addresses, so do not upload private documents. Files used by active content cannot be deleted until those references are removed.",
+  },
 
   "media.alt": {
     title: "Alt text",
@@ -277,6 +334,11 @@ const ENTRIES = {
     title: "Menus",
     what: "Your website's navigation, edited here instead of in code. A menu is a named list of links, and the list can have links nested under other links.",
     example: 'A menu named "main" holding Home, Shop, About, Contact.',
+    steps: [
+      "Choose the existing menu your website uses.",
+      "Edit the link text visitors see and the address it opens. Use the arrows to change the order.",
+      "Choose Save menu, then check the links on your website.",
+    ],
     careful: "Your website asks for a menu by its name, so renaming one means the site stops finding it.",
   },
 
@@ -307,8 +369,10 @@ const ENTRIES = {
 
   "settings.timezone": {
     title: "Timezone",
-    what: "The clock that scheduled publishing runs on. Set it to where the people using this site are.",
-    careful: 'Get it wrong and something set for "9am Friday" goes out at the wrong hour.',
+    what: "Your website's preferred time zone. The website can use this when displaying dates and times.",
+    example: "America/New_York for a store on US Eastern time.",
+    careful:
+      "The scheduling controls in this admin use your device's local time zone. Changing this setting does not change an existing scheduled publishing time.",
   },
 
   "settings.locale": {
@@ -479,6 +543,10 @@ const ENTRIES = {
   "social.caption": {
     title: "Caption",
     what: "What every selected network gets, unless you give one of them its own wording below.",
+    example:
+      "A coffee shop might write: Fresh cinnamon rolls are here until noon. Add a photo, then choose the connected accounts where it should appear.",
+    careful:
+      "Saving a draft does not send it. Check each account and its preview before publishing or scheduling; networks have different text and media limits.",
   },
 } as const satisfies Record<string, HelpEntry>
 
