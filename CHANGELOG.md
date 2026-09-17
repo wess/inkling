@@ -9,6 +9,18 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.12.0 — 2026-09-17
+
+### Added
+
+- Help is available directly in the sidebar, with searchable topics grouped by
+  everyday tasks. It uses the same explanations, steps, and examples as the (?) buttons.
+
+### Changed
+
+- The full-width name and avatar open an account popup with labeled Change password
+  and Sign out actions. The popup supports touch, keyboard access, and Escape dismissal.
+
 ## 1.11.0 — 2026-09-17
 
 ### Changed

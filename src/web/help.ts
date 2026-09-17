@@ -32,6 +32,17 @@ export type HelpEntry = {
 }
 
 const ENTRIES = {
+  "account.options": {
+    title: "Your account and signing out",
+    what: "Your name at the bottom of the sidebar opens your account options. On a phone, open Menu first to find it.",
+    steps: [
+      "Select your name to open the account menu.",
+      "Choose Change password to set a new password. You will need your current password.",
+      "Choose Sign out when you have finished, especially on a shared computer. Save your work first.",
+    ],
+    careful:
+      "Your role controls what you can change. If a setting or action is missing, ask the person who manages your website for access. Never share your password.",
+  },
   "home.start": {
     title: "Keeping your website up to date",
     what: "Home is your starting point for changing what your website says. Each section uses the names chosen for your business, such as Pages, Events, or Products.",

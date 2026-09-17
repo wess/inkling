@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   ChevronLeft,
+  CircleHelp,
   Clock,
   Copy,
   ExternalLink,
@@ -23,7 +24,6 @@ import {
   ListOrdered,
   ListTree,
   Lock,
-  LogOut,
   Maximize2,
   Megaphone,
   Menu as MenuIcon,
@@ -50,6 +50,7 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { createRoot } from "react-dom/client"
+import { AccountMenu } from "./account.tsx"
 import type {
   AgentKey,
   AgentProposal,
@@ -84,6 +85,7 @@ import type {
 import { api, clearToken, getToken, runAgent, setToken } from "./api.ts"
 import type { HelpId } from "./help.ts"
 import { HELP, helpFor } from "./help.ts"
+import { HelpContent, HelpScreen } from "./helpview.tsx"
 
 // Single-file admin SPA, following the same convention as the rest of the
 // stack: hooks only, no component classes, no router dependency. Routing is a
@@ -93,14 +95,6 @@ import { HELP, helpFor } from "./help.ts"
 // ---------------------------------------------------------------- utilities
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(" ")
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(part => part[0] ?? "")
-    .join("")
-    .toUpperCase()
 
 const ROLE_RANK: Record<string, number> = { viewer: 0, author: 1, editor: 2, admin: 3, owner: 4 }
 const hasRole = (role: string, minimum: "author" | "editor" | "admin" | "owner"): boolean =>
@@ -192,6 +186,7 @@ const useUnsavedWarning = (dirty: boolean): void => {
 
 type Route =
   | { name: "dashboard" }
+  | { name: "help" }
   | { name: "activity" }
   | { name: "collection"; type: string }
   | { name: "editor"; type: string; id: string | null }
@@ -230,6 +225,7 @@ const parse = (path: string): Route => {
   if (head === "c" && a)
     return b ? { name: "editor", type: a, id: b === "new" ? null : b } : { name: "collection", type: a }
   if (head === "media") return { name: "media" }
+  if (head === "help") return { name: "help" }
   if (head === "activity") return { name: "activity" }
   if (head === "types") return { name: "types", type: a }
   if (head === "taxonomy") return { name: "taxonomy" }
@@ -373,31 +369,7 @@ const Hint = ({ id, text, wide }: { id?: HelpId; text?: React.ReactNode; wide?: 
           createPortal(
             <Modal title={entry?.title ?? "About this"} onClose={() => setOpen(false)} wide={wide}>
               {entry ? (
-                <div className="helpbody">
-                  <p>{entry.what}</p>
-                  {entry.steps ? (
-                    <div>
-                      <h3>What to do</h3>
-                      <ol>
-                        {entry.steps.map(step => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
-                  {entry.example ? (
-                    <p className="helpeg">
-                      <b>For example: </b>
-                      {entry.example}
-                    </p>
-                  ) : null}
-                  {entry.careful ? (
-                    <p className="helpcare">
-                      <b>Worth knowing: </b>
-                      {entry.careful}
-                    </p>
-                  ) : null}
-                </div>
+                <HelpContent entry={entry} />
               ) : (
                 <div className="helpbody">
                   <p>{text}</p>
@@ -9604,6 +9576,8 @@ const App = () => {
       }
       case "media":
         return <MediaLibrary canManage={hasRole(me.role, "author")} toast={toast} />
+      case "help":
+        return <HelpScreen />
       case "types":
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin manages content types.</Note>
         return <TypesScreen types={types} editing={route.type} go={go} onChanged={loadWorkspace} toast={toast} />
@@ -9718,6 +9692,7 @@ const App = () => {
             {nav({ name: "dashboard" }, "Home", LayoutGrid)}
             {nav({ name: "media" }, "Photos & files", ImageIcon)}
             {hasRole(me.role, "author") ? nav({ name: "ai" }, "Ask Inky", Sparkles) : null}
+            {nav({ name: "help" }, "Help", CircleHelp)}
           </div>
 
           {collections.length > 0 ? (
@@ -9804,35 +9779,15 @@ const App = () => {
         </nav>
 
         <div className="sidefoot">
-          <div className="who">
-            <div className="avatar">{initials(me.name)}</div>
-            <div style={{ minWidth: 0 }}>
-              <div className="whoname">{me.name}</div>
-              <div className="whorole">{me.role}</div>
-            </div>
-            <button
-              type="button"
-              className="btn ghost sm rowend"
-              aria-label="Change password"
-              title="Change password"
-              onClick={() => setChangingPassword(true)}
-            >
-              <Lock size={14} />
-            </button>
-            <button
-              type="button"
-              className="btn ghost sm"
-              aria-label="Sign out"
-              title="Sign out"
-              onClick={async () => {
-                await api.logout().catch(() => {})
-                clearToken()
-                setMe(null)
-              }}
-            >
-              <LogOut size={14} />
-            </button>
-          </div>
+          <AccountMenu
+            me={me}
+            onPassword={() => setChangingPassword(true)}
+            onSignOut={async () => {
+              await api.logout().catch(() => {})
+              clearToken()
+              setMe(null)
+            }}
+          />
         </div>
       </aside>
 

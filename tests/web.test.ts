@@ -6,6 +6,7 @@ test("the admin serves one in-memory build with immutable assets", async () => {
   const document = await handle(new URL("http://localhost/admin/c/post/example"))
 
   expect(document.status).toBe(200)
+  expect((await handle(new URL("http://localhost/admin/help"))).status).toBe(200)
   expect(document.headers.get("cache-control")).toBe("no-store")
   expect(document.headers.get("content-security-policy")).toContain("script-src 'self'")
 

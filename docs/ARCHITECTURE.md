@@ -1015,6 +1015,9 @@ content from Social media, More tools (plugin content and panels), Manage websit
 and Advanced setup. Secondary groups start collapsed and open for their active
 route; editors highlight their parent collection. Role checks still apply to
 every destination. On small screens a labeled Menu button exposes the navigation.
+Help remains a top-level destination for every role. The full-width account button
+opens a native popover with labeled password and sign-out actions; it renders in
+the top layer so the scrolling sidebar cannot clip it.
 
 The editor distinguishes Save draft from Save live changes: saving a published
 entry updates its published payload immediately. Scheduling keeps using the
@@ -1036,6 +1039,9 @@ dialog along with itself.
 Help entries can include ordered steps alongside the explanation, example, and
 consequences. Publishing, scheduling, media uploads, and website menus explain
 the action to take as well as what the control means.
+`src/web/helpview.tsx` shares the help body between these dialogs and the searchable
+Help page. Topics are grouped by task, with technical setup last. Help search runs
+locally and does not send the query to a service.
 
 `src/web/serve.ts` bundles it with `Bun.build` and hands back a *handler*, not a
 server. `src/server.ts` calls it once at boot and falls through to it for
