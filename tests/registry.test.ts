@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test"
 import { connect, from } from "atlas/db"
 import { options, pipeline, router } from "atlas/server"
+import { authRoutes } from "../src/auth/index.ts"
 import { corsFor, preflight } from "../src/http/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { createHooks } from "../src/plugins/hooks.ts"
 import { createRegistry } from "../src/plugins/index.ts"
 import { pluginDispatch } from "../src/plugins/routes.ts"
 import { plugins } from "../src/schema/index.ts"
+import { createUser } from "../src/users/index.ts"
 import { registerWebhookBridge } from "../src/webhooks/index.ts"
 
 const setup = async () => {
@@ -17,6 +19,44 @@ const setup = async () => {
   const registry = await createRegistry(db, hooks, "./tests/fixtures/plugins")
   return { db, hooks, registry }
 }
+
+test("plugins using the public package API enforce staff route permissions", async () => {
+  const { db, registry } = await setup()
+  try {
+    await registry.enable("public")
+    const dispatch = router(...authRoutes(db), ...pluginDispatch(registry))
+    const request = (bearer?: string) =>
+      dispatch(
+        new Request("http://localhost/ext/public/account", {
+          headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
+        }),
+      )
+    expect((await request()).status).toBe(401)
+
+    for (const role of ["author", "owner"] as const) {
+      await createUser(db, {
+        name: role,
+        email: `${role}@example.test`,
+        password: "plugin-example-password",
+        role,
+      })
+      const login = await dispatch(
+        new Request("http://localhost/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: `${role}@example.test`, password: "plugin-example-password" }),
+        }),
+      )
+      expect(login.status).toBe(200)
+      const { token } = (await login.json()) as { token: string }
+      const response = await request(token)
+      expect(response.status).toBe(role === "owner" ? 200 : 403)
+      if (role === "owner") expect(await response.json()).toEqual({ name: "owner" })
+    }
+  } finally {
+    await db.close()
+  }
+})
 
 test("registry refresh preserves core webhook listeners", async () => {
   const { db, hooks } = await setup()

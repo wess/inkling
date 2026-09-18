@@ -26,6 +26,8 @@ site's content types before reading or changing entries.
 - [Changelog](https://raw.githubusercontent.com/wess/inkling/main/CHANGELOG.md): Current behavior, migrations, and release history.
 - [Configuration reference](https://raw.githubusercontent.com/wess/inkling/main/.env.example): Every runtime variable and its default or requirement.
 
+- [Plugin guide](https://wess.io/inkling/plugins.md): Public plugin API, installation, authentication, settings, panels, and lifecycle.
+
 ## Optional
 
 - [Human documentation](https://wess.io/inkling/): Start guide, concepts, tutorials, and reference pages.

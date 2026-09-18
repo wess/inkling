@@ -11,6 +11,7 @@ const agentDocs = [
   resolve(ROOT, "llms-full.txt"),
   resolve(ROOT, "agent-guide.md"),
   resolve(ROOT, "delivery.md"),
+  resolve(ROOT, "plugins.md"),
 ]
 
 for (const file of files) pages.set(file, await Bun.file(file).text())

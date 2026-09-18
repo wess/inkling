@@ -102,7 +102,7 @@ database of its own.
 
 ## Inky
 
-Connect a provider under **Settings → AI** — Claude, OpenAI, Ollama on your own
+Connect a provider under **Ask Inky → Providers** — Claude, OpenAI, Ollama on your own
 machine, or Ollama Cloud — and Inky appears in the corner of every admin screen.
 Nothing in the admin mentions AI until you do; the credential is sealed with
 AES-GCM under a key derived from `SECRET`, kept in its own table, and never
@@ -276,7 +276,10 @@ screen says so if it is not.
 
 ## Plugins
 
-Drop a directory into `plugins/` and enable it in the admin. Eight ship with it:
+Inkling already supports plugins. Open **Advanced setup → Plugins** to enable
+an installed one; its screens appear under **More tools**. For installation,
+embedded sites, and route permissions, see the [plugin guide](docs/plugins.md).
+Eight ship with Inkling:
 
 | Plugin | Demonstrates |
 |---|---|
@@ -290,7 +293,8 @@ Drop a directory into `plugins/` and enable it in the admin. Eight ship with it:
 | `google` | Google Analytics and Google Ads. A `guide` panel that walks a non-technical operator through setup and ticks itself off as they go, two `stats` panels, and a `secret` setting whose value the API can never hand back |
 
 ```ts
-import { definePlugin } from "../../src/plugins/define.ts"
+import { get, json } from "atlas/server"
+import { definePlugin } from "inkling/plugins"
 
 export default definePlugin({
   name: "hello",
@@ -311,6 +315,9 @@ export default definePlugin({
   },
 })
 ```
+
+This example is public. For staff-only routes, use `requireAuth` and
+`requireCan` from `inkling/plugins`, as shown in the plugin guide.
 
 Routes land at `/ext/hello/greet` and are live the moment the plugin is enabled
 — no restart. A plugin can observe any core event without being able to break

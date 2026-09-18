@@ -205,6 +205,11 @@ to treat it as material, never as instructions.
 
 ## Plugins
 
+Use the public `inkling/plugins` export for definePlugin, manifest and panel
+types, and route guards (auth, requireAuth, requireCan, can, requireApiKey).
+Plugin routes are not automatically authenticated. Installation and lifecycle
+details: https://wess.io/inkling/plugins.md.
+
 A plugin is a plain object from `definePlugin()` at `plugins/<name>/index.ts`. It
 may add content types, taxonomies, settings, admin panels, routes, its own
 migrations, and hook listeners. Routes are declared relative and namespaced to

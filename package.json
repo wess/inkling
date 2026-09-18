@@ -1,6 +1,6 @@
 {
   "name": "inkling",
-  "version": "1.12.1",
+  "version": "1.13.0",
   "description": "A headless CMS with a plugin system and an agent that can work the whole of it.",
   "type": "module",
   "license": "MIT",
@@ -13,6 +13,7 @@
   "exports": {
     ".": "./src/app.ts",
     "./server": "./src/server.ts",
+    "./plugins": "./src/plugins/api.ts",
     "./package.json": "./package.json"
   },
   "scripts": {

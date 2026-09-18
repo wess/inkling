@@ -24,9 +24,20 @@ them needs a seed afterwards:
 ssh gohan 'sudo docker exec inkling bun run seed'
 ```
 
-The seed is idempotent and deliberately *not* part of boot: it rewrites every
-lesson, and doing that automatically would overwrite anything edited in the
+The seed is deliberately *not* part of boot: a full run replaces differing
+lessons, and doing that automatically would overwrite anything edited in the
 admin since.
+
+For a focused documentation update, prefer selected lessons and verify them:
+
+```sh
+ssh gohan 'sudo docker exec inkling bun run seed --only=finding-your-way-around,the-question-mark'
+ssh gohan 'sudo docker exec inkling bun run seed --only=finding-your-way-around,the-question-mark --check'
+```
+
+The School's seed skips unchanged lessons, stops on failed requests, and leaves
+site settings alone with `--only`. Compare live content with the deployed lesson
+source before replacing it, so edits made through the admin are preserved.
 
 Each mounts Inkling in-process with `createInkling()` and pins it by tag. They
 all run on the `gohan` droplet behind Caddy, deployed from the **devops** repo

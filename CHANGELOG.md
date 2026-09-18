@@ -9,6 +9,23 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.13.0 — 2026-09-18
+
+### Added
+
+- `inkling/plugins` exposes the plugin definition, panel and context types,
+  and the authentication guards needed by plugins in consuming projects.
+  Plugins no longer need imports into Inkling's private source tree.
+
+### Documentation
+
+- Plugin installation, route permissions, secret settings, and disabling versus
+  uninstalling now have a focused guide. The tutorial uses the public import
+  and explains discovery for standalone and embedded sites.
+- The admin guide reflects searchable Help and the account menu. Inkling School
+  lessons are updated separately at inkling.host for the current navigation,
+  publishing controls, photos and files, and device-local scheduling.
+
 ## 1.12.1 — 2026-09-18
 
 ### Changed

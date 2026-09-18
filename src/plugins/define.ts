@@ -219,7 +219,7 @@ export type Plugin = {
   readonly taxonomies?: readonly PluginTaxonomy[]
   readonly settings?: readonly PluginSetting[]
   readonly panels?: readonly PluginPanel[]
-  // Mounted under /api/plugins/<name>/… — see src/plugins/index.ts.
+  // mounted under /ext/<name>/…; each route supplies its own access guards.
   readonly routes?: (ctx: PluginContext) => Route[] | Promise<Route[]>
   readonly register?: (ctx: PluginContext) => void | Promise<void>
   // Runs once per version on enable/upgrade, after migrations.

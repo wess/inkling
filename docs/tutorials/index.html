@@ -158,7 +158,9 @@
 
       <li class="step">
         <h3>Make the directory</h3>
-        <p>The directory name and the plugin's <code>name</code> must match.</p>
+        <p>In a standalone checkout, the directory name and the plugin's <code>name</code> must match.
+          Embedded sites pass their own absolute <code>pluginDir</code>; see the
+          <a href="../plugins.md">installation and permissions guide</a>.</p>
         <div class="screen"><pre>mkdir -p plugins/readingtime</pre></div>
       </li>
 
@@ -169,7 +171,7 @@
           <code>delivery.entry</code> filter runs on every entry on its way out,
           which is where a derived value belongs.
         </p>
-        <div class="screen"><pre><span class="k">import</span> { definePlugin } <span class="k">from</span> <span class="s">"../../src/plugins/define.ts"</span>
+        <div class="screen"><pre><span class="k">import</span> { definePlugin } <span class="k">from</span> <span class="s">"inkling/plugins"</span>
 
 <span class="c">// Words per minute is a setting rather than a constant because the right
 // number is editorial, not technical.</span>
@@ -210,7 +212,9 @@
       <li class="step">
         <h3>Turn it on</h3>
         <p>
-          <b>Plugins</b> in the admin, then enable it. Nothing restarts — plugin
+          Restart after adding the file, or call <code>POST /api/plugins/reload</code>
+          to discover it. Open <b>Advanced setup → Plugins</b> in the admin and enable it.
+          Enabling needs no restart — plugin
           routes and hooks resolve per request, so it is live on the next call.
         </p>
         <div class="screen"><pre>curl http://localhost:4300/content/post/hello -H <span class="s">"x-api-key: ink_…"</span>
@@ -233,11 +237,10 @@
     <h3>Going further</h3>
 
     <p>
-      A plugin can also declare its own content types (marked as owned by it, so
-      disabling retires them), its own taxonomies and settings, routes under
+      A plugin can also declare its own content types (marked as owned by it and retained when disabled), its own taxonomies and settings, routes under
       <code>/ext/&lt;name&gt;/…</code>, and its own database tables through
       plugin-scoped migrations in <code>plugins/&lt;name&gt;/migrations/</code>.
-      Read the seven bundled plugins — each one demonstrates a different
+      Read the eight bundled plugins — each one demonstrates a different
       extension point.
     </p>
 

@@ -541,7 +541,17 @@ Anthropic-shaped client.
 
 ## Plugins
 
-A plugin is a plain object at `plugins/<name>/index.ts`:
+A plugin is a plain object at `plugins/<name>/index.ts`. The public
+`inkling/plugins` export supplies `definePlugin`, manifest and panel types,
+`auth`, `requireAuth`, `requireCan`, `can`, and `requireApiKey` for consuming
+projects. See [the plugin guide](plugins.md) for installation and route guards.
+Plugin routes are not authenticated automatically.
+
+```ts
+import { definePlugin } from "inkling/plugins"
+```
+
+The manifest is:
 
 ```ts
 export default definePlugin({
