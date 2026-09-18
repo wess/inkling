@@ -9,6 +9,13 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.12.1 — 2026-09-18
+
+### Changed
+
+- Pin Atlas 0.3.0, updating shared validation and restoring reproducible GitHub
+  dependency installs after the framework repository layout changed.
+
 ## 1.12.0 — 2026-09-17
 
 ### Added
