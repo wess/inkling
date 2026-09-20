@@ -286,7 +286,8 @@ Eight ship with Inkling:
 | `seo` | A `delivery.entry` filter adding computed metadata to every response |
 | `redirects` | A plugin-owned content type plus a public lookup route |
 | `forms` | A plugin with its own table via plugin-scoped migrations |
-| `commerce` | Content type + taxonomy + settings + a convenience route |
+| `commerce` | Ecommerce: existing product catalog plus shop introduction and editorial shop pages |
+| `square` | Connect a Square merchant, choose products, and create Square-hosted checkouts. Requires Ecommerce; off until enabled. [Setup and storefront API](docs/commerce.md) |
 | `analytics` | Cookieless traffic collection, and a `stats` panel that renders as a dashboard |
 | `assistant` | A public, page-aware assistant answering from published content only |
 | `social` | Agency social planning — clients, campaigns, a queue, a calendar, performance reporting, and a link from each plan to its core delivery post |

@@ -5,18 +5,18 @@ import { cors } from "../../src/http/index.ts"
 import { decodeObject } from "../../src/json/index.ts"
 import { requireApiKey } from "../../src/keys/index.ts"
 import { definePlugin } from "../../src/plugins/define.ts"
+import { shop, shopProduct } from "./shop.ts"
 
-// A product catalog: content type, taxonomy, settings, and a convenience
-// delivery route. Deliberately catalog-only — no cart, no checkout, no payment.
-// Storefront behaviour belongs to the site; the CMS owns what a product *is*.
+// Existing catalogs keep their own prices. Connected shop pages hold only
+// editorial content; the provider owns every price used at checkout.
 
 type ProductRow = { id: string; slug: string; title: string; data: string }
 
 export default definePlugin({
   name: "commerce",
-  version: "1.0.0",
-  label: "Commerce",
-  description: "A product catalog with categories, pricing, and availability.",
+  version: "1.1.0",
+  label: "Ecommerce",
+  description: "Product catalogs, shop pages, and storefront content. Add Square for connected checkout.",
   author: "Inkling",
 
   settings: [
@@ -38,6 +38,8 @@ export default definePlugin({
   taxonomies: [{ name: "productcategory", label: "Product categories", hierarchical: true }],
 
   contentTypes: [
+    shop,
+    shopProduct,
     {
       name: "product",
       label: "Product",
@@ -90,8 +92,10 @@ export default definePlugin({
   ],
 
   panels: [
+    { id: "shop", label: "Shop introduction", icon: "store", kind: "collection", contentType: "shop" },
+    { id: "shoppages", label: "Shop pages", icon: "shopping-bag", kind: "collection", contentType: "shopproduct" },
     { id: "products", label: "Products", icon: "shopping-bag", kind: "collection", contentType: "product" },
-    { id: "commercesettings", label: "Commerce", icon: "settings", kind: "settings" },
+    { id: "commercesettings", label: "Catalog settings", icon: "settings", kind: "settings" },
   ],
 
   routes: ctx => [

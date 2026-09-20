@@ -12,6 +12,7 @@ const agentDocs = [
   resolve(ROOT, "agent-guide.md"),
   resolve(ROOT, "delivery.md"),
   resolve(ROOT, "plugins.md"),
+  resolve(ROOT, "commerce.md"),
 ]
 
 for (const file of files) pages.set(file, await Bun.file(file).text())

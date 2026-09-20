@@ -27,6 +27,7 @@ site's content types before reading or changing entries.
 - [Configuration reference](https://raw.githubusercontent.com/wess/inkling/main/.env.example): Every runtime variable and its default or requirement.
 
 - [Plugin guide](https://wess.io/inkling/plugins.md): Public plugin API, installation, authentication, settings, panels, and lifecycle.
+- [Ecommerce and Square](https://wess.io/inkling/commerce.md): Shop-owner setup, Square account linking, storefront API, hosted checkout, and first-version limitations.
 
 ## Optional
 

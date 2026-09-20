@@ -9,6 +9,37 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.14.0 — 2026-09-20
+
+### Added
+
+- Ecommerce (`commerce`) now includes shop introductions and editorial shop pages.
+  Existing product catalogs and prices are unchanged.
+- Optional Square integration: connect a merchant through browser-bound OAuth,
+  select a selling location, add draft product pages, and offer Square-hosted
+  checkout from your own storefront. Square supplies current products, prices,
+  stock, taxes, and orders; Inkling stores the page copy and photos.
+- Delivery-key storefront endpoints validate published pages, merchant bindings,
+  quantities, location overrides, and current stock before creating an idempotent
+  checkout. Access and refresh tokens are encrypted; setup is human-admin only.
+- Guided shop setup, read-only recent orders, and a focused storefront integration
+  guide. Configure the Square application and complete a Sandbox payment test
+  before enabling production checkout. The plugin is off by default.
+
+### Fixed
+
+- Plugin-owned single pages now appear on Home and under More tools, including
+  the Ecommerce shop introduction.
+- Switching content types resets the list and editor, preventing a single page
+  from opening an entry left over from the previous collection.
+
+### Scope
+
+- The first Square release supports fixed-price, whole-quantity physical goods
+  with flat-rate shipping. It does not reserve inventory, handle subscriptions,
+  modifiers, measured quantities, or calculate carrier quotes. Previously created
+  payment links must be closed in Square if no longer wanted.
+
 ## 1.13.0 — 2026-09-18
 
 ### Added

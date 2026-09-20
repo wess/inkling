@@ -651,6 +651,40 @@ taxonomy + settings + route), `analytics` (own table + public write route +
 `connections` panel), `google` (a `guide` panel, two `stats` panels, a
 `connections` panel, and `secret` settings).
 
+### Ecommerce and Square
+
+`commerce` keeps the existing product catalog and adds editorial `shopproduct`
+and single `shop` content types. `square` depends on it and is opt-in. Square
+owns prices, variations, stock, and orders; Inkling owns the page copy and photos.
+The private `square_products` table binds each page to an item, merchant, and
+environment. Editorial writes cannot change the binding. Setup creates drafts;
+only published, nondeleted bound pages appear in storefront results.
+
+The single `square_connections` row stores encrypted OAuth tokens, client ID,
+environment, merchant ID, and a fresh connection ID. Refreshes compare that ID
+before updating, so a late refresh cannot overwrite a replacement connection.
+The authorization-code flow uses a ten-minute sealed state, a browser cookie,
+and a database claim consumed with DELETE RETURNING. It rechecks the initiating
+administrator and application configuration at callback time. Account connection
+routes require plugins.manage, which agent keys cannot receive.
+
+Catalog and inventory reads go directly to Square, including cursor pagination
+and per-location overrides. No webhook or local stock cache is needed. Checkout
+accepts identifiers and integer quantities, rejects price overrides, validates
+published page bindings and current stock, and sends catalog variation IDs to
+Square's Payment Links API with an idempotency key. Square applies configured
+catalog taxes and discounts. The delivery-key endpoints are server-to-server,
+scoped to shopproduct, and no-store. A site renders its own cart and proxies these
+requests without exposing the key. Tokens and customer details never enter the
+delivery response. The administrator's recent-orders view is read-only.
+
+A payment link does not reserve inventory or prove payment. The first version
+supports fixed-price, whole-quantity physical products with flat-rate shipping;
+it rejects modifiers, measured quantities, stock conversions, and nonregular
+product types. Existing payment links survive unpublishing and disconnecting;
+those must be managed in Square. See [the shop guide](commerce.md) for setup,
+API contracts, and the sandbox-to-production process.
+
 ### Social (the plugin)
 
 `social` is the agency layer *above* posting: what was sold to a client, and

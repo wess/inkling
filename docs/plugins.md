@@ -119,3 +119,9 @@ this release.
 See the [plugin tutorial](https://wess.io/inkling/tutorials/#plugin),
 [architecture](https://raw.githubusercontent.com/wess/inkling/main/docs/ARCHITECTURE.md),
 and [bundled examples](https://github.com/wess/inkling/tree/main/plugins).
+
+The Ecommerce plugin (`commerce`) provides the existing catalog plus editorial
+shop pages. The optional `square` plugin connects a merchant account and supplies
+live catalog data and hosted checkout. It requires `commerce`, remains off until
+enabled, and starts with checkout paused. See [Ecommerce and Square](commerce.md)
+for setup, storefront routes, and supported product types.

@@ -245,7 +245,20 @@ assistant proposal — goes through `writePluginSettings`, where `null` clears,
 Bundled: `seo`, `redirects`, `forms`, `commerce`, `analytics`, `assistant`,
 `social` (agency planning — four content types, an `entry.beforeSave` filter,
 two `stats` panels, a `social_results` table, and a link from each plan to its
-core delivery post), `google`.
+core delivery post), `google`, `square`.
+
+`commerce` is labeled Ecommerce and retains the original catalog unchanged.
+It adds `shopproduct` (editorial pages) and `shop` (introduction/policies).
+`square` requires `commerce`, is opt-in, and uses Square as the price, stock,
+product, and order authority. Its browser-bound OAuth stores encrypted tokens;
+its server-to-server storefront API requires a delivery key scoped to shopproduct.
+`GET /ext/square/products` reads published bound pages plus current Square data.
+`POST /ext/square/checkout` accepts item IDs, quantities, and an idempotency key,
+validates them, and creates a Square-hosted payment link. No card data enters
+Inkling. Supports fixed-price, whole-quantity physical products with flat shipping;
+stock checks do not reserve stock. Operator environment configuration and a real
+Sandbox checkout are required before opening a live shop.
+See https://wess.io/inkling/commerce.md for the full contract and limits.
 Posting is not a plugin; see Social below.
 
 `google` is deliberately split in half, because Google sells it as one thing and

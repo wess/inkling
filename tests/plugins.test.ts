@@ -107,7 +107,7 @@ test("plugin manifests are validated before they can register anything", () => {
 })
 
 test("first-party plugins all load and declare a valid manifest", async () => {
-  for (const name of ["seo", "redirects", "forms", "commerce"]) {
+  for (const name of ["seo", "redirects", "forms", "commerce", "square"]) {
     const module = await import(`../plugins/${name}/index.ts`)
     const checked = validatePlugin(module.default)
     expect(checked.ok).toBe(true)

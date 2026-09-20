@@ -3,7 +3,7 @@ import { connect, from } from "atlas/db"
 import { countRows } from "../src/db/dialect.ts"
 import { id } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"
-import { down, scan, up } from "../src/migrate/index.ts"
+import { down, downAll, scan, up } from "../src/migrate/index.ts"
 import { contentTypes, entries } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 
@@ -130,5 +130,24 @@ if (!reachable) {
         .where(q => q("bucket").equals("test:pg")),
     )
     expect(total).toBe(1)
+  })
+
+  test("Square migrations and one-time OAuth claims work on postgres", async () => {
+    const directory = "./plugins/square/migrations"
+    await up(db, directory, "plugin:square")
+    try {
+      await db.execute(from("square_oauth").insert({ id: "one-use", expires_at: now() }))
+      const claim = () =>
+        db.execute(
+          from("square_oauth")
+            .where(q => q("id").equals("one-use"))
+            .del()
+            .returning("id"),
+        )
+      expect(await claim()).toHaveLength(1)
+      expect(await claim()).toHaveLength(0)
+    } finally {
+      await downAll(db, directory, "plugin:square")
+    }
   })
 }

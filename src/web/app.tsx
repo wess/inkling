@@ -1418,7 +1418,7 @@ const Dashboard = ({ go, types, role }: { go: (route: Route) => void; types: Con
       .catch(() => setError(true))
   }, [])
 
-  const content = types.filter(type => !type.ownerPlugin || type.kind === "collection")
+  const content = types
 
   return (
     <div className="home">
@@ -3383,7 +3383,7 @@ const PluginPanelView = ({
   if (panel.kind === "collection") {
     const type = types.find(t => t.name === panel.contentType)
     if (!type) return <Note kind="warn">This panel points at a content type that is not installed.</Note>
-    return <Collection type={type} canWrite go={go} />
+    return <Collection key={type.name} type={type} canWrite go={go} />
   }
 
   if (panel.kind === "stats") return <StatsPanel panel={panel} toast={toast} />
@@ -9521,7 +9521,7 @@ const App = () => {
     )
 
   const collections = types.filter(t => !t.ownerPlugin)
-  const pluginCollections = types.filter(t => t.ownerPlugin && t.kind === "collection")
+  const pluginCollections = types.filter(t => t.ownerPlugin)
   const enabledPlugins = plugins.filter(p => p.enabled && p.panels.length > 0)
 
   const nav = (target: Route, label: string, Icon: typeof FileText, count?: number) => {
@@ -9553,7 +9553,7 @@ const App = () => {
       case "collection": {
         const type = types.find(t => t.name === route.type)
         return type ? (
-          <Collection type={type} canWrite={hasRole(me.role, "author")} go={go} />
+          <Collection key={type.name} type={type} canWrite={hasRole(me.role, "author")} go={go} />
         ) : (
           <Note kind="warn">That content type no longer exists.</Note>
         )
@@ -9562,6 +9562,7 @@ const App = () => {
         const type = types.find(t => t.name === route.type)
         return type ? (
           <Editor
+            key={`${type.name}:${route.id ?? "new"}`}
             type={type}
             id={route.id}
             canEdit={hasRole(me.role, "author")}
@@ -9728,7 +9729,13 @@ const App = () => {
               }
             >
               <summary>More tools</summary>
-              {pluginCollections.map(type => nav({ name: "collection", type: type.name }, type.pluralLabel, FileText))}
+              {pluginCollections.map(type =>
+                nav(
+                  { name: "collection", type: type.name },
+                  type.kind === "single" ? type.label : type.pluralLabel,
+                  FileText,
+                ),
+              )}
               {hasRole(me.role, "admin")
                 ? enabledPlugins.flatMap(plugin =>
                     plugin.panels
