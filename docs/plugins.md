@@ -1,7 +1,7 @@
 # Build and install an Inkling plugin
 
 Inkling already includes a plugin system. Plugins can add content types,
-settings, admin panels, routes, database migrations, and hooks. Eight plugins
+settings, admin panels, routes, database migrations, and hooks. Bundled plugins
 ship with Inkling; an operator enables them under **Advanced setup → Plugins**.
 Their screens appear under **More tools**.
 

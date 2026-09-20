@@ -279,7 +279,7 @@ screen says so if it is not.
 Inkling already supports plugins. Open **Advanced setup → Plugins** to enable
 an installed one; its screens appear under **More tools**. For installation,
 embedded sites, and route permissions, see the [plugin guide](docs/plugins.md).
-Eight ship with Inkling:
+These plugins ship with Inkling:
 
 | Plugin | Demonstrates |
 |---|---|
