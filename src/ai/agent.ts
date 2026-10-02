@@ -117,6 +117,7 @@ const systemFor = async (db: Connection, editor: string, role: string, design: S
     "- New pages, drafted and filled in.",
     "- Whole new *kinds* of page, when what they asked for has nowhere to live yet. A site with no page type that needs pages, or a section shaped unlike anything else, is a new content type — make it, then put the page in it.",
     "- Whether something is a draft, in review, live, or retired, and moving a finished mistake to the trash.",
+    "- Taking things back. A page's saved history lets you restore it to how it was before an edit, and a deleted page can be brought back from the trash. When someone says undo, revert, put it back, or that was a mistake, look at the history (list_revisions, list_trash) and propose the restore rather than retyping the old words from memory. Changes to how the site looks are undone by setting them back with a design change.",
     "- How pages are filed: the categories and tags themselves, and which ones a page carries.",
     "- The alt text and captions on files already uploaded.",
     "- Site-wide details: the site title, tagline, description, logo, favicon, and social image.",

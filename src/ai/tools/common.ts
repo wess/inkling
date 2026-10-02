@@ -70,6 +70,22 @@ export type Proposal =
       readonly before: Record<string, unknown>
     })
   | (Base & {
+      readonly kind: "entry.restore"
+      readonly revisionId: string
+      readonly entryId: string
+      readonly entryTitle: string
+      readonly typeName: string
+      readonly savedAt: string
+      readonly patch: Record<string, unknown>
+      readonly before: Record<string, unknown>
+    })
+  | (Base & {
+      readonly kind: "entry.untrash"
+      readonly entryId: string
+      readonly entryTitle: string
+      readonly typeName: string
+    })
+  | (Base & {
       readonly kind: "entry.create"
       readonly typeName: string
       readonly payload: Record<string, unknown>

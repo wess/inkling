@@ -6713,6 +6713,13 @@ const changesIn = (proposal: AgentProposal): Change[] => {
       return out
     }
 
+    // The patch is already flat — only the fields that differ from the revision.
+    case "entry.restore":
+      return patchRows(proposal.patch, proposal.before)
+
+    case "entry.untrash":
+      return [{ key: "page", before: "in the trash", after: "back where it was" }]
+
     case "entry.create": {
       const data = (proposal.payload.data ?? {}) as Record<string, unknown>
       return [
@@ -6852,6 +6859,8 @@ const changesIn = (proposal: AgentProposal): Change[] => {
 const targetOf = (proposal: AgentProposal): string => {
   switch (proposal.kind) {
     case "entry.update":
+    case "entry.restore":
+    case "entry.untrash":
     case "entry.status":
     case "entry.delete":
     case "entry.terms":
@@ -7220,6 +7229,12 @@ const AgentPanel = ({
           break
         case "entry.create":
           await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+          break
+        case "entry.restore":
+          await api.restoreRevision(proposal.revisionId)
+          break
+        case "entry.untrash":
+          await api.restoreEntry(proposal.entryId)
           break
         case "entry.status":
           // Publishing has its own route because it revalidates the entry

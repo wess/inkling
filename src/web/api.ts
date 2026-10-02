@@ -490,6 +490,17 @@ export type AgentProposal =
       before: Record<string, unknown>
     })
   | (Proposed & { kind: "entry.create"; typeName: string; payload: Record<string, unknown> })
+  | (Proposed & {
+      kind: "entry.restore"
+      revisionId: string
+      entryId: string
+      entryTitle: string
+      typeName: string
+      savedAt: string
+      patch: Record<string, unknown>
+      before: Record<string, unknown>
+    })
+  | (Proposed & { kind: "entry.untrash"; entryId: string; entryTitle: string; typeName: string })
   | (Proposed & { kind: "entry.status"; entryId: string; entryTitle: string; from: string; to: string })
   | (Proposed & { kind: "entry.delete"; entryId: string; entryTitle: string; typeName: string })
   | (Proposed & {

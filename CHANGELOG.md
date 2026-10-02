@@ -25,6 +25,10 @@ content type; a minor for new surface; a patch for fixes alone.
   that stylesheet after its own. Without `design`, nothing changes: Inky is not
   offered the two new tools (`get_design`, `propose_design_change`), and
   `/site/design.css` is an empty sheet.
+- Inky can undo. New tools `list_revisions`, `propose_revision_restore`,
+  `list_trash` and `propose_entry_untrash` give it the two ways back the admin
+  already had, as proposals: restore a page to how it was before an edit (the
+  card shows only the fields that would change), or bring a deleted page back.
 - New admin route `GET`/`PUT /api/design`, gated on `settings.manage`, and a
   `design.updated` audit event carrying the before and after rules.
 

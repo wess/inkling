@@ -5,6 +5,7 @@ import type { Tool, ToolContext, ToolResult, ToolRun } from "./common.ts"
 import { fail, proposalId, queued, text } from "./common.ts"
 import { contentTools } from "./content.ts"
 import { designTools } from "./design.ts"
+import { historyTools } from "./history.ts"
 import { siteTools } from "./site.ts"
 import { socialTools } from "./social.ts"
 
@@ -87,6 +88,7 @@ const navigationTool: Tool = {
 // come first.
 export const TOOLS: readonly Tool[] = [
   ...contentTools,
+  ...historyTools,
   ...siteTools,
   ...designTools,
   ...accessTools,

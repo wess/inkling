@@ -462,6 +462,14 @@ client's own vocabulary. That vocabulary is the entire reach of the feature.
   restores the host's original design. Every apply is audited as `design.updated`
   with the before and after rules.
 
+**Undo** (`src/ai/tools/history.ts`) is what makes handing Inky the whole site
+reasonable. It uses the two ways back the admin already had: a revision is
+snapshotted *before* each save, so the newest one is "how it was before the last
+edit", and a deleted entry waits in the trash. `propose_revision_restore` diffs
+the revision against the live page and proposes only the fields that differ, so
+the review card reads as the change it is; applying it goes through the ordinary
+restore route, which snapshots first, so an undo can itself be undone.
+
 What this deliberately is not: arbitrary CSS, layout changes, or edits to the
 host's templates. A request outside the surfaces and properties gets an honest
 "I can't do that, here is what I can".
