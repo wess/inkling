@@ -140,6 +140,7 @@ const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</
         <tr><td><code>sections[].collection</code></td><td>Optional <code>{ type, label }</code> linking to shared records used by the section, such as team members.</td></tr>
         <tr><td><code>fields</code></td><td>Field-key-to-selector map for clicking text or pictures. <code>$title</code> means the entry title.</td></tr>
         <tr><td><code>references</code></td><td>Optional field-key-to-<code>{ type, label }</code> map. Displays a searchable entry picker and stores the chosen entry's slug in that field.</td></tr>
+        <tr><td><code>formatted</code></td><td>Optional field keys storing inline HTML. The visual editor shows text with italic and line-break controls; the stored string retains only text, <code>i</code>, and <code>br</code> markup.</td></tr>
         <tr><td><code>entry.data.__layout</code></td><td>Saved <code>{ order: string[], hidden: string[] }</code> using section ids. Saved and revised with the entry.</td></tr>
       </tbody>
     </table>

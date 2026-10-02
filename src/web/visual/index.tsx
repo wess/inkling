@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Monitor, Smartphone } from "lucide-react"
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { api, type ContentType, type Entry, type Field, type VisualPage } from "../api.ts"
+import { FormattedInput } from "../formatted/index.tsx"
 import { Canvas, type Selection } from "./canvas.tsx"
 import "./style.css"
 
@@ -223,7 +224,20 @@ export const VisualEditor = ({
                     id={`visual-${field.key}`}
                     className={selected.field === field.key ? "visualfield selected" : "visualfield"}
                   >
-                    {renderField(field)}
+                    {definition.formatted?.includes(field.key) ? (
+                      <div className="f">
+                        <span className="fl">{field.label}</span>
+                        <FormattedInput
+                          id={`f-${field.key}`}
+                          label={field.label}
+                          value={String(data[field.key] ?? "")}
+                          disabled={disabled}
+                          onChange={value => edit(field.key, value)}
+                        />
+                      </div>
+                    ) : (
+                      renderField(field)
+                    )}
                     {errors[field.key] ? <span className="visualerror">{errors[field.key]}</span> : null}
                   </div>
                 ))

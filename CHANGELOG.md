@@ -9,6 +9,14 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.18.2 — 2026-10-02
+
+### Fixed
+
+- Visual page headings can use guided italic and line-break controls instead of
+  exposing formatting tags. Sites opt in per field with the visual manifest.
+  The controls preserve existing emphasis and strip pasted markup.
+
 ## 1.18.1 — 2026-10-02
 
 ### Fixed

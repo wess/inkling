@@ -1,0 +1,21 @@
+.formattedinput {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.formattedcontent {
+  min-height: 5.5rem;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.formattedcontent:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.formattedinput > .dim2 {
+  display: block;
+  padding: 0 12px 12px;
+}

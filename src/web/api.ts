@@ -130,6 +130,7 @@ export type VisualPage = {
   }[]
   fields?: Record<string, string>
   references?: Record<string, { type: string; label: string }>
+  formatted?: string[]
 }
 
 // A machine's credential for this API — an MCP server, a build script. Narrower

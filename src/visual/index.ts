@@ -21,6 +21,7 @@ export type VisualPage = {
   sections: VisualSection[]
   fields?: Record<string, string>
   references?: Record<string, { type: string; label: string }>
+  formatted?: string[]
 }
 
 export type VisualPages = Record<string, VisualPage>
