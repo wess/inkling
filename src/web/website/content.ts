@@ -36,6 +36,17 @@ export const loadPart = async (part: SharedPart): Promise<SharedContent> => {
   return { fields, values: entry.data, entry }
 }
 
+export const sharedPatch = (
+  part: SharedPart,
+  loaded: SharedContent,
+  values: Record<string, unknown>,
+): Record<string, unknown> =>
+  part.source.kind === "menu"
+    ? {}
+    : Object.fromEntries(
+        part.source.fields.filter(key => values[key] !== loaded.values[key]).map(key => [key, values[key]]),
+      )
+
 export const savePart = async (
   part: SharedPart,
   loaded: SharedContent,
@@ -48,9 +59,7 @@ export const savePart = async (
     else await api.createMenu(source.label, items, source.name)
     return
   }
-  const patch = Object.fromEntries(
-    source.fields.filter(key => values[key] !== loaded.values[key]).map(key => [key, values[key]]),
-  )
+  const patch = sharedPatch(part, loaded, values)
   if (source.kind === "settings") await api.saveSettings(patch)
   else if (loaded.entry) await api.updateEntry(loaded.entry.id, { data: patch })
   else throw new Error("These details could not be loaded. Reload before saving.")

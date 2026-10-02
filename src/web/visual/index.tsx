@@ -1,8 +1,12 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Monitor, Smartphone } from "lucide-react"
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api, type ContentType, type Entry, type Field, type VisualPage } from "../api.ts"
 import { FormattedInput } from "../formatted/index.tsx"
 import { askTarget, selectTarget } from "../inkystore.ts"
+import { sharedPatch } from "../website/content.ts"
+import { type SharedInputs, SharedInspector } from "../website/inspector.tsx"
+import { useSharedContent } from "../website/state.ts"
+import "../website/style.css"
 import { Canvas, type Selection } from "./canvas.tsx"
 import { focusControl } from "./selection.ts"
 import "./style.css"
@@ -22,7 +26,10 @@ export const VisualEditor = ({
   renderField,
   actions,
   openCollection,
-  openShared,
+  sharedInputs,
+  role,
+  onSharedState,
+  onSharedSaved,
 }: {
   entry: Entry
   type: ContentType
@@ -35,7 +42,10 @@ export const VisualEditor = ({
   edit: (key: string, value: unknown) => void
   renderField: (field: Field) => ReactNode
   actions: ReactNode
-  openShared: (id?: string) => void
+  sharedInputs: SharedInputs
+  role: string
+  onSharedState: (dirty: boolean, saving: boolean) => void
+  onSharedSaved: (entryId: string, values: Record<string, unknown>) => void
   openCollection: (type: string) => void
 }) => {
   const [website, setWebsite] = useState<Awaited<ReturnType<typeof api.website>> | null>(null)
@@ -46,6 +56,29 @@ export const VisualEditor = ({
       .catch(() => {})
   }, [])
   const [selected, setSelected] = useState<Selection>({ section: definition.sections[0]?.id })
+  const part = website?.parts.find(item => item.id === selected.shared)
+  const shared = useSharedContent(part, disabled)
+  const [pending, setPending] = useState<{ selection: Selection; focus: boolean } | null>(null)
+  const focusSelection = useRef(false)
+  useEffect(() => {
+    onSharedState(shared.dirty, shared.saving)
+  }, [shared.dirty, shared.saving, onSharedState])
+  useEffect(() => () => onSharedState(false, false), [onSharedState])
+  useEffect(() => {
+    const next = focusSelection.current ? selected : null
+    if (!next || disabled || shared.saving || (next.shared && !shared.loaded)) return
+    const frame = requestAnimationFrame(() => {
+      focusSelection.current = false
+      focusControl(
+        next.shared
+          ? document.querySelector(".sharedinspector .visualcontrols")
+          : next.field
+            ? document.getElementById(`visual-${next.field}`)
+            : document.querySelector(".visualcontrols"),
+      )
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [selected, shared.loaded, shared.saving, disabled])
   const [tab, setTab] = useState<"content" | "sections">("content")
   const [phone, setPhone] = useState(false)
   const [preview, setPreview] = useState<{ html: string; url: string } | null>(null)
@@ -122,16 +155,29 @@ export const VisualEditor = ({
     }
   }, [entry.id, snapshot, retry])
 
-  const select = (next: Selection) => {
-    if (next.shared) {
-      openShared(next.shared)
-      return
-    }
+  const openSelection = (next: Selection, focus = false) => {
+    setPending(null)
+    focusSelection.current = focus
     const parent = definition.sections.find(item => item.id === next.section || item.fields.includes(next.field ?? ""))
     setSelected({ ...next, section: parent?.id })
     setTab("content")
-    if (next.field)
-      requestAnimationFrame(() => document.getElementById(`visual-${next.field}`)?.scrollIntoView({ block: "nearest" }))
+    requestAnimationFrame(() => {
+      if (!focus && next.field) document.getElementById(`visual-${next.field}`)?.scrollIntoView({ block: "nearest" })
+    })
+  }
+  const select = (next: Selection, focus = false) => {
+    if (shared.saving) return
+    if (part && shared.dirty && next.shared !== part.id) setPending({ selection: next, focus })
+    else openSelection(next, focus)
+  }
+  const saveShared = async () => {
+    if (!(await shared.save())) return false
+    if (part?.source.kind === "entry" && shared.loaded?.entry) {
+      const values = sharedPatch(part, shared.loaded, shared.values)
+      onSharedSaved(shared.loaded.entry.id, values)
+    }
+    setRetry(value => value + 1)
+    return true
   }
   const move = (id: string, amount: number) => {
     const next = sections.map(section => section.id)
@@ -147,18 +193,10 @@ export const VisualEditor = ({
       order: sections.map(section => section.id),
       hidden: hidden.includes(id) ? hidden.filter(key => key !== id) : [...hidden, id],
     })
-  const editSelection = (next: Selection) => {
-    select(next)
-    if (!next.shared)
-      requestAnimationFrame(() =>
-        focusControl(
-          next.field ? document.getElementById(`visual-${next.field}`) : document.querySelector(".visualcontrols"),
-        ),
-      )
-  }
+  const editSelection = (next: Selection) => select(next, true)
 
   return (
-    <div className="visualeditor">
+    <div className={part ? "visualeditor editingshared" : "visualeditor"}>
       <div className="visualstage">
         <div className="visualtools">
           <span className="visualhint">Double-click to edit · Right-click for actions</span>
@@ -258,139 +296,168 @@ export const VisualEditor = ({
           )}
         </div>
       </div>
-      <aside className="visualinspector" aria-label="Page editing controls">
-        {website?.parts.length ? (
-          <button type="button" className="btn visualshared" onClick={() => openShared()}>
-            Header, footer & shared details
-          </button>
-        ) : null}
-        <fieldset className="visualtabs" aria-label="Editing controls">
-          <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
-            Content
-          </button>
-          <button type="button" aria-pressed={tab === "sections"} onClick={() => setTab("sections")}>
-            Sections
-          </button>
-        </fieldset>
-        <fieldset className="visualcontrols" disabled={disabled}>
-          {tab === "content" ? (
-            <>
-              <label className="f">
-                <span className="fl">Editing</span>
-                <select value={selected.section ?? ""} onChange={event => select({ section: event.target.value })}>
-                  <option value="">All content</option>
-                  {sections.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                      {hidden.includes(item.id) ? " (hidden)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {section && hidden.includes(section.id) ? (
-                <p className="visualnotice">This section is hidden on your website. Show it again under Sections.</p>
-              ) : null}
-              {section?.collection ? (
-                <div className="visualrelated">
-                  <p>To change the items shown here:</p>
-                  <button
-                    type="button"
-                    className="btn sm"
-                    onClick={() => {
-                      if (section.collection) openCollection(section.collection.type)
-                    }}
-                  >
-                    Open {section.collection.label}
-                  </button>
-                </div>
-              ) : null}
-              {fields.length ? (
-                fields.map(field => (
-                  <div
-                    key={field.key}
-                    id={`visual-${field.key}`}
-                    className={selected.field === field.key ? "visualfield selected" : "visualfield"}
-                  >
-                    {definition.formatted?.includes(field.key) ? (
-                      <div className="f">
-                        <span className="fl">{field.label}</span>
-                        <FormattedInput
-                          id={`f-${field.key}`}
-                          label={field.label}
-                          value={String(data[field.key] ?? "")}
-                          disabled={disabled}
-                          onChange={value => edit(field.key, value)}
-                        />
-                      </div>
-                    ) : (
-                      renderField(field)
-                    )}
-                    {errors[field.key] ? <span className="visualerror">{errors[field.key]}</span> : null}
-                  </div>
-                ))
-              ) : (
-                <p className="dim">
-                  This section uses content managed elsewhere on your site. Select another section to edit its words or
-                  pictures.
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <h3>Page sections</h3>
-              <p className="dim">
-                Move sections up or down, or hide them from visitors.{" "}
-                {entry.status === "published"
-                  ? "Save to update your website."
-                  : "Save to keep these changes. Publish when you’re ready."}
-              </p>
-              <ol className="visualsections">
-                {sections.map((item, index) => (
-                  <li key={item.id}>
-                    <button type="button" className="visualsectionname" onClick={() => select({ section: item.id })}>
-                      {item.label}
-                      <small>{hidden.includes(item.id) ? "Hidden from visitors" : "Visible"}</small>
+      {part ? (
+        <SharedInspector
+          part={part}
+          state={shared}
+          role={role}
+          disabled={disabled}
+          save={saveShared}
+          {...sharedInputs}
+          before={
+            <button
+              type="button"
+              className="btn visualshared"
+              onClick={() => select({ section: definition.sections[0]?.id })}
+            >
+              Back to page content
+            </button>
+          }
+          switching={
+            pending
+              ? {
+                  label: targetFor(pending.selection).label.toLowerCase(),
+                  accept: () => openSelection(pending.selection, pending.focus),
+                  cancel: () => setPending(null),
+                }
+              : null
+          }
+        />
+      ) : (
+        <aside className="visualinspector" aria-label="Page editing controls">
+          {website?.parts.length ? (
+            <button type="button" className="btn visualshared" onClick={() => select({ shared: website.parts[0]?.id })}>
+              Header, footer & shared details
+            </button>
+          ) : null}
+          <fieldset className="visualtabs" aria-label="Editing controls">
+            <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
+              Content
+            </button>
+            <button type="button" aria-pressed={tab === "sections"} onClick={() => setTab("sections")}>
+              Sections
+            </button>
+          </fieldset>
+          <fieldset className="visualcontrols" disabled={disabled}>
+            {tab === "content" ? (
+              <>
+                <label className="f">
+                  <span className="fl">Editing</span>
+                  <select value={selected.section ?? ""} onChange={event => select({ section: event.target.value })}>
+                    <option value="">All content</option>
+                    {sections.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                        {hidden.includes(item.id) ? " (hidden)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {section && hidden.includes(section.id) ? (
+                  <p className="visualnotice">This section is hidden on your website. Show it again under Sections.</p>
+                ) : null}
+                {section?.collection ? (
+                  <div className="visualrelated">
+                    <p>To change the items shown here:</p>
+                    <button
+                      type="button"
+                      className="btn sm"
+                      onClick={() => {
+                        if (section.collection) openCollection(section.collection.type)
+                      }}
+                    >
+                      Open {section.collection.label}
                     </button>
-                    <div className="row">
-                      <button
-                        type="button"
-                        className="btn ghost sm"
-                        aria-label={`Move ${item.label} up`}
-                        disabled={index === 0 || item.movable === false || sections[index - 1]?.movable === false}
-                        onClick={() => move(item.id, -1)}
-                      >
-                        <ArrowUp size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn ghost sm"
-                        aria-label={`Move ${item.label} down`}
-                        disabled={
-                          index === sections.length - 1 ||
-                          item.movable === false ||
-                          sections[index + 1]?.movable === false
-                        }
-                        onClick={() => move(item.id, 1)}
-                      >
-                        <ArrowDown size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn ghost sm"
-                        aria-label={`${hidden.includes(item.id) ? "Show" : "Hide"} ${item.label}`}
-                        onClick={() => toggle(item.id)}
-                      >
-                        {hidden.includes(item.id) ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
+                  </div>
+                ) : null}
+                {fields.length ? (
+                  fields.map(field => (
+                    <div
+                      key={field.key}
+                      id={`visual-${field.key}`}
+                      className={selected.field === field.key ? "visualfield selected" : "visualfield"}
+                    >
+                      {definition.formatted?.includes(field.key) ? (
+                        <div className="f">
+                          <span className="fl">{field.label}</span>
+                          <FormattedInput
+                            id={`f-${field.key}`}
+                            label={field.label}
+                            value={String(data[field.key] ?? "")}
+                            disabled={disabled}
+                            onChange={value => edit(field.key, value)}
+                          />
+                        </div>
+                      ) : (
+                        renderField(field)
+                      )}
+                      {errors[field.key] ? <span className="visualerror">{errors[field.key]}</span> : null}
                     </div>
-                  </li>
-                ))}
-              </ol>
-            </>
-          )}
-        </fieldset>
-        <div className="visualactions">{actions}</div>
-      </aside>
+                  ))
+                ) : (
+                  <p className="dim">
+                    This section uses content managed elsewhere on your site. Select another section to edit its words
+                    or pictures.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <h3>Page sections</h3>
+                <p className="dim">
+                  Move sections up or down, or hide them from visitors.{" "}
+                  {entry.status === "published"
+                    ? "Save to update your website."
+                    : "Save to keep these changes. Publish when you’re ready."}
+                </p>
+                <ol className="visualsections">
+                  {sections.map((item, index) => (
+                    <li key={item.id}>
+                      <button type="button" className="visualsectionname" onClick={() => select({ section: item.id })}>
+                        {item.label}
+                        <small>{hidden.includes(item.id) ? "Hidden from visitors" : "Visible"}</small>
+                      </button>
+                      <div className="row">
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          aria-label={`Move ${item.label} up`}
+                          disabled={index === 0 || item.movable === false || sections[index - 1]?.movable === false}
+                          onClick={() => move(item.id, -1)}
+                        >
+                          <ArrowUp size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          aria-label={`Move ${item.label} down`}
+                          disabled={
+                            index === sections.length - 1 ||
+                            item.movable === false ||
+                            sections[index + 1]?.movable === false
+                          }
+                          onClick={() => move(item.id, 1)}
+                        >
+                          <ArrowDown size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn ghost sm"
+                          aria-label={`${hidden.includes(item.id) ? "Show" : "Hide"} ${item.label}`}
+                          onClick={() => toggle(item.id)}
+                        >
+                          {hidden.includes(item.id) ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+          </fieldset>
+          <div className="visualactions">{actions}</div>
+        </aside>
+      )}
     </div>
   )
 }

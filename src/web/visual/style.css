@@ -265,6 +265,10 @@
   .editortoolbar {
     top: 58px;
   }
+  .editortoolbar .rowend {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
   .visualhint {
     font-size: 12px;
   }

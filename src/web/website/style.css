@@ -24,13 +24,13 @@
   margin: 0 0 12px;
   line-height: 1.5;
 }
-.sharedscreen .visualinspector > .note {
+.sharedinspector > .note {
   margin: 12px 20px 0;
 }
-.sharedscreen .visualactions p {
+.sharedinspector .visualactions p {
   margin: 0 0 12px;
 }
-.sharedscreen .visualactions > .note {
+.sharedinspector .visualactions > .note {
   margin: 0 0 12px;
 }
 .sharedswitch {
@@ -40,10 +40,10 @@
 .visualshared {
   margin: 12px;
 }
-.sharedscreen .menuitemeditor {
+.sharedinspector .menuitemeditor {
   padding: 12px;
 }
-.sharedscreen .menuitemfields {
+.sharedinspector .menuitemfields {
   grid-template-columns: 1fr;
 }
 
@@ -66,10 +66,11 @@
 }
 
 @media (max-width: 800px) {
-  .sharedscreen {
+  .sharedscreen,
+  .visualeditor.editingshared {
     padding-bottom: var(--sharedactions, 132px);
   }
-  .sharedscreen .visualactions {
+  .sharedinspector .visualactions {
     position: fixed;
     inset: auto 0 0;
     z-index: 30;
@@ -77,7 +78,7 @@
     background: var(--paper);
     box-shadow: 0 -2px 12px rgb(0 0 0 / 12%);
   }
-  .sharedscreen .visualactions p {
+  .sharedinspector .visualactions p {
     margin: 0;
   }
 

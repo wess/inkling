@@ -9,6 +9,20 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.20.2 — 2026-10-02
+
+### Fixed
+
+- Selecting a logo, navigation, or footer in the page designer opens its shared
+  controls beside that same page. Other page elements stay selectable, and page
+  drafts survive shared editing. Unsaved shared changes retain their save,
+  discard, and failed-save recovery choices when selecting another element.
+- Page and shared saves cannot overlap. The save shortcut preserves unsaved
+  shared details, and the phone toolbar keeps all save guidance visible.
+- The sidebar separates Pages from Content lists. Catalog opens its page
+  editor; Books opens its content list. Shared source records stay under Shared
+  content. Single-page navigation no longer flashes an intermediate list.
+
 ## 1.20.1 — 2026-10-02
 
 ### Fixed

@@ -100,6 +100,7 @@ import {
   setDraft,
   useInky,
 } from "./inkystore.ts"
+import { websiteNavigation } from "./navigation.ts"
 import { VisualEditor } from "./visual/index.tsx"
 import { SharedScreen } from "./website/index.tsx"
 import { MenuLink } from "./website/link.tsx"
@@ -1665,6 +1666,8 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
     }
   }, [type.kind, type.name, busy, entries, go, failure])
 
+  if (type.kind === "single" && !failure) return <Spinner />
+
   return (
     <>
       <div className="row collectionhead" style={{ marginBottom: 18 }}>
@@ -1882,6 +1885,7 @@ const EntryTaxonomies = ({
 const Editor = ({
   type,
   id,
+  role,
   canEdit,
   canPublish,
   identityId,
@@ -1890,6 +1894,7 @@ const Editor = ({
 }: {
   type: ContentType
   id: string | null
+  role: string
   canEdit: boolean
   canPublish: boolean
   identityId: string
@@ -1907,6 +1912,12 @@ const Editor = ({
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [sharedDirty, setSharedDirty] = useState(false)
+  const [sharedSaving, setSharedSaving] = useState(false)
+  const sharedState = useCallback((dirty: boolean, saving: boolean) => {
+    setSharedDirty(dirty)
+    setSharedSaving(saving)
+  }, [])
   const [scheduleAt, setScheduleAt] = useState("")
   const [siteUrl, setSiteUrl] = useState("")
   const [writers, setWriters] = useState<Identity[]>([])
@@ -1916,7 +1927,7 @@ const Editor = ({
   const [action, setAction] = useState(false)
   const saveLock = useRef(false)
   const mayEdit = canEdit && (!entry || canPublish || entry.authorId === identityId)
-  const locked = saving || action
+  const locked = saving || action || sharedSaving
 
   useEffect(() => {
     let active = true
@@ -1990,7 +2001,7 @@ const Editor = ({
   }
 
   const save = async (): Promise<Entry | null> => {
-    if (saveLock.current || !mayEdit) return null
+    if (saveLock.current || !mayEdit || sharedDirty || sharedSaving) return null
     saveLock.current = true
     setSaving(true)
     setErrors({})
@@ -2008,9 +2019,11 @@ const Editor = ({
       setSlug(saved.slug)
       setData(saved.data)
       setDirty(false)
-      delete document.body.dataset.unsaved
       toast(saved.status === "published" ? "Saved. Your website is updated." : "Draft saved")
-      if (!entry) go({ name: "editor", type: type.name, id: saved.id })
+      if (!entry) {
+        delete document.body.dataset.unsaved
+        go({ name: "editor", type: type.name, id: saved.id })
+      }
       return saved
     } catch (error) {
       const fields = fieldErrors(error)
@@ -2116,8 +2129,13 @@ const Editor = ({
   // the browser open a save-page dialog over the admin.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (mayEdit && !locked && (event.metaKey || event.ctrlKey) && event.key === "s") {
+      if ((event.metaKey || event.ctrlKey) && event.key === "s") {
         event.preventDefault()
+        if (!mayEdit || locked) return
+        if (sharedDirty) {
+          toast("Save your shared changes in the sidebar first")
+          return
+        }
         void save()
       }
     }
@@ -2125,7 +2143,7 @@ const Editor = ({
     return () => removeEventListener("keydown", onKey)
   })
 
-  useUnsavedWarning(dirty)
+  useUnsavedWarning(dirty || sharedDirty)
 
   if (busy) return <Spinner />
 
@@ -2155,17 +2173,24 @@ const Editor = ({
             </button>
           ) : null}
           {mayEdit ? (
-            <button type="button" className="btn primary" onClick={save} disabled={locked || (!dirty && !!entry)}>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={save}
+              disabled={locked || sharedDirty || (!dirty && !!entry)}
+            >
               {saving ? <span className="spin" /> : null}
               {saving
                 ? "Saving…"
-                : !dirty && entry
-                  ? "Saved"
-                  : entry?.status === "published"
-                    ? "Save live changes"
-                    : !entry || entry.status === "draft"
-                      ? "Save draft"
-                      : "Save changes"}
+                : sharedDirty
+                  ? "Save shared edits first"
+                  : !dirty && entry
+                    ? "Saved"
+                    : entry?.status === "published"
+                      ? "Save live changes"
+                      : !entry || entry.status === "draft"
+                        ? "Save draft"
+                        : "Save changes"}
             </button>
           ) : null}
         </div>
@@ -2207,12 +2232,17 @@ const Editor = ({
             type="button"
             className={cx("btn", !visual && "primary")}
             aria-pressed={!visual}
+            disabled={sharedDirty || sharedSaving}
             onClick={() => setVisual(false)}
           >
             All fields & publishing
           </button>
           <span className="editorstate" role="status">
-            {dirty ? "Unsaved changes" : "All changes saved"}
+            {sharedDirty
+              ? "Unsaved shared changes — save in the sidebar"
+              : dirty
+                ? "Unsaved page changes"
+                : "All changes saved"}
           </span>
         </fieldset>
       ) : null}
@@ -2227,7 +2257,17 @@ const Editor = ({
           errors={errors}
           disabled={!mayEdit || locked}
           edit={edit}
-          openShared={part => go({ name: "website", part })}
+          role={role}
+          onSharedState={sharedState}
+          onSharedSaved={(entryId, values) => {
+            if (entryId !== entry.id) return
+            setData(current => ({ ...current, ...values }))
+            setEntry(current => (current ? { ...current, data: { ...current.data, ...values } } : current))
+          }}
+          sharedInputs={{
+            renderField: (field, value, onChange) => <FieldInput field={field} value={value} onChange={onChange} />,
+            renderMenu: (items, onChange) => <SharedMenuInput value={items} onChange={onChange} />,
+          }}
           openCollection={name => go({ name: "collection", type: name })}
           renderField={field =>
             field.key === "$title" ? (
@@ -10078,6 +10118,7 @@ const App = () => {
   const [me, setMe] = useState<Identity | null>(null)
   const [booted, setBooted] = useState(false)
   const [types, setTypes] = useState<ContentType[]>([])
+  const [visualPages, setVisualPages] = useState<Record<string, VisualPage>>({})
   const [plugins, setPlugins] = useState<Plugin[]>([])
   const [route, navigate] = useRoute()
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null)
@@ -10098,9 +10139,14 @@ const App = () => {
   }, [])
 
   const loadWorkspace = useCallback(async () => {
-    const [nextTypes, nextPlugins] = await Promise.all([api.types().catch(() => []), api.plugins().catch(() => [])])
+    const [nextTypes, nextPlugins, visual] = await Promise.all([
+      api.types().catch(() => []),
+      api.plugins().catch(() => []),
+      api.visualPages().catch(() => ({ data: {} })),
+    ])
     setTypes(nextTypes)
     setPlugins(nextPlugins)
+    setVisualPages(visual.data)
   }, [])
 
   useEffect(() => {
@@ -10130,7 +10176,7 @@ const App = () => {
       />
     )
 
-  const collections = types.filter(t => !t.ownerPlugin)
+  const websiteNav = websiteNavigation(types, visualPages)
   const pluginCollections = types.filter(t => t.ownerPlugin)
   const enabledPlugins = plugins.filter(p => p.enabled && p.panels.length > 0)
 
@@ -10161,7 +10207,13 @@ const App = () => {
   const screen = (() => {
     switch (route.name) {
       case "collection": {
-        const type = types.find(t => t.name === route.type)
+        const stored = types.find(t => t.name === route.type)
+        const type = stored
+          ? {
+              ...stored,
+              pluralLabel: websiteNav.content.find(item => item.type.name === stored.name)?.label ?? stored.pluralLabel,
+            }
+          : undefined
         return type ? (
           <Collection key={type.name} type={type} canWrite={hasRole(me.role, "author")} go={go} />
         ) : (
@@ -10169,11 +10221,18 @@ const App = () => {
         )
       }
       case "editor": {
-        const type = types.find(t => t.name === route.type)
+        const stored = types.find(t => t.name === route.type)
+        const type = stored
+          ? {
+              ...stored,
+              pluralLabel: websiteNav.content.find(item => item.type.name === stored.name)?.label ?? stored.pluralLabel,
+            }
+          : undefined
         return type ? (
           <Editor
             key={`${type.name}:${route.id ?? "new"}`}
             type={type}
+            role={me.role}
             id={route.id}
             canEdit={hasRole(me.role, "author")}
             canPublish={hasRole(me.role, "editor")}
@@ -10323,11 +10382,33 @@ const App = () => {
             {nav({ name: "help" }, "Help", CircleHelp)}
           </div>
 
-          {collections.length > 0 ? (
+          {websiteNav.pages.length > 0 ? (
             <div className="navgroup">
-              <div className="navlabel">Your website</div>
-              {collections.map(type => nav({ name: "collection", type: type.name }, type.pluralLabel, FileText))}
+              <div className="navlabel">Pages</div>
+              {websiteNav.pages.map(({ type, label }) => nav({ name: "collection", type: type.name }, label, FileText))}
             </div>
+          ) : null}
+          {websiteNav.content.length > 0 ? (
+            <div className="navgroup">
+              <div className="navlabel">Content</div>
+              {websiteNav.content.map(({ type, label }) =>
+                nav({ name: "collection", type: type.name }, label, FileText),
+              )}
+            </div>
+          ) : null}
+          {websiteNav.shared.length > 0 ? (
+            <details
+              className="navgroup navsection"
+              open={
+                (route.name === "collection" || route.name === "editor") &&
+                websiteNav.shared.some(({ type }) => type.name === route.type)
+              }
+            >
+              <summary>Shared content</summary>
+              {websiteNav.shared.map(({ type, label }) =>
+                nav({ name: "collection", type: type.name }, label, FileText),
+              )}
+            </details>
           ) : null}
 
           {hasRole(me.role, "author") ? (

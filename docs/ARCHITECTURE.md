@@ -1293,7 +1293,12 @@ enough for the editor to lay out an image without a native image dependency.
 menu handles with optional fallback links, or registered site settings. The
 admin's `src/web/website` loads a single selected source, saves only its changed
 fields through existing routes, and refreshes an isolated sandboxed preview.
-Page previews use the same selectors to open those controls. Nothing seeds or
+Page previews use the same selectors to open those controls in place, without
+replacing the canvas or leaving the page route. `useSharedContent` and
+`SharedInspector` serve both the page designer and the standalone shared screen.
+Page and shared dirty state feed one leave guard; changing the inspector protects
+shared drafts and preserves page drafts. Shared saves merge only their changed
+fields into a page draft when both refer to the same entry. Nothing seeds or
 migrates client content when a manifest is installed.
 
 The manifest also reaches Inky's system context and the MCP `get_shared_areas`
@@ -1306,6 +1311,11 @@ Nested selectors resolve to the closest shared part, so a badge can expose its
 single image field within a larger announcement. Unsaved shared edits offer
 Save and switch, Keep editing, or Discard and switch; a failed save stays on the
 original part. Save errors stay with the actions on narrow screens.
+
+The admin sidebar groups configured singleton pages under Pages, collections
+under Content, and supporting singletons under Shared content. Visual section
+collection labels identify the item lists, so a catalog page and its books are
+distinct destinations without rewriting stored type labels.
 
 `src/ai/selection.ts` resolves optional agent request `selection` against the
 host manifests. Shared selections use the host label and source; browser labels
