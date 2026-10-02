@@ -53,6 +53,8 @@ import { registerWebhookBridge, webhookRoutes } from "./webhooks/index.ts"
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..")
 const fromRoot = (path: string): string => (isAbsolute(path) ? path : resolve(ROOT, path))
 
+export type { Surface, Surfaces } from "./design/index.ts"
+
 export type InklingOptions = {
   // Where the admin answers. "/" is standalone: every unmatched path becomes
   // the admin. A host that owns "/" passes something like "/admin", and then

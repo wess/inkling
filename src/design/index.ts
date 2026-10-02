@@ -246,7 +246,9 @@ export const designRoutes = (db: Connection, surfaces: Surfaces): Route[] => {
 
 // Public, and deliberately without a delivery key: it is fetched by a <link>
 // tag, which cannot send one. It exposes only the stylesheet the visitor's
-// browser is about to apply anyway.
+// browser is about to apply anyway. `no-cache` rather than a max-age: the point
+// of the feature is that an approved change is on the page at the next load, and
+// the ETag makes the revalidation a 304 when nothing moved.
 export const designPublicRoutes = (db: Connection, surfaces: Surfaces): Route[] => [
   get("/site/design.css", async c => {
     const css = await readDesignCss(db, surfaces)
@@ -254,6 +256,6 @@ export const designPublicRoutes = (db: Connection, surfaces: Surfaces): Route[] 
     const fresh = c.request.headers.get("if-none-match") === tag
     const response = fresh ? text(c, 304, "") : text(c, 200, css)
     const typed = putHeader(response, "content-type", "text/css; charset=utf-8")
-    return putHeader(putHeader(typed, "cache-control", "public, max-age=60"), "etag", tag)
+    return putHeader(putHeader(typed, "cache-control", "public, no-cache"), "etag", tag)
   }),
 ]
