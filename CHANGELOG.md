@@ -9,6 +9,13 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.18.1 — 2026-10-02
+
+### Fixed
+
+- The visual section renderer also type-checks in embedding sites that enable
+  unchecked-index validation. Rendering and saved layout behavior are unchanged.
+
 ## 1.18.0 — 2026-10-02
 
 ### Added

@@ -73,7 +73,10 @@ export const renderVisual = (html: string, definition: VisualPage, layout: unkno
       parent.replaceChild(slot, element)
       return slot
     })
-    for (const [index, slot] of slots.entries()) parent.replaceChild(desired[index].element, slot)
+    for (const [index, slot] of slots.entries()) {
+      const item = desired[index]
+      if (item) parent.replaceChild(item.element, slot)
+    }
   }
   if (!editing) {
     for (const { section, element } of found) {
