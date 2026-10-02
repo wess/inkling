@@ -1,5 +1,6 @@
 import type { Connection } from "atlas/db"
 import type { Capability, Scope } from "../../auth/roles.ts"
+import type { Change, Surfaces } from "../../design/index.ts"
 import type { Field } from "../../fields/index.ts"
 import type { Registry } from "../../plugins/index.ts"
 
@@ -24,6 +25,8 @@ export type ToolContext = {
   readonly db: Connection
   readonly role: string
   readonly registry: Registry
+  // What the host lets Inky restyle. Empty means the design tools do not exist.
+  readonly design: Surfaces
   readonly proposals: Proposal[]
 }
 
@@ -124,6 +127,11 @@ export type Proposal =
       readonly kind: "settings.update"
       readonly patch: Record<string, unknown>
       readonly before: Record<string, unknown>
+    })
+  | (Base & {
+      readonly kind: "design.update"
+      readonly changes: readonly Change[]
+      readonly before: Record<string, string | null>
     })
   | (Base & {
       readonly kind: "menu.update"

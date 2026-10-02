@@ -1,8 +1,10 @@
 import { can } from "../../auth/roles.ts"
+import type { Surfaces } from "../../design/index.ts"
 import { accessTools } from "./access.ts"
 import type { Tool, ToolContext, ToolResult, ToolRun } from "./common.ts"
 import { fail, proposalId, queued, text } from "./common.ts"
 import { contentTools } from "./content.ts"
+import { designTools } from "./design.ts"
 import { siteTools } from "./site.ts"
 import { socialTools } from "./social.ts"
 
@@ -83,14 +85,26 @@ const navigationTool: Tool = {
 // Every tool the model can ever be offered. Order is the order it reads them
 // in, so the content ones — the overwhelming majority of what is asked for —
 // come first.
-export const TOOLS: readonly Tool[] = [...contentTools, ...siteTools, ...accessTools, ...socialTools, navigationTool]
+export const TOOLS: readonly Tool[] = [
+  ...contentTools,
+  ...siteTools,
+  ...designTools,
+  ...accessTools,
+  ...socialTools,
+  navigationTool,
+]
 
 const BY_NAME = new Map(TOOLS.map(tool => [tool.name, tool]))
 
 // What this person's role can actually reach. Filtering here rather than
 // refusing later is the difference between Inky saying "your role cannot do
 // that" and Inky confidently queueing a change that meets a 403 on apply.
-export const toolsFor = (role: string): readonly Tool[] => TOOLS.filter(tool => tool.needs(role))
+const DESIGN = new Set(designTools.map(tool => tool.name))
+
+// A site that exposed no design surfaces never shows Inky the design tools:
+// offering them would only teach it to promise a restyle nothing can deliver.
+export const toolsFor = (role: string, design: Surfaces = {}): readonly Tool[] =>
+  TOOLS.filter(tool => tool.needs(role) && (!DESIGN.has(tool.name) || Object.keys(design).length > 0))
 
 // The capabilities a role does *not* hold, named the way the system prompt
 // wants to say them. Empty for an owner.
@@ -110,8 +124,8 @@ export const outOfReach = (role: string): string[] => {
 
 // A tool spec in the shape the wire wants. Both provider loops read this, and
 // neither should know that a handler exists.
-export const specsFor = (role: string) =>
-  toolsFor(role).map(tool => ({
+export const specsFor = (role: string, design: Surfaces = {}) =>
+  toolsFor(role, design).map(tool => ({
     name: tool.name,
     description: tool.description,
     input_schema: tool.input_schema,

@@ -350,6 +350,10 @@ bun --env-file=gamma.env src/start.ts</pre></div>
           <td><code>siteKeyName</code></td>
           <td>Mints a delivery key for the site sharing the process — it has no browser in which to visit the admin and copy one. Derived from <code>SECRET</code>, so it is the same key on every boot.</td>
         </tr>
+        <tr>
+          <td><code>design</code></td>
+          <td>The parts of the site Inky may restyle, as named selector groups such as <code>{ buttons: { label: "Buttons", selector: ".button" } }</code>. Approved changes are served at <code>/site/design.css</code>; link it after your own stylesheet. Omit it and Inky has no design tools.</td>
+        </tr>
       </tbody>
     </table>
 

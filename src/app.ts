@@ -13,6 +13,7 @@ import { contentTypeRoutes } from "./contenttypes/index.ts"
 import { countRows } from "./db/dialect.ts"
 import { db } from "./db/index.ts"
 import { deliveryRoutes } from "./delivery/index.ts"
+import { designPublicRoutes, designRoutes, readDesignCss, type Surfaces } from "./design/index.ts"
 import { entryRoutes, publishDue } from "./entries/index.ts"
 import { prefixed } from "./http/index.ts"
 import { apiKeyRoutes, ensureNamedKey } from "./keys/index.ts"
@@ -63,6 +64,9 @@ export type InklingOptions = {
   // stored only as a hash, so this re-mints on every boot rather than
   // recovering the previous secret — see ensureNamedKey.
   siteKeyName?: string
+  // The parts of the site Inky may restyle, in the host's own words. Absent or
+  // empty switches the design tools off. See src/design.
+  design?: Surfaces
 }
 
 // Bun.serve hands `fetch` a server exposing the raw socket peer. It is optional
@@ -81,6 +85,9 @@ export type Inkling = {
   // this cannot safely forget — see the comment where it is built.
   serveOptions: { idleTimeout: number; maxRequestBodySize: number }
   siteKey: string | null
+  // The generated design stylesheet, for a host that serves it itself. A
+  // function rather than a string because approved changes land at runtime.
+  designCss: () => Promise<string>
   adminBase: string
   db: typeof db
   config: typeof config
@@ -101,6 +108,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   }
 
   const adminBase = normalizeBase(options.adminBase ?? "/")
+  const surfaces: Surfaces = options.design ?? {}
 
   // 1. Schema first — every module below assumes its tables exist.
   const applied = await migrate(db, fromRoot(options.migrationsDir ?? "./migrations"))
@@ -189,7 +197,8 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...previewRoutes(db),
       ...aiRoutes(db),
       ...assistantRoutes(db),
-      ...agentRoutes(db, registry),
+      ...designRoutes(db, surfaces),
+      ...agentRoutes(db, registry, surfaces),
       ...socialRoutes(db, store, hooks),
       ...realtime.routes,
       ...pluginRoutes(db, hooks, registry, pluginDir),
@@ -205,6 +214,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
     // integrated elsewhere. The wildcard /ext dispatcher can't shadow any of
     // them — router matching is exact-first.
     ...mediaFileRoutes(db, store),
+    ...designPublicRoutes(db, surfaces),
     ...previewPublicRoutes(db),
     // The OAuth return leg. Public because the provider redirects the browser
     // here by top-level navigation, which carries no bearer token — the sealed
@@ -308,6 +318,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       maxRequestBodySize: config.maxUploadBytes + 2 * 1024 * 1024,
     },
     siteKey,
+    designCss: () => readDesignCss(db, surfaces),
     adminBase,
     db,
     config,

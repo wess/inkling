@@ -6,6 +6,7 @@ import type { Route } from "atlas/server"
 import { badRequest, conflict, json, parseJson, pipeline, post, putHeader, stream, tooManyRequests } from "atlas/server"
 import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can, scopesFor } from "../auth/roles.ts"
+import type { Surfaces } from "../design/index.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import type { Registry } from "../plugins/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
@@ -87,7 +88,7 @@ const clientFor = (credential: ResolvedCredential) =>
     ? new Anthropic({ authToken: credential.secret })
     : new Anthropic({ apiKey: credential.secret })
 
-const systemFor = async (db: Connection, editor: string, role: string): Promise<string> => {
+const systemFor = async (db: Connection, editor: string, role: string, design: Surfaces): Promise<string> => {
   const settings = await siteSettings(db).catch(() => ({}) as Record<string, unknown>)
   const title = typeof settings.title === "string" ? settings.title : "this site"
   const description = typeof settings.description === "string" ? settings.description : ""
@@ -119,6 +120,11 @@ const systemFor = async (db: Connection, editor: string, role: string): Promise<
     "- How pages are filed: the categories and tags themselves, and which ones a page carries.",
     "- The alt text and captions on files already uploaded.",
     "- Site-wide details: the site title, tagline, description, logo, favicon, and social image.",
+    ...(Object.keys(design).length > 0 && can.manageSettings(role)
+      ? [
+          "- How the site looks: colours, text size and weight, corner rounding, spacing and shadows on the named parts of the site (its surfaces). Call get_design first to see which parts and which properties exist. You cannot restyle anything that is not a listed surface or property, and you cannot write CSS; when asked for something outside that, say what you can do instead. A design change is live on the site the moment it is applied, so say what will look different, and when you change a background also set a text colour that stays readable on it.",
+        ]
+      : []),
     "- Navigation: the menus, what is in them, their order and nesting — and new menus.",
     "- Which plugins are switched on, and how each one is configured.",
     "- What role somebody has.",
@@ -215,6 +221,7 @@ type Emit = (event: string, data: unknown) => void
 type Run = {
   readonly db: Connection
   readonly registry: Registry
+  readonly design: Surfaces
   // The asking person's, because it decides which tools exist at all — see
   // `toolsFor`. A tool the model is never shown is a proposal it never queues
   // that would have met a 403 on apply.
@@ -237,7 +244,7 @@ const dispatch = async (
   run.emit("tool", { name, input })
   const before = run.proposals.length
   const result = await runTool(
-    { db: run.db, registry: run.registry, role: run.role, proposals: run.proposals },
+    { db: run.db, registry: run.registry, design: run.design, role: run.role, proposals: run.proposals },
     name,
     input,
   )
@@ -322,7 +329,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system,
-      tools: specsFor(run.role) as unknown as Anthropic.Beta.BetaToolUnion[],
+      tools: specsFor(run.role, run.design) as unknown as Anthropic.Beta.BetaToolUnion[],
       messages,
     })
 
@@ -377,7 +384,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
 const runCompatible = async (run: Run): Promise<unknown[]> => {
   const provider = createProvider(compatibleConfig(run.credential))
 
-  const tools: ToolDef[] = specsFor(run.role).map(spec => ({
+  const tools: ToolDef[] = specsFor(run.role, run.design).map(spec => ({
     name: spec.name,
     description: spec.description,
     parameters: spec.input_schema,
@@ -425,7 +432,7 @@ const runCompatible = async (run: Run): Promise<unknown[]> => {
   return messages
 }
 
-export const agentRoutes = (db: Connection, registry: Registry): Route[] => {
+export const agentRoutes = (db: Connection, registry: Registry, design: Surfaces = {}): Route[] => {
   const guard = pipeline(requireAuth(db), requireCan(can.useAi, "use the assistant"), parseJson)
   const limiter = createRateLimit(db)
   const audit = createAudit(db)
@@ -487,7 +494,7 @@ export const agentRoutes = (db: Connection, registry: Registry): Route[] => {
         // only message this route builds itself.
         const conversation: unknown[] = [...history, { role: "user", content: opening.join("\n\n") }]
 
-        const system = await systemFor(db, identity.name || identity.email, identity.role)
+        const system = await systemFor(db, identity.name || identity.email, identity.role, design)
         const proposals: Proposal[] = []
 
         audit.log({
@@ -508,6 +515,7 @@ export const agentRoutes = (db: Connection, registry: Registry): Route[] => {
               const run = {
                 db,
                 registry,
+                design,
                 role: identity.role,
                 credential,
                 system,

@@ -77,7 +77,7 @@ const call = (
   name: string,
   input: object,
   role = "owner",
-) => runTool({ db, registry: noPlugins, role, proposals }, name, input as Record<string, unknown>)
+) => runTool({ db, registry: noPlugins, design: {}, role, proposals }, name, input as Record<string, unknown>)
 
 test("every tool the model is offered is a read, a proposal, or a move", () => {
   // A write tool would have to be added here first, so this is the tripwire on
@@ -119,8 +119,11 @@ test("a tool is only offered to a role that could apply what it produces", () =>
   expect(editor).toContain("propose_term_create")
   expect(editor).not.toContain("propose_settings_update")
 
-  // An owner gets everything there is.
-  expect(named("owner")).toHaveLength(TOOLS.length)
+  // An owner gets everything there is — once the host has exposed something for
+  // the design tools to act on. Without surfaces those two do not exist.
+  const surfaces = { buttons: { label: "Buttons", selector: ".button" } }
+  expect(toolsFor("owner", surfaces)).toHaveLength(TOOLS.length)
+  expect(named("owner")).toHaveLength(TOOLS.length - 2)
 })
 
 test("a tool a role cannot reach is refused even if the model asks for it anyway", async () => {

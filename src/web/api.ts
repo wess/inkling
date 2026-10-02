@@ -523,6 +523,11 @@ export type AgentProposal =
     })
   | (Proposed & { kind: "settings.update"; patch: Record<string, unknown>; before: Record<string, unknown> })
   | (Proposed & {
+      kind: "design.update"
+      changes: { surface: string; property: string; value: string | null }[]
+      before: Record<string, string | null>
+    })
+  | (Proposed & {
       kind: "menu.update"
       menuName: string
       menuLabel: string
@@ -744,6 +749,8 @@ export const api = {
 
   settings: () =>
     request<{ data: Record<string, unknown>; schema: { key: string; label: string; type: string }[] }>("/settings"),
+  saveDesign: (changes: { surface: string; property: string; value: string | null }[]) =>
+    request<{ rules: unknown[] }>("/design", { method: "PUT", body: { changes } }),
   saveSettings: (input: Record<string, unknown>) =>
     request<Wrapped<Record<string, unknown>>>("/settings", { method: "PUT", body: input }),
 

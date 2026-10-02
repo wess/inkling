@@ -6772,6 +6772,14 @@ const changesIn = (proposal: AgentProposal): Change[] => {
     case "settings.update":
       return patchRows(proposal.patch, proposal.before)
 
+    // "buttons: background" reads as what is changing; the stored key is not.
+    case "design.update":
+      return proposal.changes.map(change => ({
+        key: `${change.surface} · ${change.property}`,
+        before: proposal.before[`${change.surface}.${change.property}`] ?? "original design",
+        after: change.value ?? "original design",
+      }))
+
     // A menu is a tree, and a JSON dump of one is unreadable at review time.
     // The labels in order are what a person is actually approving.
     case "menu.update": {
@@ -6862,6 +6870,8 @@ const targetOf = (proposal: AgentProposal): string => {
       return proposal.taxonomyLabel
     case "settings.update":
       return "Site details"
+    case "design.update":
+      return "How the site looks"
     case "menu.update":
     case "menu.delete":
       return `${proposal.menuLabel} menu`
@@ -7241,6 +7251,9 @@ const AgentPanel = ({
           break
         case "settings.update":
           await api.saveSettings(proposal.patch)
+          break
+        case "design.update":
+          await api.saveDesign(proposal.changes)
           break
         case "menu.update":
           await api.saveMenu(

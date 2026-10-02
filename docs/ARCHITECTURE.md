@@ -134,6 +134,10 @@ name yields the same key on every boot — the row is replaced when it is missin
 stale after a `SECRET` rotation, or revoked. Rotating `SECRET` rotates this key
 along with sessions and stored AI credentials.
 
+**`design`** declares the surfaces Inky may restyle — see *Design surfaces* under
+the agent. Absent, the feature is off. `inkling.designCss()` returns the
+generated stylesheet.
+
 **`serveOptions`** exists so two `Bun.serve` values are Inkling's decision rather
 than a host's to remember. `maxRequestBodySize` is the load-bearing one: Bun
 buffers a whole request body before any handler runs and defaults to 128MB,
@@ -412,12 +416,55 @@ type), tells Inky to prefer acting over interrogating, and tells it to speak in
 with the exact keys.
 
 It also states the boundary out loud, because the obvious request is one Inkling
-cannot serve: **Inkling stores content and does not render the site**, so
-colours, fonts, spacing, and layout live in the consuming site's own code. Inky is
-told not to refuse flatly and not to pretend, but to find the content-shaped
-version of the request — "make the hero bigger" is somebody else's job, "make the
-hero say less" is usually what was meant — and to name the rest as belonging to
-whoever builds the site.
+cannot serve on its own: **Inkling stores content and does not render the site**,
+so colours, fonts, spacing, and layout live in the consuming site's own code.
+Without more, Inky is told not to refuse flatly and not to pretend, but to find
+the content-shaped version of the request — "make the hero bigger" is somebody
+else's job, "make the hero say less" is usually what was meant — and to name the
+rest as belonging to whoever builds the site.
+
+A host can move that boundary, narrowly, by declaring **design surfaces** (next
+section). Then "make every button black" becomes a request Inky can serve.
+
+**Design surfaces** (`src/design/`, `src/ai/tools/design.ts`) let a person change
+how the site looks by asking, without opening the admin's settings or a
+stylesheet. The host passes `createInkling({ design: { buttons: { label:
+"Buttons", selector: ".button, .cta" } } })`: named groups of selectors in the
+client's own vocabulary. That vocabulary is the entire reach of the feature.
+
+- **Inky never writes CSS or a selector.** It proposes `{ surface, property,
+  value }`. The surface must be one the host declared; the property must be on a
+  closed list (`PROPERTIES`: fills, text colour, border colour, radius, size,
+  weight, spacing, padding, case, shadow, opacity); and the value is checked by
+  the property's *type* — a colour must be a colour, a length a length — not by
+  a blocklist. Nothing on the list can load a resource, so a prompt-injected
+  value (`url(…)`, `}` followed by a new rule) is not a string a type accepts.
+  Checked in the tool so Inky can correct itself with the turn open, and again in
+  `PUT /api/design`, because the browser is not a trusted caller.
+- **Still a proposal.** `design.update` rides the same approve-and-apply flow as
+  everything else Inky does, needs `settings.manage`, and shows a before/after
+  row per property ("buttons · background: original design → #000").
+- **Stored as data, rendered as one stylesheet.** Rules live in the `design`
+  settings scope and are re-sanitised on the way out, so a surface the host
+  later removes simply stops applying. `GET /site/design.css` serves them
+  (public, ETagged, no delivery key — a `<link>` cannot send one), and
+  `inkling.designCss()` returns the same string to a host that serves it itself.
+  A host loads it **after its own stylesheet** and should version the URL with
+  the content hash, or a browser keeps an old design past the change.
+- **Declarations are `!important`.** The override has to beat selectors the host
+  wrote with more specificity than a surface's. `background` is a fill, not
+  `background-color`, because a button painted with a gradient ignores a plain
+  colour and "make it black" has to mean black.
+- **No surfaces, no tools.** `toolsFor(role, design)` withholds `get_design` and
+  `propose_design_change` when the host declared nothing, rather than letting
+  Inky promise a restyle nothing can deliver.
+- **Undoing is a null.** A change whose value is `null` removes the override and
+  restores the host's original design. Every apply is audited as `design.updated`
+  with the before and after rules.
+
+What this deliberately is not: arbitrary CSS, layout changes, or edits to the
+host's templates. A request outside the surfaces and properties gets an honest
+"I can't do that, here is what I can".
 
 **Every tool in that surface is a read.** The agent cannot write, and no flag
 makes it able to: every `propose_*` tool records an intention and hands it to the

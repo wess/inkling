@@ -100,7 +100,7 @@ const call = (
   name: string,
   input: object,
   registry: Registry = noPlugins,
-) => runTool({ db, registry, role: "owner", proposals }, name, input as Record<string, unknown>)
+) => runTool({ db, registry, design: {}, role: "owner", proposals }, name, input as Record<string, unknown>)
 
 test("categories are readable, and changing them is still only a proposal", async () => {
   const { db, termId } = await setup()
@@ -264,11 +264,15 @@ test("a role change is proposed, and cannot reach above the person asking", asyn
 
   // An admin cannot mint an owner, and the tool says so rather than letting the
   // route refuse it after the button is pressed.
-  const overreach = await runTool({ db, registry: noPlugins, role: "admin", proposals }, "propose_person_role", {
-    userId,
-    role: "owner",
-    summary: "x",
-  })
+  const overreach = await runTool(
+    { db, registry: noPlugins, design: {}, role: "admin", proposals },
+    "propose_person_role",
+    {
+      userId,
+      role: "owner",
+      summary: "x",
+    },
+  )
   expect(overreach.isError).toBe(true)
   expect(proposals).toHaveLength(1)
 

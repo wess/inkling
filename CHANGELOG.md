@@ -9,6 +9,25 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.15.0 — 2026-10-02
+
+### Inky can restyle the site
+
+- New `createInkling({ design })` option. A host declares **surfaces**, named
+  groups of selectors in its own vocabulary (`buttons`, `headings`), and Inky can
+  then act on requests like "make every button black". Inky proposes
+  `{ surface, property, value }`, the person approves, and the change is live.
+- Inky never writes CSS or a selector. Properties come from a closed list and
+  values are checked by type, so nothing it proposes can load a resource or break
+  out of a declaration. The full reasoning is in `docs/ARCHITECTURE.md`.
+- Approved rules are served at `GET /site/design.css` (public, ETagged) and as
+  `inkling.designCss()`. **A site has to opt in twice**: pass `design`, and link
+  that stylesheet after its own. Without `design`, nothing changes: Inky is not
+  offered the two new tools (`get_design`, `propose_design_change`), and
+  `/site/design.css` is an empty sheet.
+- New admin route `GET`/`PUT /api/design`, gated on `settings.manage`, and a
+  `design.updated` audit event carrying the before and after rules.
+
 ## 1.14.2 — 2026-10-02
 
 ### Fixes

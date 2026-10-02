@@ -444,7 +444,11 @@ Bun.serve({
 everywhere else, so Inkling never swallows a path it does not own. `siteKeyName`
 mints a delivery key for the site sharing the process, derived from `SECRET` so
 it is the same key on every boot — an in-process consumer has no browser in which
-to visit the admin and copy one.
+to visit the admin and copy one. `design` names the parts of the site Inky may
+restyle (`{ buttons: { label: "Buttons", selector: ".button" } }`), so a client
+can say "make every button black" and approve the result; load
+`GET /site/design.css` (or `inkling.designCss()`) after your own stylesheet.
+Omit it and Inky has no design tools.
 
 This is still one instance per process: `config` and the database connection are
 module-level, so mounting twice gives you two route sets over the same data.
