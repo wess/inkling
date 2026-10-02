@@ -426,7 +426,18 @@ rest as belonging to whoever builds the site.
 A host can move that boundary, narrowly, by declaring **design surfaces** (next
 section). Then "make every button black" becomes a request Inky can serve.
 
-**Design surfaces** (`src/design/`, `src/ai/tools/design.ts`) let a person change
+**The conversation is the person's, not the panel's** (`src/web/inkystore.ts`).
+Turns, the model's transcript, proposals and which were applied live in a small
+external store rather than component state, so closing the dock or following one
+of Inky's own "take me there" links does not end the chat. A stream in flight
+keeps writing into the store with nothing mounted; its toasts and navigation go
+to whichever panel is attached when the event arrives, and a failure with none
+attached is written into the conversation instead. It is mirrored to
+`sessionStorage` (debounced, size-capped, dropping the model transcript before
+the visible turns), keyed to the sign-in so it is never shown to the next
+person. A one-time secret is deliberately outside it.
+
+**Design surfaces** (`src/design/, `src/ai/tools/design.ts`) let a person change
 how the site looks by asking, without opening the admin's settings or a
 stylesheet. The host passes `createInkling({ design: { buttons: { label:
 "Buttons", selector: ".button, .cta" } } })`: named groups of selectors in the

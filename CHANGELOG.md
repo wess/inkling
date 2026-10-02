@@ -9,6 +9,22 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.15.1 — 2026-10-02
+
+### Fixes
+
+- Inky's conversation no longer disappears when you leave it. It used to live in
+  the panel's own state, so closing the dock, opening the full AI screen, or
+  following one of Inky's "take me there" links to look at an image or a page all
+  ended it, and a reload did too. The conversation now outlives the panel, keeps
+  streaming while nothing is on screen to show it, and is restored after a
+  reload, along with the changes Inky proposed and which of them you applied or
+  dismissed. A **New conversation** link starts over.
+- It is kept in the tab's `sessionStorage`, not `localStorage`: a proposal can
+  carry something pasted into the chat, and that should end with the tab. It is
+  per sign-in, so the next person to sign in never sees it. A one-time secret
+  (a new delivery key or webhook secret) is never stored.
+
 ## 1.15.0 — 2026-10-02
 
 ### Inky can restyle the site

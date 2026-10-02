@@ -82,10 +82,19 @@ import type {
   Term,
   Webhook,
 } from "./api.ts"
-import { api, clearToken, getToken, runAgent, setToken } from "./api.ts"
+import { api, clearToken, getToken, setToken } from "./api.ts"
 import type { HelpId } from "./help.ts"
 import { HELP, helpFor } from "./help.ts"
 import { HelpContent, HelpScreen } from "./helpview.tsx"
+import {
+  attach,
+  decide,
+  type InkyContext,
+  newConversation,
+  send as sendToInky,
+  setDraft,
+  useInky,
+} from "./inkystore.ts"
 
 // Single-file admin SPA, following the same convention as the rest of the
 // stack: hooks only, no component classes, no router dependency. Routing is a
@@ -7026,16 +7035,10 @@ const ProposalCard = ({
   )
 }
 
-// Turns and tool calls both carry an id because both are append-only lists
-// whose entries are not distinguishable by content — the agent can call the
-// same tool twice in one turn, and two questions can be worded identically.
-const marker = (): string => Math.random().toString(36).slice(2, 10)
-
-type Turn = { id: string; role: "you" | "agent"; text: string; tools: { id: string; name: string }[] }
-
-// What the person is looking at when they ask. Sent with every turn so "this
+// What the person is looking at when they ask is sent with every turn, so "this
 // page" and "change this" resolve to something instead of Inky having to ask.
-export type InkyContext = { screen: string; type?: string; entryId?: string }
+// The type lives with the conversation, in ./inkystore.ts.
+export type { InkyContext }
 
 // Inky, reachable from wherever you already are. The AI screen still exists and
 // is the same panel — this is the version you can open without leaving the page
@@ -7142,15 +7145,12 @@ const AgentPanel = ({
   compact?: boolean
 }) => {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof api.agentStatus>> | null>(null)
-  const [turns, setTurns] = useState<Turn[]>([])
-  const [history, setHistory] = useState<unknown[]>([])
-  const [proposals, setProposals] = useState<AgentProposal[]>([])
-  const [decided, setDecided] = useState<Record<string, "applied" | "dismissed">>({})
+  // The conversation is not this component's: it outlives it, so closing the
+  // dock or following Inky to another screen does not end it. See inkystore.ts.
+  const { turns, proposals, decided, draft, running } = useInky()
   // A delivery key and a webhook secret exist exactly once, at the moment they
   // are created. Everything else about a proposal can be looked at again.
   const [fresh, setFresh] = useState<{ title: string; value: string } | null>(null)
-  const [draft, setDraft] = useState("")
-  const [running, setRunning] = useState(false)
   const tail = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -7167,54 +7167,25 @@ const AgentPanel = ({
     if (turns.length > 0) tail.current?.scrollIntoView({ block: "end" })
   }, [turns])
 
-  const send = async () => {
-    const message = draft.trim()
-    if (!message || running) return
+  // While this is mounted it is who an answer in flight reports to: toasts, and
+  // the one thing Inky does rather than proposes — taking you to a screen. `go`
+  // still asks about unsaved work.
+  useEffect(
+    () =>
+      attach({
+        toast,
+        onProposal: proposal => {
+          if (proposal.kind !== "admin.open") return
+          const route = routeFor(proposal)
+          if (route) go(route)
+        },
+      }),
+    [toast, go],
+  )
 
-    setDraft("")
-    setTurns(current => [
-      ...current,
-      { id: marker(), role: "you", text: message, tools: [] },
-      { id: marker(), role: "agent", text: "", tools: [] },
-    ])
-    setRunning(true)
-
-    // The last turn is always the agent's, so every event folds into it.
-    const onto = (change: (turn: Turn) => Turn) =>
-      setTurns(current => current.map((turn, index) => (index === current.length - 1 ? change(turn) : turn)))
-
-    try {
-      await runAgent({ message, history, ...context }, event => {
-        switch (event.type) {
-          case "text":
-            onto(turn => ({ ...turn, text: turn.text + event.text }))
-            break
-          case "tool":
-            onto(turn => ({ ...turn, tools: [...turn.tools, { id: marker(), name: event.name }] }))
-            break
-          case "proposal":
-            setProposals(current => [...current, event.proposal])
-            // Navigation is the one thing Inky does rather than proposes, so it
-            // happens as it is announced. `go` still asks about unsaved work.
-            if (event.proposal.kind === "admin.open") {
-              const route = routeFor(event.proposal)
-              if (route) go(route)
-            }
-            break
-          case "done":
-            setHistory(event.history)
-            break
-          case "error":
-            toast(event.message, true)
-            break
-        }
-      })
-    } catch (error) {
-      toast(errorOf(error), true)
-    } finally {
-      setRunning(false)
-      tail.current?.scrollIntoView({ block: "end", behavior: "smooth" })
-    }
+  const send = () => {
+    void sendToInky(context)
+    tail.current?.scrollIntoView({ block: "end", behavior: "smooth" })
   }
 
   // Applying sends the change through the ordinary admin routes — the same ones
@@ -7339,7 +7310,7 @@ const AgentPanel = ({
         }
       }
 
-      setDecided(current => ({ ...current, [proposal.id]: "applied" }))
+      decide(proposal.id, "applied")
       toast("Change applied")
     } catch (error) {
       toast(errorOf(error), true)
@@ -7456,7 +7427,7 @@ const AgentPanel = ({
               decided={decided[proposal.id]}
               canApply={allowed(proposal)}
               onApply={() => void apply(proposal)}
-              onDismiss={() => setDecided(current => ({ ...current, [proposal.id]: "dismissed" }))}
+              onDismiss={() => decide(proposal.id, "dismissed")}
             />
           ))}
           <p className="dim2" style={{ fontSize: 12 }}>
@@ -7474,15 +7445,24 @@ const AgentPanel = ({
           disabled={running}
           onChange={event => setDraft(event.target.value)}
           onKeyDown={event => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void send()
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) send()
           }}
         />
-        <button type="button" className="btn primary" disabled={running || !draft.trim()} onClick={() => void send()}>
+        <button type="button" className="btn primary" disabled={running || !draft.trim()} onClick={send}>
           <Send size={14} /> {running ? "Working…" : "Send"}
         </button>
       </div>
       <p className="dim2" style={{ fontSize: 12 }}>
-        {status.model} · ⌘↵ to send. Inky can read everything in this admin;{" "}
+        {status.model} · ⌘↵ to send.{" "}
+        {turns.length > 0 && !running ? (
+          <>
+            <button type="button" className="linkish" onClick={newConversation}>
+              New conversation
+            </button>
+            .{" "}
+          </>
+        ) : null}
+        Inky can read everything in this admin;{" "}
         <button type="button" className="linkish" onClick={() => go({ name: "activity" })}>
           every run is recorded in Activity
         </button>
