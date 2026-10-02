@@ -30,6 +30,13 @@
 .sharedscreen .visualactions p {
   margin: 0 0 12px;
 }
+.sharedscreen .visualactions > .note {
+  margin: 0 0 12px;
+}
+.sharedswitch {
+  display: grid;
+  gap: 8px;
+}
 .visualshared {
   margin: 12px;
 }
@@ -60,7 +67,7 @@
 
 @media (max-width: 800px) {
   .sharedscreen {
-    padding-bottom: 132px;
+    padding-bottom: var(--sharedactions, 132px);
   }
   .sharedscreen .visualactions {
     position: fixed;

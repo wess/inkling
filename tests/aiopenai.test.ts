@@ -324,7 +324,10 @@ test("shared website connections reach the model with exact editable sources", a
     new Request("http://localhost/ai/agent", {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ message: "Where do I change the footer email?" }),
+      body: JSON.stringify({
+        message: "Where do I change this?",
+        selection: { shared: "footer", label: "untrusted browser label" },
+      }),
     }),
   )
   expect(response.status).toBe(200)
@@ -332,6 +335,10 @@ test("shared website connections reach the model with exact editable sources", a
   const sent = mock.seen[0]?.body.messages[0].content
   expect(sent).toContain('"type":"house","fields":["email"]')
   expect(sent).toContain("shared edits affect all pages")
+  const context = mock.seen[0]?.body.messages[1].content
+  expect(context).toContain("They selected the shared website part")
+  expect(context).toContain('"label":"Footer contact"')
+  expect(context).not.toContain("untrusted browser label")
   mock.server.stop()
   await db.close()
 })

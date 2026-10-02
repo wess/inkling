@@ -2,7 +2,9 @@ import { Monitor, Smartphone } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import type { Website } from "../../website/index.ts"
 import { api, type Field, type MenuItem } from "../api.ts"
+import { askTarget, selectTarget } from "../inkystore.ts"
 import { Canvas } from "../visual/canvas.tsx"
+import { focusControl } from "../visual/selection.ts"
 import { loadPart, type SharedContent, savePart } from "./content.ts"
 import "./style.css"
 
@@ -32,11 +34,57 @@ export const SharedScreen = ({
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState("")
+  const [switching, setSwitching] = useState<string | null>(null)
+  const focusPart = useRef<string | null>(null)
+  const actions = useRef<HTMLDivElement>(null)
   const lock = useRef(false)
   const part = website?.parts.find(item => item.id === partId) ?? website?.parts[0]
   const loaded = content?.partId === part?.id ? content : null
+  useEffect(() => {
+    const bar = actions.current
+    if (!part?.id || !bar) return
+    const measure = () =>
+      bar.closest<HTMLElement>(".sharedscreen")?.style.setProperty("--sharedactions", `${bar.offsetHeight + 24}px`)
+    const observer = new ResizeObserver(measure)
+    observer.observe(bar)
+    return () => observer.disconnect()
+  }, [part?.id])
   const mayEdit =
     part?.source.kind === "settings" ? ["owner", "admin"].includes(role) : ["owner", "admin", "editor"].includes(role)
+  useEffect(() => {
+    selectTarget(part ? { label: part.label, shared: part.id } : null)
+    return () => selectTarget(null)
+  }, [part])
+  useEffect(() => {
+    if (loaded && focusPart.current === part?.id) {
+      const frame = requestAnimationFrame(() => {
+        focusPart.current = null
+        focusControl(document.querySelector(".sharedscreen .visualcontrols"))
+      })
+      return () => cancelAnimationFrame(frame)
+    }
+  }, [loaded, part?.id])
+  useEffect(() => {
+    if (switching) document.getElementById("shared-switch")?.focus()
+  }, [switching])
+  const openPart = (id: string) => {
+    setSwitching(null)
+    delete document.body.dataset.unsaved
+    onSelect(id)
+  }
+  const choosePart = (id: string, focus = false) => {
+    if (saving) return
+    if (id === part?.id) {
+      if (focus) {
+        if (loaded) requestAnimationFrame(() => focusControl(document.querySelector(".sharedscreen .visualcontrols")))
+        else focusPart.current = id
+      }
+      return
+    }
+    focusPart.current = focus ? id : null
+    if (dirty) setSwitching(id)
+    else openPart(id)
+  }
 
   useEffect(() => {
     void api
@@ -106,7 +154,7 @@ export const SharedScreen = ({
     setSaved("")
   }
   const save = async () => {
-    if (!part || !loaded || lock.current) return
+    if (!part || !loaded || lock.current) return false
     lock.current = true
     setSaving(true)
     setFailure("")
@@ -120,8 +168,10 @@ export const SharedScreen = ({
           : "Saved. These details are now updated across your website.",
       )
       setRevision(value => value + 1)
+      return true
     } catch (error) {
       setFailure((error as Error).message)
+      return false
     } finally {
       lock.current = false
       setSaving(false)
@@ -133,7 +183,7 @@ export const SharedScreen = ({
       <header>
         <h1>Header, footer & shared details</h1>
         <p className="dim">
-          Edit the parts that appear across your website. Choose a part below or click it in the preview.
+          Choose a part below, or double-click it in the preview. Right-click for editing actions and Ask Inky.
         </p>
       </header>
       {website?.parts.length === 0 ? (
@@ -147,7 +197,7 @@ export const SharedScreen = ({
             className="btn"
             aria-pressed={part?.id === item.id}
             disabled={saving}
-            onClick={() => onSelect(item.id)}
+            onClick={() => choosePart(item.id)}
           >
             {item.label}
           </button>
@@ -189,7 +239,14 @@ export const SharedScreen = ({
                   parts={website?.parts}
                   selected={{ shared: part.id }}
                   onSelect={selection => {
-                    if (selection.shared && !saving) onSelect(selection.shared)
+                    if (selection.shared) choosePart(selection.shared)
+                  }}
+                  onEdit={selection => {
+                    if (selection.shared) choosePart(selection.shared, true)
+                  }}
+                  onAsk={(selection, anchor, restore) => {
+                    const selected = website?.parts.find(part => part.id === selection.shared)
+                    if (selected) askTarget({ label: selected.label, shared: selected.id }, anchor, restore)
                   }}
                   phone={phone}
                   labels={{}}
@@ -205,26 +262,66 @@ export const SharedScreen = ({
               <p>{part.description}</p>
               <p className="dim">Changes apply everywhere this part appears.</p>
             </div>
-            {failure ? (
-              <div className="note err" role="alert">
-                {failure}
-                {!loaded ? (
-                  <button type="button" className="btn" onClick={() => location.reload()}>
-                    Reload controls
+            <div className="visualactions" ref={actions}>
+              {failure ? (
+                <div className="note err" role="alert">
+                  {failure}
+                  {!loaded ? (
+                    <button type="button" className="btn" onClick={() => location.reload()}>
+                      Reload controls
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {switching ? (
+                <section
+                  id="shared-switch"
+                  className="sharedswitch"
+                  aria-label="Unsaved changes before switching"
+                  tabIndex={-1}
+                >
+                  <p>
+                    Save your changes to {part.label.toLowerCase()} before opening{" "}
+                    {website?.parts.find(item => item.id === switching)?.label.toLowerCase()}?
+                  </p>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={saving}
+                    onClick={async () => {
+                      if (await save()) openPart(switching)
+                    }}
+                  >
+                    Save and switch
                   </button>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="visualactions">
-              <p role="status">{saved || (dirty ? "Unsaved changes" : "No unsaved changes")}</p>
-              <button
-                type="button"
-                className="btn primary"
-                disabled={!mayEdit || !loaded || !dirty || saving}
-                onClick={() => void save()}
-              >
-                {saving ? "Saving…" : dirty ? `Save ${part.label.toLowerCase()}` : "Saved"}
-              </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={saving}
+                    onClick={() => {
+                      setSwitching(null)
+                      focusPart.current = null
+                    }}
+                  >
+                    Keep editing
+                  </button>
+                  <button type="button" className="btn ghost" disabled={saving} onClick={() => openPart(switching)}>
+                    Discard and switch
+                  </button>
+                </section>
+              ) : (
+                <>
+                  <p role="status">{saved || (dirty ? "Unsaved changes" : "No unsaved changes")}</p>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={!mayEdit || !loaded || !dirty || saving}
+                    onClick={() => void save()}
+                  >
+                    {saving ? "Saving…" : dirty ? `Save ${part.label.toLowerCase()}` : "Saved"}
+                  </button>
+                </>
+              )}
             </div>
             <fieldset className="visualcontrols" disabled={!mayEdit || saving || !loaded}>
               {!mayEdit ? (

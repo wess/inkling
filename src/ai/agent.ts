@@ -22,6 +22,7 @@ import { claudeExtras, readable } from "./complete.ts"
 import { resolveCredential } from "./index.ts"
 import type { ProviderName } from "./providers.ts"
 import { endpointFor } from "./providers.ts"
+import { selectionHint } from "./selection.ts"
 import type { Proposal } from "./tools/index.ts"
 import { outOfReach, runTool, specsFor } from "./tools/index.ts"
 
@@ -544,6 +545,8 @@ export const agentRoutes = (
         if (opening.length > 0) {
           opening.push('When they say "this" or "here", that is what they mean unless they say otherwise.')
         }
+        const selection = selectionHint(input.selection, visual, website)
+        if (selection) opening.push(selection)
         const outcomes = optionalText(input, "outcomes")?.slice(0, 4000)
         if (outcomes)
           opening.push(

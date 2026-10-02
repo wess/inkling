@@ -1,0 +1,40 @@
+.contextmenu {
+  position: fixed;
+  z-index: 90;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius2);
+  background: var(--paper);
+  box-shadow: 0 12px 36px rgb(20 22 26 / 20%);
+}
+.contexttitle {
+  padding: 8px 10px;
+  color: var(--text2);
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.contextmenu button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.contextmenu button:hover,
+.contextmenu button:focus-visible {
+  background: var(--accentwash);
+}
+.contextmenu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

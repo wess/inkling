@@ -1,0 +1,35 @@
+.elementinky .dockhead {
+  align-items: flex-start;
+}
+.inkysubject {
+  flex: 1;
+  min-width: 0;
+}
+.inkysubject strong {
+  display: block;
+}
+.inkysubject .dockwhere {
+  display: block;
+  margin-top: 3px;
+  white-space: normal;
+}
+.inkyselection {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--accentwash);
+  border-bottom: 1px solid var(--line);
+}
+.elementinky .agentintro {
+  text-align: left;
+}
+.elementinky .agentbar {
+  position: sticky;
+  bottom: 0;
+  background: var(--paper);
+  padding-top: 8px;
+}
+@media (max-width: 720px) {
+  .elementinky {
+    max-height: calc(100dvh - 110px);
+  }
+}

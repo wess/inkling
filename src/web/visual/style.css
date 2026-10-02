@@ -46,6 +46,20 @@
   height: 100%;
   background: white;
 }
+.visualsurface {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+.canvasactions {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  box-shadow: 0 4px 14px rgb(20 22 26 / 18%);
+}
 .visualframe.phone {
   flex: 0 0 min(390px, 100%);
   width: min(390px, 100%);

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
-import type { AgentProposal } from "./api.ts"
+import type { AgentProposal, AgentSelection } from "./api.ts"
 import { getToken, runAgent } from "./api.ts"
+import type { ElementAnchor } from "./inky/window.tsx"
 
 // Inky's conversation, held outside the component that shows it.
 //
@@ -17,9 +18,15 @@ import { getToken, runAgent } from "./api.ts"
 // should end with the tab rather than sit on disk. It is also per sign-in — see
 // `owner` — so one person's conversation is never shown to the next.
 
-export type Turn = { id: string; role: "you" | "agent"; text: string; tools: { id: string; name: string }[] }
+export type Turn = {
+  id: string
+  role: "you" | "agent"
+  text: string
+  targetLabel?: string
+  tools: { id: string; name: string }[]
+}
 export type Decision = "applied" | "dismissed"
-export type InkyContext = { screen: string; type?: string; entryId?: string }
+export type InkyContext = { screen: string; type?: string; entryId?: string; selection?: AgentSelection }
 
 type State = {
   // The tail of the session token it belongs to. A new sign-in is a new person
@@ -32,6 +39,7 @@ type State = {
   readonly decided: Record<string, Decision>
   readonly draft: string
   readonly running: boolean
+  readonly target: AgentSelection | null
 }
 
 const KEY = "inkling.inky.v1"
@@ -50,6 +58,7 @@ const blank = (): State => ({
   decided: {},
   draft: "",
   running: false,
+  target: null,
 })
 
 const read = (): State => {
@@ -74,6 +83,7 @@ const read = (): State => {
       decided: saved.decided && typeof saved.decided === "object" ? saved.decided : {},
       draft: typeof saved.draft === "string" ? saved.draft : "",
       running: false,
+      target: null,
     }
   } catch {
     return blank()
@@ -143,12 +153,33 @@ export const readInky = snapshot
 
 export const setDraft = (draft: string): void => set({ draft })
 
+export const selectTarget = (target: AgentSelection | null): void => set({ target })
+export const askTarget = (target: AgentSelection, anchor?: ElementAnchor, restore?: () => void): void => {
+  selectTarget(target)
+  window.dispatchEvent(new CustomEvent("inkling:ask", { detail: { target, anchor, restore } }))
+}
+
+export const activityLabel = (name: string): string => {
+  if (name.startsWith("propose_")) return "Preparing a change"
+  const labels: Record<string, string> = {
+    get_entry: "Reading a page",
+    list_entries: "Finding pages",
+    list_content_types: "Checking page controls",
+    list_media: "Finding images",
+    get_site_settings: "Reading website details",
+    list_menus: "Reading navigation",
+    get_visual_pages: "Checking page sections",
+    open_screen: "Opening the editor",
+  }
+  return labels[name] ?? "Checking your website"
+}
+
 export const decide = (id: string, decision: Decision): void =>
   set(current => ({ decided: { ...current.decided, [id]: decision } }))
 
 export const newConversation = (): void => {
   if (state.running) return
-  set(blank())
+  set({ ...blank(), target: state.target })
 }
 
 // What the running stream needs from whatever is on screen. It is the *latest*
@@ -177,7 +208,7 @@ export const send = async (context: InkyContext | undefined): Promise<void> => {
     running: true,
     turns: [
       ...current.turns,
-      { id: marker(), role: "you", text: message, tools: [] },
+      { id: marker(), role: "you", text: message, targetLabel: context?.selection?.label, tools: [] },
       { id: marker(), role: "agent", text: "", tools: [] },
     ],
   }))

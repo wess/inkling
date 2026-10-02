@@ -1,8 +1,10 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, Monitor, Smartphone } from "lucide-react"
-import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
 import { api, type ContentType, type Entry, type Field, type VisualPage } from "../api.ts"
 import { FormattedInput } from "../formatted/index.tsx"
+import { askTarget, selectTarget } from "../inkystore.ts"
 import { Canvas, type Selection } from "./canvas.tsx"
+import { focusControl } from "./selection.ts"
 import "./style.css"
 
 type Layout = { order: string[]; hidden: string[] }
@@ -61,6 +63,26 @@ export const VisualEditor = ({
     if (key === "$title") return { key, label: "Title", type: "text" }
     return type.fields.find(field => field.key === key) ?? []
   })
+  const targetFor = useCallback(
+    (next: Selection) => {
+      const shared = website?.parts.find(part => part.id === next.shared)
+      if (shared) return { label: shared.label, shared: shared.id }
+      const group = definition.sections.find(part => part.id === next.section || part.fields.includes(next.field ?? ""))
+      const label = next.field === "$title" ? "Page title" : type.fields.find(field => field.key === next.field)?.label
+      return {
+        label: label ?? group?.label ?? entry.title,
+        entryId: entry.id,
+        type: type.name,
+        field: next.field,
+        section: group?.id,
+      }
+    },
+    [website, definition, type.fields, type.name, entry.id, entry.title],
+  )
+  useEffect(() => {
+    selectTarget(targetFor(selected))
+    return () => selectTarget(null)
+  }, [selected, targetFor])
 
   useEffect(() => {
     let active = true
@@ -125,12 +147,21 @@ export const VisualEditor = ({
       order: sections.map(section => section.id),
       hidden: hidden.includes(id) ? hidden.filter(key => key !== id) : [...hidden, id],
     })
+  const editSelection = (next: Selection) => {
+    select(next)
+    if (!next.shared)
+      requestAnimationFrame(() =>
+        focusControl(
+          next.field ? document.getElementById(`visual-${next.field}`) : document.querySelector(".visualcontrols"),
+        ),
+      )
+  }
 
   return (
     <div className="visualeditor">
       <div className="visualstage">
         <div className="visualtools">
-          <span className="visualhint">Click text or a picture to edit</span>
+          <span className="visualhint">Double-click to edit · Right-click for actions</span>
           <fieldset className="row visualsize" aria-label="Preview size">
             <button
               type="button"
@@ -175,8 +206,45 @@ export const VisualEditor = ({
               parts={website?.parts}
               selected={selected}
               onSelect={select}
+              onEdit={editSelection}
+              onAsk={(selection, anchor, restore) => askTarget(targetFor(selection), anchor, restore)}
+              actions={selection => {
+                if (selection.shared) return []
+                const item = sections.find(
+                  item => item.id === selection.section || item.fields.includes(selection.field ?? ""),
+                )
+                if (!item) return []
+                const index = sections.indexOf(item)
+                const collection = item.collection
+                return [
+                  ...(collection
+                    ? [{ label: `Open ${collection.label}`, run: () => openCollection(collection.type) }]
+                    : []),
+                  {
+                    label: "Move section up",
+                    disabled:
+                      disabled || index === 0 || item.movable === false || sections[index - 1]?.movable === false,
+                    run: () => move(item.id, -1),
+                  },
+                  {
+                    label: "Move section down",
+                    disabled:
+                      disabled ||
+                      index === sections.length - 1 ||
+                      item.movable === false ||
+                      sections[index + 1]?.movable === false,
+                    run: () => move(item.id, 1),
+                  },
+                  {
+                    label: hidden.includes(item.id) ? "Show section" : "Hide section",
+                    disabled,
+                    run: () => toggle(item.id),
+                  },
+                ]
+              }}
               phone={phone}
               labels={{
+                ...Object.fromEntries(definition.sections.map(section => [section.id, section.label])),
                 $title: "Title",
                 ...Object.fromEntries(
                   type.fields.map(field => [field.key, definition.references?.[field.key]?.label ?? field.label]),

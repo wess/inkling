@@ -419,6 +419,13 @@ the result in an iframe with scripts and forms disabled; selection is bound by
 the parent. The canvas changes only the local draft. Save remains explicit and
 uses the same validation, revision and audit path as the field editor.
 
+Double-click opens the selected content controls. A right-click context menu
+and visible Actions button expose editing, section movement, visibility and
+collection shortcuts. `src/web/context` owns menu positioning and keyboard
+navigation. Ask Inky attaches `src/web/inky` beside the selected element on a
+desktop and uses the existing dock on narrow screens. The conversation carries
+the selected field, section or shared part rather than only the current route.
+
 ## AI
 
 Optional, and off until an operator connects a provider. Three parts:
@@ -1286,6 +1293,17 @@ read tool. `create_menu` can materialize a fallback under its declared handle.
 Menu delivery resolves published `entryId` destinations from content-type
 preview templates, while respecting delivery key scopes. Shared editing cannot
 create a template capability the consuming site does not implement.
+
+Nested selectors resolve to the closest shared part, so a badge can expose its
+single image field within a larger announcement. Unsaved shared edits offer
+Save and switch, Keep editing, or Discard and switch; a failed save stays on the
+original part. Save errors stay with the actions on narrow screens.
+
+`src/ai/selection.ts` resolves optional agent request `selection` against the
+host manifests. Shared selections use the host label and source; browser labels
+are not instructions. Page selections require a declared type and field or
+section. These hints ask Inky to read the saved source before proposing a change
+and do not expand tool permissions or apply changes automatically.
 
 Inky's provider test can request `?tools=1` to verify streamed tool arguments
 without a site tool. Errors and interrupted streams remain visible in the chat.

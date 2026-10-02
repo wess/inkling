@@ -54,6 +54,7 @@ import { AccountMenu } from "./account.tsx"
 import type {
   AgentKey,
   AgentProposal,
+  AgentSelection,
   AiCredential,
   AiProvider,
   AuditEvent,
@@ -87,7 +88,9 @@ import { api, clearToken, getToken, setToken } from "./api.ts"
 import type { HelpId } from "./help.ts"
 import { HELP, helpFor } from "./help.ts"
 import { HelpContent, HelpScreen } from "./helpview.tsx"
+import { type ElementAnchor, InkyWindow } from "./inky/window.tsx"
 import {
+  activityLabel,
   attach,
   decide,
   type InkyContext,
@@ -747,7 +750,13 @@ const MediaField = ({
             </button>
           </div>
         ))}
-        <button type="button" className="btn" onClick={() => setPicking(true)} style={{ alignSelf: "flex-start" }}>
+        <button
+          type="button"
+          className="btn"
+          data-media-pick
+          onClick={() => setPicking(true)}
+          style={{ alignSelf: "flex-start" }}
+        >
           <ImageIcon size={14} /> {ids.length > 0 && !multiple ? "Replace" : "Choose"}
         </button>
       </div>
@@ -7429,18 +7438,52 @@ const InkyDock = ({
   go: (route: Route) => void
 }) => {
   const [open, setOpen] = useState(false)
-  const context = describe(route, types)
+  const { target } = useInky()
+  const [attached, setAttached] = useState<{
+    target: AgentSelection
+    anchor?: ElementAnchor
+    restore?: () => void
+    path: string
+  } | null>(null)
+  const selection = attached?.target ?? target
+  const context = {
+    ...describe(route, types),
+    ...(selection?.shared ? { entryId: undefined, type: undefined } : {}),
+    selection: selection ?? undefined,
+  }
+  const close = useCallback(() => {
+    const restore = attached?.restore
+    setOpen(false)
+    setAttached(null)
+    requestAnimationFrame(() => {
+      if (restore) restore()
+      else document.querySelector<HTMLButtonElement>(".dockbubble")?.focus({ preventScroll: true })
+    })
+  }, [attached])
+  useEffect(() => {
+    const ask = (event: Event) => {
+      const detail = (event as CustomEvent<{ target: AgentSelection; anchor?: ElementAnchor; restore?: () => void }>)
+        .detail
+      setAttached({ ...detail, path: href(route) })
+      setOpen(true)
+    }
+    window.addEventListener("inkling:ask", ask)
+    return () => window.removeEventListener("inkling:ask", ask)
+  }, [route])
+  useEffect(() => {
+    setAttached(current => (current?.path === href(route) ? current : null))
+  }, [route])
 
   // Escape closes it, because a panel that covers the corner of the screen
   // should not need the mouse to dismiss.
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false)
+      if (event.key === "Escape") close()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [open])
+  }, [open, close])
 
   // The AI screen is this same panel full-size; two of them at once would run
   // two conversations behind one button.
@@ -7449,17 +7492,26 @@ const InkyDock = ({
   return (
     <>
       {open ? (
-        <div className="dock">
+        <InkyWindow anchor={attached?.anchor} label={selection ? `Ask Inky about ${selection.label}` : "Ask Inky"}>
           <div className="dockhead">
             <Sparkles size={15} />
-            <strong>Inky</strong>
-            <span className="dockwhere">{context.screen}</span>
-            <button type="button" className="btn ghost sm rowend" aria-label="Close" onClick={() => setOpen(false)}>
+            <div className="inkysubject">
+              <strong>Inky</strong>
+              <span className="dockwhere">{selection ? `About: ${selection.label}` : context.screen}</span>
+            </div>
+            <button
+              type="button"
+              className="btn ghost sm rowend"
+              data-inky-initial
+              aria-label="Close Inky"
+              onClick={close}
+            >
               <X size={14} />
             </button>
           </div>
+          {selection?.shared ? <p className="inkyselection">This item is shared across your website.</p> : null}
           <AgentPanel toast={toast} go={go} context={context} compact />
-        </div>
+        </InkyWindow>
       ) : null}
 
       <button
@@ -7468,7 +7520,10 @@ const InkyDock = ({
         aria-label={open ? "Close Inky" : "Ask Inky"}
         title={open ? "Close Inky" : "Ask Inky"}
         aria-expanded={open}
-        onClick={() => setOpen(value => !value)}
+        onClick={() => {
+          if (open) close()
+          else setOpen(true)
+        }}
       >
         {open ? <X size={20} /> : <Sparkles size={20} />}
       </button>
@@ -7500,6 +7555,17 @@ const AgentPanel = ({
   const [batch, setBatch] = useState(false)
   const applyLock = useRef(false)
   const tail = useRef<HTMLDivElement>(null)
+  const composer = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (
+      compact &&
+      context?.selection &&
+      status?.configured &&
+      document.activeElement?.hasAttribute("data-inky-initial")
+    )
+      composer.current?.focus({ preventScroll: true })
+  }, [compact, context?.selection, status?.configured])
 
   useEffect(() => {
     api
@@ -7765,20 +7831,30 @@ const AgentPanel = ({
             <h3>
               Hi, I'm Inky <Hint id="ai.reach" />
             </h3>
-            <p className="dim2">
-              Tell me what you want in your own words — a page, its wording, what a page is made of, your navigation,
-              your categories, who has an account, or getting a social network connected. I'll read your site, work out
-              what that means, show you the change before anything is saved, and take you to the right screen when the
-              last step is one only you can do.
-            </p>
+            {context?.selection ? (
+              <p className="dim2">
+                Tell me what you want to change about <strong>{context.selection.label}</strong>. I’ll read its saved
+                content and prepare a change for you to review.
+              </p>
+            ) : (
+              <p className="dim2">
+                Tell me what you want in your own words — a page, its wording, what a page is made of, your navigation,
+                your categories, who has an account, or getting a social network connected. I'll read your site, work
+                out what that means, show you the change before anything is saved, and take you to the right screen when
+                the last step is one only you can do.
+              </p>
+            )}
             <div className="agentseeds">
-              {[
-                "Update the contact details in our footer",
-                "Make the homepage opening shorter and warmer",
-                "Help me set up posting to Instagram",
-                "Give our new designer an account that can publish",
-                "Which pages are missing a description?",
-              ].map(seed => (
+              {(context?.selection
+                ? ["What can I change here?", "Help me update this"]
+                : [
+                    "Update the contact details in our footer",
+                    "Make the homepage opening shorter and warmer",
+                    "Help me set up posting to Instagram",
+                    "Give our new designer an account that can publish",
+                    "Which pages are missing a description?",
+                  ]
+              ).map(seed => (
                 <button type="button" key={seed} className="btn sm" onClick={() => setDraft(seed)}>
                   {seed}
                 </button>
@@ -7788,13 +7864,14 @@ const AgentPanel = ({
         ) : (
           turns.map((turn, index) => (
             <div className={cx("turn", turn.role)} key={turn.id}>
-              <div className="turnwho">{turn.role === "you" ? "You" : "Inky"}</div>
+              <div className="turnwho">
+                {turn.role === "you" ? "You" : "Inky"}
+                {turn.targetLabel ? ` · ${turn.targetLabel}` : ""}
+              </div>
               {turn.tools.length > 0 ? (
                 <div className="turntools">
                   {turn.tools.map(tool => (
-                    <span className="mono" key={tool.id}>
-                      {tool.name.replace(/_/g, " ")}
-                    </span>
+                    <span key={tool.id}>{activityLabel(tool.name)}</span>
                   ))}
                 </div>
               ) : null}
@@ -7860,9 +7937,15 @@ const AgentPanel = ({
 
       <div className="agentbar">
         <textarea
+          ref={composer}
           value={draft}
           rows={2}
-          placeholder="Ask Inky for anything about this site — a page, your menu, your categories, connecting a network…"
+          aria-label={context?.selection ? `Message Inky about ${context.selection.label}` : "Message Inky"}
+          placeholder={
+            context?.selection
+              ? "What would you like to change here?"
+              : "Ask Inky for anything about this site — a page, your menu, your categories, connecting a network…"
+          }
           disabled={running}
           onChange={event => setDraft(event.target.value)}
           onKeyDown={event => {

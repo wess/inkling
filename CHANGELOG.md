@@ -9,6 +9,27 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.20.0 — 2026-10-02
+
+### Added
+
+- Double-click page content to open its editing controls. Right-click or use
+  the visible Actions button for editing, section movement, visibility, and
+  collection shortcuts. The same menu supports keyboard navigation.
+- Ask Inky from an element's menu to open a conversation beside that element.
+  The conversation names its target and warns when it is shared across the
+  website. Inky receives the registered field, section, or shared source.
+- Unsaved shared edits offer Save and switch, Keep editing, and Discard and
+  switch when opening another part. Failed saves preserve the current part
+  and show the error alongside the save actions, including on phones.
+
+### Fixed
+
+- Nested shared elements select their closest configured part, allowing a
+  badge image to open its own image controls within an announcement.
+- Preview selection scrolls within the page canvas without shifting the
+  surrounding editor during a double-click.
+
 ## 1.19.0 — 2026-10-02
 
 ### Added

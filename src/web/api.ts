@@ -1,4 +1,7 @@
+import type { AgentSelection } from "../ai/selection.ts"
 import type { Website } from "../website/index.ts"
+
+export type { AgentSelection } from "../ai/selection.ts"
 
 // Typed client for the admin API. Everything goes through /api/*, which
 // src/web/serve.ts proxies to the API process — the browser never talks to the
@@ -607,7 +610,15 @@ export type AgentEvent =
 // Server-sent events, hand-parsed because the browser's EventSource cannot set
 // an Authorization header and this API has no cookie to fall back on.
 export const runAgent = async (
-  input: { message: string; outcomes?: string; history?: unknown[]; entryId?: string; type?: string; screen?: string },
+  input: {
+    message: string
+    outcomes?: string
+    history?: unknown[]
+    entryId?: string
+    type?: string
+    screen?: string
+    selection?: AgentSelection
+  },
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> => {

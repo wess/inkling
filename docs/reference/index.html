@@ -157,6 +157,8 @@ const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</
 
     <h3>Unsaved previews</h3>
 
+    <p>Double-click text or an image to open its editing controls. Right-click, or use the visible Actions button, for Edit, Ask Inky, and the selected section's available move, hide, or collection actions. These actions preserve the explicit save flow. Ask Inky opens beside the selected element on desktop and names that target in the conversation; narrow screens use the corner panel.</p>
+
     <p>
       <code>POST /api/entries/:id/preview</code> requires permission to edit the
       entry. Send an optional JSON body <code>{ title, slug, data }</code> to
@@ -335,6 +337,7 @@ const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</
 const inkling = await createInkling({ adminBase: "/admin", website })</pre></div>
     <p><code>GET /api/website</code> requires content read access. Entry sources require an existing singleton. Each save uses the usual entry, menu, or settings route and its permissions; only changed fields belonging to that part are sent. Shared entry drafts remain drafts. The preview is same-origin and refreshes after saving. A missing menu starts with declared fallback links and is first created when an editor saves; the template must read the declared menu name. The shared menu editor edits a flat list. Nested menus remain available in All menus for sites that render them.</p>
     <p>Choose a page searches published entries whose content type has a preview address. Menu delivery resolves their <code>entryId</code> references to <code>url</code> using that address template, excluding draft, deleted, or out-of-scope destinations. Existing address links are preserved.</p>
+    <p>Give independently editable elements their own parts: a badge image inside an announcement can map just its image field. Selection uses the closest matching element. Switching shared parts with unsaved work offers Save and switch, Keep editing, or Discard and switch. A failed save preserves the current controls and shows its error beside the save actions.</p>
 
     <h2 id="ai">AI providers and agent tools</h2>
 
