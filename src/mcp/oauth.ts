@@ -14,8 +14,7 @@ import { agentKeys, mcpOauthCodes, users } from "../schema/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
 import { now } from "../time/index.ts"
 
-const CLIENT = "https://chatgpt.com/oauth/client.json"
-const REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
+const STABLE_REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
 const SCOPE = "site"
 const TOOL_SCOPES = new Set([
   "content.read",
@@ -40,17 +39,46 @@ type Code = {
   expires_at: string
 }
 
-const clientValid = async (): Promise<boolean> => {
+const clientUrl = (value: string): boolean =>
+  /^https:\/\/chatgpt\.com\/oauth\/(?:[A-Za-z0-9_-]+\/){0,2}client\.json$/.test(value)
+
+const redirectUrl = (value: string): boolean => {
   try {
-    const response = await fetch(CLIENT, { signal: AbortSignal.timeout(5000) })
+    const url = new URL(value)
+    if (url.search || url.hash || url.username || url.password) return false
+    if (url.origin === "https://chatgpt.com")
+      return value === STABLE_REDIRECT || /^\/connector\/oauth\/[A-Za-z0-9_-]+$/.test(url.pathname)
+    return (
+      url.protocol === "http:" &&
+      (url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
+      Number(url.port) > 0 &&
+      /^\/callback(?:\/[A-Za-z0-9_-]+)?$/.test(url.pathname)
+    )
+  } catch {
+    return false
+  }
+}
+
+const registeredRedirect = (client: string, redirect: string, registered: unknown[]): boolean => {
+  if (registered.includes(redirect)) return true
+  if (!client.startsWith("https://chatgpt.com/oauth/codex/")) return false
+  const url = new URL(redirect)
+  return url.protocol === "http:" && registered.includes(`${url.protocol}//${url.hostname}${url.pathname}`)
+}
+
+const clientValid = async (client: string, redirect: string): Promise<boolean> => {
+  if (!clientUrl(client) || !redirectUrl(redirect)) return false
+  try {
+    const response = await fetch(client, { signal: AbortSignal.timeout(5000) })
     if (!response.ok) return false
     const data = (await response.json()) as Record<string, unknown>
     return (
-      data.client_id === CLIENT &&
+      data.client_id === client &&
       Array.isArray(data.redirect_uris) &&
-      data.redirect_uris.includes(REDIRECT) &&
-      Array.isArray(data.token_endpoint_auth_methods_supported) &&
-      data.token_endpoint_auth_methods_supported.includes("none")
+      registeredRedirect(client, redirect, data.redirect_uris) &&
+      ((Array.isArray(data.token_endpoint_auth_methods_supported) &&
+        data.token_endpoint_auth_methods_supported.includes("none")) ||
+        data.token_endpoint_auth_method === "none")
     )
   } catch {
     return false
@@ -59,8 +87,8 @@ const clientValid = async (): Promise<boolean> => {
 
 const paramsValid = (params: URLSearchParams): boolean =>
   params.get("response_type") === "code" &&
-  params.get("client_id") === CLIENT &&
-  params.get("redirect_uri") === REDIRECT &&
+  clientUrl(params.get("client_id") ?? "") &&
+  redirectUrl(params.get("redirect_uri") ?? "") &&
   params.get("code_challenge_method") === "S256" &&
   /^[A-Za-z0-9_-]{43,128}$/.test(params.get("code_challenge") ?? "") &&
   params.get("resource") === resource &&
@@ -143,6 +171,13 @@ export const oauthRoutes = (db: Connection, validateClient = clientValid): Route
         scopes_supported: [SCOPE],
       }),
     ),
+    get("/.well-known/oauth-protected-resource/mcp", c =>
+      json(responseHeaders(c), 200, {
+        resource,
+        authorization_servers: [origin],
+        scopes_supported: [SCOPE],
+      }),
+    ),
     get("/.well-known/oauth-authorization-server", c =>
       json(responseHeaders(c), 200, {
         issuer: origin,
@@ -159,7 +194,11 @@ export const oauthRoutes = (db: Connection, validateClient = clientValid): Route
     ),
     get("/mcp/authorize", async c => {
       const params = new URL(c.request.url).searchParams
-      if (!paramsValid(params) || !(await validateClient())) return fail(c, 400, "Invalid connection request")
+      if (
+        !paramsValid(params) ||
+        !(await validateClient(params.get("client_id") as string, params.get("redirect_uri") as string))
+      )
+        return fail(c, 400, "Invalid connection request")
       return putHeader(
         putHeader(text(responseHeaders(c), 200, connectPage), "content-type", "text/html; charset=utf-8"),
         "content-security-policy",
@@ -180,7 +219,11 @@ export const oauthRoutes = (db: Connection, validateClient = clientValid): Route
         const params = new URLSearchParams(
           Object.entries(input).filter((pair): pair is [string, string] => typeof pair[1] === "string"),
         )
-        if (!paramsValid(params) || !(await validateClient())) return fail(c, 400, "Invalid connection request")
+        if (
+          !paramsValid(params) ||
+          !(await validateClient(params.get("client_id") as string, params.get("redirect_uri") as string))
+        )
+          return fail(c, 400, "Invalid connection request")
         const identity = auth(c)
         const verdict = await limiter.check(`mcp:approve:${identity.id}`, 8, 900)
         if (!verdict.ok) return fail(c, 429, "Too many attempts. Try again shortly.")
@@ -200,15 +243,15 @@ export const oauthRoutes = (db: Connection, validateClient = clientValid): Route
           from(mcpOauthCodes).insert({
             hashed_code: await sha256(code),
             user_id: identity.id,
-            client_id: CLIENT,
-            redirect_uri: REDIRECT,
+            client_id: params.get("client_id") as string,
+            redirect_uri: params.get("redirect_uri") as string,
             challenge: params.get("code_challenge") as string,
             resource,
             expires_at: new Date(Date.now() + CODE_TTL).toISOString(),
           }),
         )
         await audit.log({ userId: identity.id, event: "mcp.authorized" })
-        const redirect = new URL(REDIRECT)
+        const redirect = new URL(params.get("redirect_uri") as string)
         redirect.searchParams.set("code", code)
         redirect.searchParams.set("iss", origin)
         if (params.has("state")) redirect.searchParams.set("state", params.get("state") as string)
@@ -221,8 +264,8 @@ export const oauthRoutes = (db: Connection, validateClient = clientValid): Route
       const verifier = params.get("code_verifier") ?? ""
       if (
         params.get("grant_type") !== "authorization_code" ||
-        params.get("client_id") !== CLIENT ||
-        params.get("redirect_uri") !== REDIRECT ||
+        !clientUrl(params.get("client_id") ?? "") ||
+        !redirectUrl(params.get("redirect_uri") ?? "") ||
         params.get("resource") !== resource ||
         !/^[A-Za-z0-9_-]{43,128}$/.test(verifier) ||
         !code.startsWith("inkcode_")
@@ -244,8 +287,8 @@ export const oauthRoutes = (db: Connection, validateClient = clientValid): Route
         if (
           !row ||
           row.expires_at <= now() ||
-          row.client_id !== CLIENT ||
-          row.redirect_uri !== REDIRECT ||
+          row.client_id !== params.get("client_id") ||
+          row.redirect_uri !== params.get("redirect_uri") ||
           row.resource !== resource ||
           row.challenge !== challenge
         )

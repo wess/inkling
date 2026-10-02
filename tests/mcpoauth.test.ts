@@ -23,6 +23,9 @@ test("remote MCP publishes OAuth metadata and prompts an unlinked account", asyn
     const metadata = await handle(new Request("http://localhost/.well-known/oauth-protected-resource"))
     expect(metadata.status).toBe(200)
     expect((await metadata.json()) as Record<string, unknown>).toMatchObject({ resource, scopes_supported: ["site"] })
+    const pathMetadata = await handle(new Request("http://localhost/.well-known/oauth-protected-resource/mcp"))
+    expect(pathMetadata.status).toBe(200)
+    expect((await pathMetadata.json()) as Record<string, unknown>).toMatchObject({ resource })
 
     const list = await handle(
       new Request("http://localhost/mcp", {
@@ -90,6 +93,53 @@ test("account linking requires the account password and returns the registered c
     expect(redirect.searchParams.get("state")).toBe("test-state")
     expect(redirect.searchParams.get("iss")).toBe(new URL(resource).origin)
     expect(redirect.searchParams.get("code")).toStartWith("inkcode_")
+  } finally {
+    await db.close()
+  }
+})
+
+test("account linking accepts a ChatGPT connection-specific callback", async () => {
+  const db = connect({ driver: "sqlite", path: ":memory:" })
+  await up(db, "./migrations")
+  try {
+    const callbackId = "a1b2c3d4-1234-5678-90ab-cdef12345678"
+    const client = `https://chatgpt.com/oauth/${callbackId}/client.json`
+    const redirect = `https://chatgpt.com/connector/oauth/${callbackId}`
+    const handle = router(...oauthRoutes(db, async (id, uri) => id === client && uri === redirect))
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: client,
+      redirect_uri: redirect,
+      code_challenge_method: "S256",
+      code_challenge: "a".repeat(43),
+      resource,
+      scope: "site",
+    })
+    const response = await handle(new Request(`http://localhost/mcp/authorize?${params}`))
+    expect(response.status).toBe(200)
+  } finally {
+    await db.close()
+  }
+})
+
+test("account linking accepts Codex's temporary desktop callback", async () => {
+  const db = connect({ driver: "sqlite", path: ":memory:" })
+  await up(db, "./migrations")
+  try {
+    const client = "https://chatgpt.com/oauth/codex/client.json"
+    const redirect = "http://127.0.0.1:63256/callback"
+    const handle = router(...oauthRoutes(db, async (id, uri) => id === client && uri === redirect))
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: client,
+      redirect_uri: redirect,
+      code_challenge_method: "S256",
+      code_challenge: "a".repeat(43),
+      resource,
+      scope: "site",
+    })
+    const response = await handle(new Request(`http://localhost/mcp/authorize?${params}`))
+    expect(response.status).toBe(200)
   } finally {
     await db.close()
   }

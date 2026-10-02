@@ -9,6 +9,15 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.17.1 — 2026-10-02
+
+### Fixed
+
+- Account linking now accepts the Codex desktop client's temporary localhost
+  callback and ChatGPT's connection-specific callback after validating their
+  published client metadata. MCP clients can also find the protected-resource
+  metadata at the path-specific well-known URL.
+
 ## 1.17.0 — 2026-10-02
 
 ### Added
