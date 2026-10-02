@@ -29,6 +29,7 @@ import { decodeArray, decodeObject, encode } from "../json/index.ts"
 import type { Hooks } from "../plugins/hooks.ts"
 import { contentTypes, entries, media as mediaTable, revisions, users } from "../schema/index.ts"
 import { now, parseIso } from "../time/index.ts"
+import { readLayout } from "../visual/layout.ts"
 
 export const STATUSES = ["draft", "review", "scheduled", "published", "archived"] as const
 export type Status = (typeof STATUSES)[number]
@@ -152,7 +153,11 @@ const resolveAuthor = async (
   return user.id
 }
 
-const validateAgainstType = (type: ContentTypeRow, input: unknown, existing: Record<string, unknown>) => {
+export const validateAgainstType = (
+  type: ContentTypeRow,
+  input: unknown,
+  existing: Record<string, unknown>,
+): Record<string, unknown> => {
   const fields = decodeArray<Field>(type.fields)
   const supplied = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}
   // Merge over what is stored so a partial save from the editor doesn't blank
@@ -165,10 +170,13 @@ const validateAgainstType = (type: ContentTypeRow, input: unknown, existing: Rec
       details: { fields: result.errors },
     })
   }
-  return result.data
+  return {
+    ...result.data,
+    ...(merged.__layout === undefined ? {} : { __layout: readLayout(merged.__layout) }),
+  }
 }
 
-const validateRelations = async (
+export const validateRelations = async (
   db: Connection,
   type: ContentTypeRow,
   data: Record<string, unknown>,
@@ -464,6 +472,7 @@ export const entryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         if (status && status !== "all") query = query.where(q => q("status").equals(status))
         if (c.query.locale) query = query.where(q => q("locale").equals(c.query.locale as string))
         if (c.query.author) query = query.where(q => q("author_id").equals(c.query.author as string))
+        if (c.query.slug) query = query.where(q => q("slug").equals(c.query.slug as string))
         if (c.query.q) query = query.where(q => q.raw(contains(db, "title", c.query.q as string)))
 
         const sortable = new Set(["updated_at", "created_at", "published_at", "title", "slug", "sort_order"])

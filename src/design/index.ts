@@ -4,6 +4,7 @@ import { badRequest, get, json, parseJson, pipeline, put, putHeader, text } from
 import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body } from "../http/index.ts"
+import type { Hooks } from "../plugins/hooks.ts"
 import { createAudit } from "../security/index.ts"
 import { readSetting, writeSetting } from "../settings/index.ts"
 
@@ -196,7 +197,7 @@ export const describeSurfaces = (surfaces: Surfaces) =>
     describes: surface.describes ?? null,
   }))
 
-export const designRoutes = (db: Connection, surfaces: Surfaces): Route[] => {
+export const designRoutes = (db: Connection, surfaces: Surfaces, hooks?: Hooks): Route[] => {
   const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageSettings, "change the design"), parseJson)
   const audit = createAudit(db)
@@ -238,6 +239,7 @@ export const designRoutes = (db: Connection, surfaces: Surfaces): Route[] => {
           event: "design.updated",
           metadata: { changes, before },
         })
+        await hooks?.emit("design.afterSave", {})
         return json(c, 200, { rules: after })
       }),
     ),

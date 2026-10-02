@@ -52,8 +52,9 @@ twice under different prefixes.
 
 There are two deliberate exceptions to "published only", each narrow enough to
 state in a sentence. A **preview token** (`/preview/:token`) names one entry,
-expires within the hour, and is signed rather than stored — it is how a draft
-reaches someone without an account. The **realtime socket** (`/realtime`) tells a
+expires within the hour, and is signed — it is how a draft reaches someone
+without an account. Unsaved previews also name a temporary in-memory snapshot.
+The **realtime socket** (`/realtime`) tells a
 key holder that published content moved, carrying ids and never payloads.
 
 A delivery key can never see a draft, a user's email, or a soft-deleted row.
@@ -87,7 +88,7 @@ the first and skips the second.
    intervals behind
 8. Start background sweeps (`setInterval`): scheduled publishing every 60s,
    rate-limit cleanup hourly, then return
-   `{ fetch, upgrade, websocket, siteKey, db, config, stop }`
+   `{ fetch, upgrade, websocket, serveOptions, siteKey, designCss, contentVersion, adminBase, db, config, stop }`
 
 `src/server.ts` then wraps that in `Bun.serve` and `withSecurityHeaders`, with a
 `fetch` that attempts the WebSocket upgrade first — once anything returns a
@@ -144,6 +145,22 @@ along with sessions and stored AI credentials.
 **`design`** declares the surfaces Inky may restyle — see *Design surfaces* under
 the agent. Absent, the feature is off. `inkling.designCss()` returns the
 generated stylesheet.
+
+**`visual`** declares editable sections and fields in the host's rendered HTML.
+The admin reads this map from `GET /api/visual`; the host applies saved layouts
+with `renderVisual` from `inkling/visual`. The host still owns its templates and
+routing. See *Visual page editing* below.
+
+**`contentVersion()`** returns a process-local counter for host cache invalidation.
+It advances on entry saves, publication, unpublication and deletion; media
+changes; settings; menus; design; content types; and taxonomy changes. Scheduled
+publication goes through the same hooks. Registering the listener before plugins
+keeps a slow observer from delaying invalidation. Compare the counter before
+serving cached delivery data, and do not cache a response if the counter changed
+while it was being fetched. It is not a durable revision or a cross-process
+signal; remote consumers use realtime or webhooks. Public page cache headers must
+also allow fresh HTML after a save. Direct database writes by plugins must emit
+the corresponding hook to participate in invalidation.
 
 **`serveOptions`** exists so two `Bun.serve` values are Inkling's decision rather
 than a host's to remember. `maxRequestBodySize` is the load-bearing one: Bun
@@ -347,24 +364,60 @@ editorial signal about work that may still be a draft.
 
 ## Previews
 
-A content type can declare a `preview_url` template, but until there was a way to
-*fetch* an unpublished entry the template had nothing to point at. `POST
-/entries/:id/preview` mints a signed token naming exactly one entry, good for an
-hour; `GET /preview/:token` returns that entry whatever its status, with media
-expanded and `X-Robots-Tag: noindex`.
+A content type declares a `preview_url` template. Authenticated `POST
+/api/entries/:id/preview` returns a signed token, its expiry, the public API URL,
+and a site URL filled from that template. With no request body, the token reads
+the saved entry. An optional JSON body `{ title, slug, data }` creates an unsaved
+snapshot after field validation. Both variants name one existing entry and last
+up to an hour. Authors may preview only their own entries; editors may preview
+any entry they may edit.
 
-Signed rather than stored, because the value of a preview link is that it can be
-pasted to someone with no account, and a row per share is bookkeeping for
-something meant to be disposable. Nothing is revocable, which is why the lifetime
-is short. References are *not* expanded: that would mean deciding whether a
-referenced draft is also in scope, and one token should mean one entry.
+Snapshots live only in a bounded memory store: at most 100 entries and 16 MiB
+total, with a 1 MiB limit per snapshot. Expiry, eviction, or a process restart
+invalidates a snapshot link. Previewing does not save a row, add a revision, or
+publish changes. Deleting the source entry also makes its preview unavailable.
+Saved-entry links remain stateless; both kinds use the same signed token format.
 
-The entry editor opens the site's rendered preview from the content type's URL
-template. It saves pending edits first, then mints a token and opens the site in
-a new tab. Saving a published entry updates the live page before previewing; the
-button says **Save live & preview** in that state. The consuming site must read
-the `preview` query parameter and fetch `/preview/:token` to render a draft.
-Inkling cannot render a consuming site's templates on its own.
+`GET /preview/:token` returns the saved entry or snapshot at any status, expands
+media, and sends `no-store` and `X-Robots-Tag: noindex, nofollow`. References are
+not expanded: a token authorizes only its one entry. The consuming site reads the
+`preview` query parameter, fetches that response, and substitutes it only within
+the current render request. The page response must also be uncacheable and
+unindexable. Never place a preview entry in the public content cache.
+
+The entry editor's Preview button uses a snapshot and opens the rendered site
+in a new tab. A brand-new entry first needs a saved draft to obtain its id.
+Saving a published entry still updates the live website; previewing an existing
+entry does not.
+
+## Visual page editing
+
+The host supplies `VisualPages`, keyed by content type. Each page declares
+sections with stable ids, human labels, CSS selectors and editable field keys;
+`$title` selects the entry title. `fields` maps those keys to clickable selectors.
+Optional `references` turn slug fields into named entry pickers, while a section's
+`collection` points to the records used by that part of the page. These controls
+reuse the existing content model and entry routes.
+
+Layout lives in the reserved `data.__layout` object:
+`{ order: string[], hidden: string[] }`. It is validated separately from model
+fields and survives ordinary partial content updates. Because it belongs to the
+entry, revisions, duplication, saving and publishing carry layout with content.
+
+`renderVisual(html, definition, layout, editing = false)` applies layout only to
+declared selectors. Sections move among their declared sibling positions;
+undeclared elements and sections with `movable: false` retain their positions.
+Unknown or absent section ids do not create elements. Public renders remove
+hidden sections. Editing renders preserve them with `data-inkling-hidden`, and
+annotate sections and fields with `data-inkling-section` and
+`data-inkling-field` for selection.
+
+The visual editor requests a snapshot, adds `visual=1` to the preview URL, and
+fetches the rendered page. The host enables editing annotations only after
+validating the preview token. The admin strips executable content and displays
+the result in an iframe with scripts and forms disabled; selection is bound by
+the parent. The canvas changes only the local draft. Save remains explicit and
+uses the same validation, revision and audit path as the field editor.
 
 ## AI
 
@@ -423,9 +476,9 @@ is usually not the person who built the site: they describe an outcome — "we n
 somewhere for customer quotes", "take the old promo off the menu", "I want to
 post this to Instagram" — and the translation into a field on a content type, or
 into a developer app registered with a network, is Inky's job, not theirs. So the
-system prompt does most of the work here. It states the two kinds of change that
-exist (what a page *says* is an entry; what a page is *made of* is its content
-type), tells Inky to prefer acting over interrogating, and tells it to speak in
+system prompt does most of the work here. It distinguishes changing a page's
+values from changing which fields its content type can store, tells Inky to
+prefer acting over interrogating, and tells it to speak in
 "section" and "page" rather than "field" and "entry" while still calling tools
 with the exact keys.
 
@@ -438,7 +491,12 @@ else's job, "make the hero say less" is usually what was meant — and to name t
 rest as belonging to whoever builds the site.
 
 A host can move that boundary, narrowly, by declaring **design surfaces** (next
-section). Then "make every button black" becomes a request Inky can serve.
+section) or **visual pages**. Then "make every button black" or "hide the
+testimonials on this page" becomes a request Inky can serve. `get_page_layout`
+reads host-declared section IDs, labels, fields, and saved layout. Updates to
+`data.__layout` use the ordinary entry proposal and save path. The proposal
+validator refuses unknown section IDs; fixed sections keep their positions in
+the host renderer. Reordering content-type fields only changes the form.
 
 **The conversation is the person's, not the panel's** (`src/web/inkystore.ts`).
 Turns, the model's transcript, proposals and which were applied live in a small
@@ -495,9 +553,9 @@ the revision against the live page and proposes only the fields that differ, so
 the review card reads as the change it is; applying it goes through the ordinary
 restore route, which snapshots first, so an undo can itself be undone.
 
-What this deliberately is not: arbitrary CSS, layout changes, or edits to the
-host's templates. A request outside the surfaces and properties gets an honest
-"I can't do that, here is what I can".
+Arbitrary CSS and edits to the host's templates remain outside the tools.
+Layout proposals can only move or hide declared visual sections; design
+proposals can only change declared surfaces and properties.
 
 **Every tool in that surface is a read.** The agent cannot write, and no flag
 makes it able to: every `propose_*` tool records an intention and hands it to the

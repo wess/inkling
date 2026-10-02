@@ -38,6 +38,7 @@
     <h2>Reference</h2>
     <ol>
       <li><a href="#delivery">Delivery API</a></li>
+      <li><a href="#visual">Visual page editor</a></li>
       <li><a href="#socket">Socket frames</a></li>
       <li><a href="#fields">Field types</a></li>
       <li><a href="#roles">Roles</a></li>
@@ -103,6 +104,87 @@
         something the key could not have asked for directly.
       </p>
     </div>
+
+    <h2 id="visual">Visual page editor</h2>
+
+    <p>
+      An embedded site opts in by passing <code>visual</code> to
+      <code>createInkling</code>. The keys are content-type names. The editor
+      uses the site's existing page templates and ordinary content fields.
+      Types without a definition keep the field editor.
+    </p>
+
+    <div class="screen"><pre>import { createInkling } from "inkling"
+import { renderVisual, type VisualPages } from "inkling/visual"
+
+const visual = {
+  homepage: {
+    sections: [{
+      id: "intro", label: "Introduction", selector: "main &gt; #intro",
+      fields: ["heading", "image"],
+    }],
+    fields: { heading: "#intro h1", image: "#intro img" },
+  },
+} satisfies VisualPages
+
+const inkling = await createInkling({ adminBase: "/admin", visual })
+
+// In the site's page renderer, after loading the correct entry:
+const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</pre></div>
+
+    <table class="table">
+      <thead><tr><th>Definition</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>sections</code></td><td>Ordered section definitions with a stable <code>id</code>, readable <code>label</code>, CSS <code>selector</code>, and editable <code>fields</code>.</td></tr>
+        <tr><td><code>sections[].movable</code></td><td>Set to <code>false</code> to keep that section in its original position.</td></tr>
+        <tr><td><code>sections[].collection</code></td><td>Optional <code>{ type, label }</code> linking to shared records used by the section, such as team members.</td></tr>
+        <tr><td><code>fields</code></td><td>Field-key-to-selector map for clicking text or pictures. <code>$title</code> means the entry title.</td></tr>
+        <tr><td><code>references</code></td><td>Optional field-key-to-<code>{ type, label }</code> map. Displays a searchable entry picker and stores the chosen entry's slug in that field.</td></tr>
+        <tr><td><code>entry.data.__layout</code></td><td>Saved <code>{ order: string[], hidden: string[] }</code> using section ids. Saved and revised with the entry.</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      <code>renderVisual(html, definition, layout, editing = false)</code>
+      returns HTML. It moves declared sibling sections and removes hidden ones
+      on the public page. With <code>editing: true</code>, hidden sections remain
+      visible to the editor, and fields and sections receive selection attributes.
+      Enable this mode only inside a valid preview request with
+      <code>visual=1</code>. The admin fetches that page into a sandboxed canvas;
+      it does not run the site's scripts or submit forms.
+    </p>
+
+    <h3>Unsaved previews</h3>
+
+    <p>
+      <code>POST /api/entries/:id/preview</code> requires permission to edit the
+      entry. Send an optional JSON body <code>{ title, slug, data }</code> to
+      preview unsaved changes. Without a body, the link reads the saved entry.
+      The response contains <code>token</code>, <code>expiresAt</code>,
+      <code>url</code>, and <code>siteUrl</code> from the content type's preview
+      URL template. Previewing an existing entry does not save or publish it.
+    </p>
+
+    <p>
+      The host reads the <code>preview</code> query parameter and fetches
+      <code>GET /preview/:token</code>, substituting that single entry for this
+      request only. Send <code>no-store</code> and
+      <code>X-Robots-Tag: noindex, nofollow</code> on the rendered page.
+      Links last up to one hour. Unsaved snapshots also expire after a restart
+      or eviction: the store holds at most 100 snapshots, 16 MiB total, and
+      1 MiB per snapshot. Deleting the source entry invalidates its preview.
+    </p>
+
+    <h3>Refresh after saving</h3>
+
+    <p>
+      <code>inkling.contentVersion()</code> returns a process-local counter that
+      changes after content mutations, including scheduled publication. Clear
+      host delivery caches when it changes. Capture the version before an
+      asynchronous read and cache the response only if the version still matches.
+      Set public page cache headers to revalidate after edits. Separate processes
+      should use realtime or webhooks for invalidation.
+    </p>
 
     <h2 id="socket">Socket frames</h2>
 
@@ -256,7 +338,7 @@
     <h3>What Inky can do</h3>
 
     <p>
-      Thirty-eight tools: thirteen read, twenty-four propose, one moves the
+      Forty-five tools: nineteen read, twenty-five propose, one moves the
       admin. Nothing writes. A proposal is a record the admin renders as a diff
       and applies through the same route your own edit takes — so it is
       validated, revisioned where a revision exists, and recorded in Activity as
@@ -275,12 +357,16 @@
       <thead><tr><th>Tool</th><th>Kind</th><th>Needs</th><th>Does</th></tr></thead>
       <tbody>
         <tr><td><code>list_content_types</code></td><td>read</td><td><code>content.read</code></td><td>The model — every type and its fields.</td></tr>
-        <tr><td><code>list_entries</code></td><td>read</td><td><code>content.read</code></td><td>Entries of a type, filtered and paged.</td></tr>
+        <tr><td><code>list_entries</code></td><td>read</td><td><code>content.read</code></td><td>Entries of a type, with offset pagination and up to eight selected data fields. Publication status is separate from availability stored in data.</td></tr>
         <tr><td><code>search_site</code></td><td>read</td><td><code>content.read</code></td><td>Find a page by title or a file by its name, alt text, caption, or folder.</td></tr>
         <tr><td><code>get_entry</code></td><td>read</td><td><code>content.read</code></td><td>One entry in full, including what it is filed under.</td></tr>
+        <tr><td><code>get_page_layout</code></td><td>read</td><td><code>content.read</code></td><td>Declared visual sections, which can move, and the current order and hidden sections. Available when the host connects visual pages.</td></tr>
+        <tr><td><code>list_revisions</code></td><td>read</td><td><code>content.read</code></td><td>Saved history of one entry, newest first.</td></tr>
+        <tr><td><code>list_trash</code></td><td>read</td><td><code>content.write</code></td><td>Deleted entries that can be restored.</td></tr>
         <tr><td><code>list_media</code></td><td>read</td><td><code>content.read</code></td><td>Searches filenames, alt text, captions, and folders; can browse older files with an offset.</td></tr>
         <tr><td><code>list_taxonomies</code></td><td>read</td><td><code>content.read</code></td><td>Categories, tags, and every term in each.</td></tr>
         <tr><td><code>get_site_settings</code></td><td>read</td><td><code>content.read</code></td><td>Title, tagline, description, logo, social image.</td></tr>
+        <tr><td><code>get_design</code></td><td>read</td><td><code>settings.manage</code></td><td>Host-declared design surfaces, supported properties, and current overrides.</td></tr>
         <tr><td><code>list_menus</code></td><td>read</td><td><code>content.read</code></td><td>Your navigation trees.</td></tr>
         <tr><td><code>list_plugins</code></td><td>read</td><td><code>plugins.manage</code></td><td>What is installed, what is on, and how each is configured.</td></tr>
         <tr><td><code>list_people</code></td><td>read</td><td><code>users.manage</code></td><td>Everyone with an account, and the role each holds.</td></tr>
@@ -289,7 +375,9 @@
         <tr><td><code>get_social_setup</code></td><td>read</td><td><code>social.manage</code></td><td>Per network: app registered, credentials saved, account connected.</td></tr>
         <tr><td><code>get_social_guide</code></td><td>read</td><td><code>social.manage</code></td><td>The real steps through that network's console, and the step everybody misses.</td></tr>
         <tr><td><code>list_social_posts</code></td><td>read</td><td><code>social.write</code></td><td>Drafts, what is scheduled, and what already went out.</td></tr>
-        <tr><td><code>propose_entry_update</code></td><td>propose</td><td><code>content.write</code></td><td>Change what a page says.</td></tr>
+        <tr><td><code>propose_entry_update</code></td><td>propose</td><td><code>content.write</code></td><td>Change page content or its declared section layout through <code>data.__layout</code>. Unknown fields, invalid values, and unknown section IDs are refused before review.</td></tr>
+        <tr><td><code>propose_revision_restore</code></td><td>propose</td><td><code>content.write</code></td><td>Restore an entry's earlier saved version.</td></tr>
+        <tr><td><code>propose_entry_untrash</code></td><td>propose</td><td><code>content.write</code></td><td>Restore a deleted entry from the trash.</td></tr>
         <tr><td><code>propose_entry_create</code></td><td>propose</td><td><code>content.write</code></td><td>Draft a page that does not exist yet.</td></tr>
         <tr><td><code>propose_entry_status</code></td><td>propose</td><td><code>content.write</code>, or <code>content.publish</code> to go live</td><td>Publish, unpublish, or return something to draft.</td></tr>
         <tr><td><code>propose_entry_delete</code></td><td>propose</td><td><code>content.write</code></td><td>Move a page to the trash, where it stays restorable.</td></tr>
@@ -300,6 +388,7 @@
         <tr><td><code>propose_taxonomy_create</code></td><td>propose</td><td><code>taxonomy.manage</code></td><td>A new way of filing content.</td></tr>
         <tr><td><code>propose_term_create</code></td><td>propose</td><td><code>taxonomy.manage</code></td><td>One category or tag inside an existing set.</td></tr>
         <tr><td><code>propose_settings_update</code></td><td>propose</td><td><code>settings.manage</code></td><td>Site details.</td></tr>
+        <tr><td><code>propose_design_change</code></td><td>propose</td><td><code>settings.manage</code></td><td>Change supported properties on declared surfaces, or remove an override to restore the original design.</td></tr>
         <tr><td><code>propose_menu_update</code></td><td>propose</td><td><code>menus.manage</code></td><td>Navigation.</td></tr>
         <tr><td><code>propose_menu_create</code></td><td>propose</td><td><code>menus.manage</code></td><td>A second menu — a footer, a sidebar.</td></tr>
         <tr><td><code>propose_menu_delete</code></td><td>propose</td><td><code>menus.manage</code></td><td>Remove one outright, which is not recoverable.</td></tr>

@@ -54,7 +54,7 @@ const ENTRIES = {
     example:
       "For a comic signing, open Events and add the date, guest, and details. For new opening hours, open the page that displays your hours.",
     careful:
-      "Saving an already published item updates its published version. Social posts are separate from website content. Fonts and page layout are managed by the person who built your website.",
+      "Saving an already published item updates its published version. On connected pages, Edit page lets you select text and pictures or move and hide supported sections. Social posts are separate from website content.",
   },
 
   "entry.save": {
@@ -64,6 +64,7 @@ const ENTRIES = {
       "For new content, choose Save draft. It stays off the public website.",
       "Choose Publish now to make it available to your website, or Schedule for later to pick a time.",
       "For published content, Save live changes updates the published version immediately. Take off website returns it to a draft.",
+      "Preview page shows your unsaved edits without changing an existing live page. Save a new draft once to get its preview address.",
     ],
     example:
       "You can prepare next week's coffee tasting as a draft. Correcting the time on an already published event changes the version your website reads as soon as you save.",

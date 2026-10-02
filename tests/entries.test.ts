@@ -366,3 +366,45 @@ test("an editor may reassign a byline; an author may not", async () => {
   expect(typeId).toBeTruthy()
   await db.close()
 })
+
+test("entry layout survives partial saves, publication, and revision restoration", async () => {
+  const { db, call } = await setup()
+  const layout = { order: ["books", "intro"], hidden: ["quotes"] }
+  const created = await call("POST", "/types/article/entries", {
+    title: "Visual page",
+    data: { summary: "Before", __layout: layout },
+  })
+  const entry = (await created.json()) as { id: string; data: Record<string, unknown> }
+  expect(created.status).toBe(201)
+  expect(entry.data.__layout).toEqual(layout)
+  const saved = await call("PUT", `/entries/${entry.id}`, { data: { summary: "After" } })
+  expect(((await saved.json()) as any).data.__layout).toEqual(layout)
+  const published = await call("POST", `/entries/${entry.id}/publish`)
+  expect(((await published.json()) as any).data.__layout).toEqual(layout)
+  const history = await db.all<{ id: string }>(from(revisions).where(q => q("entry_id").equals(entry.id)))
+  const changed = await call("PUT", `/entries/${entry.id}`, { data: { __layout: { order: [], hidden: [] } } })
+  expect(changed.status).toBe(200)
+  const restored = await call("POST", `/revisions/${history[0].id}/restore`)
+  expect(restored.status).toBe(200)
+  expect(((await restored.json()) as any).data.__layout).toEqual(layout)
+  const invalid = await call("PUT", `/entries/${entry.id}`, { data: { __layout: { order: ["main > *"] } } })
+  expect(invalid.status).toBe(400)
+  const stored = await db.one<{ data: string }>(
+    from(entries)
+      .select("data")
+      .where(q => q("id").equals(entry.id)),
+  )
+  expect(JSON.parse(stored?.data ?? "{}").__layout).toEqual(layout)
+  await db.close()
+})
+
+test("entry pickers can resolve an exact slug without matching similarly named entries", async () => {
+  const { db, call } = await setup()
+  await call("POST", "/types/article/entries", { title: "Garden", slug: "garden" })
+  await call("POST", "/types/article/entries", { title: "Garden journal", slug: "garden-journal" })
+  const response = await call("GET", "/types/article/entries?slug=garden")
+  const result = (await response.json()) as { data: { slug: string }[]; meta: { total: number } }
+  expect(result.data.map(entry => entry.slug)).toEqual(["garden"])
+  expect(result.meta.total).toBe(1)
+  await db.close()
+})

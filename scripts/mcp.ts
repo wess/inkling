@@ -249,6 +249,14 @@ const TOOLS: readonly Tool[] = [
     run: a => call(`/entries/${encodeURIComponent(a.id)}`),
   },
   {
+    name: "get_visual_pages",
+    description:
+      "Read the site's supported visual page sections, keyed by content type. Each section has an id, label, editable fields, and whether it can move. Read get_entry for the page's current data.__layout before using update_entry to set its order and hidden arrays. Use only declared section ids, preserve unrelated layout values, and never promise to move a fixed section. An empty map means visual sections are not connected for this site.",
+    inputSchema: object({}),
+    needs: "content.read",
+    run: () => call("/visual"),
+  },
+  {
     name: "search",
     description:
       "Search entry titles and media filenames across the whole site. A quick way to find an id when you know roughly " +

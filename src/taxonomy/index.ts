@@ -8,6 +8,7 @@ import { rows } from "../db/dialect.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { id, isHandle, slugify } from "../ids/index.ts"
 import { fromBit } from "../json/index.ts"
+import type { Hooks } from "../plugins/hooks.ts"
 import { entries, entryTerms, taxonomies, terms } from "../schema/index.ts"
 import { now } from "../time/index.ts"
 
@@ -84,7 +85,7 @@ export const termsForEntries = async (
   return grouped
 }
 
-export const taxonomyRoutes = (db: Connection): Route[] => {
+export const taxonomyRoutes = (db: Connection, hooks?: Hooks): Route[] => {
   const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageTaxonomy, "manage taxonomies"), parseJson)
   const act = pipeline(requireAuth(db), requireCan(can.manageTaxonomy, "manage taxonomies"))
@@ -125,6 +126,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
           created_at: now(),
         }
         await db.execute(from(taxonomies).insert(row))
+        await hooks?.emit("taxonomy.afterChange", {})
         return json(c, 201, presentTaxonomy(row))
       }),
     ),
@@ -142,6 +144,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
             .where(q => q("id").equals(taxonomy.id))
             .del(),
         )
+        await hooks?.emit("taxonomy.afterChange", {})
         return json(c, 200, { deleted: true })
       }),
     ),
@@ -199,6 +202,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
           created_at: now(),
         }
         await db.execute(from(terms).insert(row))
+        await hooks?.emit("taxonomy.afterChange", {})
         return json(c, 201, presentTerm(row))
       }),
     ),
@@ -238,6 +242,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
               .where(q => q("id").equals(row.id)),
           )
         }
+        await hooks?.emit("taxonomy.afterChange", {})
         return json(c, 200, presentTerm({ ...row, ...changes } as TermRow))
       }),
     ),
@@ -252,6 +257,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
             .where(q => q("id").equals(row.id))
             .del(),
         )
+        await hooks?.emit("taxonomy.afterChange", {})
         return json(c, 200, { deleted: true })
       }),
     ),
@@ -303,6 +309,7 @@ export const taxonomyRoutes = (db: Connection): Route[] => {
           }
         })
 
+        await hooks?.emit("taxonomy.afterChange", {})
         return json(c, 200, { entryId, termIds })
       }),
     ),

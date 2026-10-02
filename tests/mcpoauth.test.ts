@@ -11,6 +11,7 @@ import { oauthRoutes, resource } from "../src/mcp/oauth.ts"
 import { up } from "../src/migrate/index.ts"
 import { agentKeys, mcpOauthCodes } from "../src/schema/index.ts"
 import { createUser } from "../src/users/index.ts"
+import { visualRoutes } from "../src/visual/index.ts"
 
 const CLIENT = "https://chatgpt.com/oauth/client.json"
 const REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
@@ -35,10 +36,13 @@ test("remote MCP publishes OAuth metadata and prompts an unlinked account", asyn
       }),
     )
     expect(list.status).toBe(200)
-    const listed = (await list.json()) as { result: { tools: { name: string; securitySchemes: unknown[] }[] } }
+    const listed = (await list.json()) as {
+      result: { tools: { name: string; securitySchemes: unknown[]; annotations: { readOnlyHint: boolean } }[] }
+    }
     expect(listed.result.tools.some(tool => tool.name === "update_entry")).toBe(true)
     expect(listed.result.tools.some(tool => tool.name === "upload_media")).toBe(false)
     expect(listed.result.tools.every(tool => tool.securitySchemes.length > 0)).toBe(true)
+    expect(listed.result.tools.find(tool => tool.name === "get_visual_pages")?.annotations.readOnlyHint).toBe(true)
 
     const call = await handle(
       new Request("http://localhost/mcp", {
@@ -236,7 +240,13 @@ test("a linked account can call a read tool through the remote bridge", async ()
     }),
   )
   const address = new URL(resource)
-  const handle = router(...mcpRoutes(db), ...prefixed("/api", [...agentKeyRoutes(db), ...contentTypeRoutes(db)]))
+  const pages = {
+    homepage: { sections: [{ id: "intro", label: "Introduction", selector: ".intro", fields: ["heading"] }] },
+  }
+  const handle = router(
+    ...mcpRoutes(db),
+    ...prefixed("/api", [...agentKeyRoutes(db), ...contentTypeRoutes(db), ...visualRoutes(db, pages)]),
+  )
   const server = Bun.serve({
     hostname: address.hostname,
     port: Number(address.port) || 80,
@@ -261,6 +271,23 @@ test("a linked account can call a read tool through the remote bridge", async ()
     const rpc = (await response.json()) as { result: { isError: boolean; content: { text: string }[] } }
     expect(rpc.result.isError).toBe(false)
     expect(JSON.parse(rpc.result.content[0]?.text ?? "") as Record<string, unknown>).toHaveProperty("data")
+    const layout = await fetch(resource, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "visual",
+        method: "tools/call",
+        params: {
+          name: "get_visual_pages",
+          arguments: {},
+          _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" },
+        },
+      }),
+    })
+    const visual = (await layout.json()) as { result: { isError: boolean; content: { text: string }[] } }
+    expect(visual.result.isError).toBe(false)
+    expect(JSON.parse(visual.result.content[0]?.text ?? "")).toEqual({ data: pages })
   } finally {
     server.stop(true)
     await db.close()

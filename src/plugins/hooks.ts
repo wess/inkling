@@ -23,7 +23,15 @@ export type EmitMap = {
   "entry.afterUnpublish": { entry: EntryRow; type: ContentTypeRow | null; identity: Identity | null }
   "entry.afterDelete": { entry: EntryRow; identity: Identity | null }
   "media.afterUpload": { media: MediaRow; identity: Identity | null }
+  "media.afterSave": { media: MediaRow; identity: Identity | null }
   "media.afterDelete": { media: MediaRow; identity: Identity | null }
+  "settings.afterSave": { scope: string }
+  "menu.afterSave": { name: string }
+  "menu.afterDelete": { name: string }
+  "design.afterSave": Record<string, never>
+  "contentType.afterSave": { name: string }
+  "contentType.afterDelete": { name: string }
+  "taxonomy.afterChange": Record<string, never>
   // After a social post has been attempted on every network it names. There is
   // no `before` half and there will not be: by the time anything could listen,
   // the post is on someone else's servers and no listener can take it back.

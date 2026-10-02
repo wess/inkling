@@ -10,6 +10,7 @@ import { validateDefinition } from "../fields/index.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { id, isHandle, slugify } from "../ids/index.ts"
 import { decodeArray, encode } from "../json/index.ts"
+import type { Hooks } from "../plugins/hooks.ts"
 import { contentTypes } from "../schema/index.ts"
 import { now } from "../time/index.ts"
 
@@ -132,7 +133,7 @@ export const upsertOwned = async (
   return { created: true }
 }
 
-export const contentTypeRoutes = (db: Connection): Route[] => {
+export const contentTypeRoutes = (db: Connection, hooks?: Hooks): Route[] => {
   const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageTypes, "manage content types"), parseJson)
   const destroy = pipeline(requireAuth(db), requireCan(can.manageTypes, "manage content types"))
@@ -254,6 +255,7 @@ export const contentTypeRoutes = (db: Connection): Route[] => {
         }
 
         await db.execute(from(contentTypes).insert(row))
+        await hooks?.emit("contentType.afterSave", { name: row.name })
         return json(c, 201, present(row as ContentTypeRow))
       }),
     ),
@@ -292,6 +294,7 @@ export const contentTypeRoutes = (db: Connection): Route[] => {
         )
 
         const updated = await byId(db, existing.id)
+        await hooks?.emit("contentType.afterSave", { name: existing.name })
         return json(c, 200, present(updated as ContentTypeRow))
       }),
     ),
@@ -358,6 +361,7 @@ export const contentTypeRoutes = (db: Connection): Route[] => {
             .where(q => q("id").equals(existing.id))
             .del(),
         )
+        await hooks?.emit("contentType.afterDelete", { name: existing.name })
         return json(c, 200, { deleted: true })
       }),
     ),

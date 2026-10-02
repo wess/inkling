@@ -11,6 +11,7 @@ import { body, optionalText, requireText } from "../http/index.ts"
 import type { Registry } from "../plugins/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
 import { siteSettings } from "../settings/index.ts"
+import type { VisualPages } from "../visual/index.ts"
 import type { ResolvedCredential } from "./complete.ts"
 // Betas and fallbacks are decided once, in complete.ts, because they are
 // properties of the credential and the model rather than of a call site — and
@@ -88,7 +89,13 @@ const clientFor = (credential: ResolvedCredential) =>
     ? new Anthropic({ authToken: credential.secret })
     : new Anthropic({ apiKey: credential.secret })
 
-const systemFor = async (db: Connection, editor: string, role: string, design: Surfaces): Promise<string> => {
+const systemFor = async (
+  db: Connection,
+  editor: string,
+  role: string,
+  design: Surfaces,
+  visual: VisualPages,
+): Promise<string> => {
   const settings = await siteSettings(db).catch(() => ({}) as Record<string, unknown>)
   const title = typeof settings.title === "string" ? settings.title : "this site"
   const description = typeof settings.description === "string" ? settings.description : ""
@@ -106,14 +113,19 @@ const systemFor = async (db: Connection, editor: string, role: string, design: S
     "",
     "That gives you two different kinds of change, and telling them apart is most of the job:",
     "- Changing what a page *says* is an entry change. The shape stays; the words change.",
-    "- Changing what a page is *made of* — adding a section, removing one, reordering them — is a content type change. It affects every page of that type, which is worth saying out loud before you propose one.",
+    "- Changing which values a page can store is a content type change. It affects every page of that type. Adding, removing, or reordering those fields changes the editing form, not the website's rendered sections or layout.",
     "",
     "Around that sit the things a site needs but no single page owns: categories and tags, navigation menus, the site's own details, the files in the media library, the people with accounts, the keys a website reads content with, and the social accounts it posts from.",
     "",
     "WHAT YOU CAN CHANGE",
     "",
     "- The words, images, and values on any page.",
-    "- The structure of any page: add a section, remove one, reorder them, change what a section holds.",
+    ...(Object.keys(visual).length
+      ? [
+          "- The order and visibility of existing visual sections on supported pages. Read get_page_layout first. Propose only declared section ids through data.__layout in propose_entry_update, keeping the existing order and hidden sections unless asked to change them. Moving or hiding these sections changes only this page, without changing its content model.",
+        ]
+      : []),
+    "- The content model behind a page: what values it can store. The website must already know how to render a value for it to appear there; never promise a visible section solely by changing the content model.",
     "- New pages, drafted and filled in.",
     "- Whole new *kinds* of page, when what they asked for has nowhere to live yet. A site with no page type that needs pages, or a section shaped unlike anything else, is a new content type — make it, then put the page in it.",
     "- Whether something is a draft, in review, live, or retired, and moving a finished mistake to the trash.",
@@ -169,6 +181,8 @@ const systemFor = async (db: Connection, editor: string, role: string, design: S
     "- Field keys are not yours to invent. Use the keys the content type declares. When you add a field, leave every existing key exactly as it is — entry data is keyed by them, so a renamed key is content abandoned.",
     "- When asked to add an image, read the page's media field and search list_media using short subject words. If that finds nothing, call list_media without a query and page through older files with offset before saying it is missing. Use only an id returned by the library. A filename or alt text may be vague, so do not claim you have seen the image itself from metadata alone.",
     "- Propose the smallest change that does the job, and send only what you are changing.",
+    "- For catalog cleanup, list the real availability and identifying fields with list_entries.fields and page through results with offset. Publication status is separate from an availability value stored inside data. Read the exact entries before proposing removal. Similar titles alone do not prove duplicates: compare authors, editions, formats, identifiers and slugs, and ask which to keep when those differ. Never claim a catalog is fully reviewed after reading only its first page.",
+    "- When someone wants an item off the website, propose draft or archived status. Moving a mistaken duplicate to trash is separate. An availability value such as out of print may describe the item without hiding it on every site's template; do not promise removal based only on that field.",
     "- Prefer acting to asking. If a request has an obvious reading, take it and say what you assumed. Ask a question only when the readings differ enough that guessing wrong would waste their time, and then ask exactly one.",
     "- Never invent facts, prices, dates, names, quotes, or testimonials. If a section needs content you do not have, propose the structure and leave the values empty, then say what they need to fill in.",
     "- Match the voice of what is already written on the site. Read a sibling page before drafting a new one.",
@@ -230,6 +244,7 @@ type Run = {
   readonly db: Connection
   readonly registry: Registry
   readonly design: Surfaces
+  readonly visual: VisualPages
   // The asking person's, because it decides which tools exist at all — see
   // `toolsFor`. A tool the model is never shown is a proposal it never queues
   // that would have met a 403 on apply.
@@ -252,7 +267,14 @@ const dispatch = async (
   run.emit("tool", { name, input })
   const before = run.proposals.length
   const result = await runTool(
-    { db: run.db, registry: run.registry, design: run.design, role: run.role, proposals: run.proposals },
+    {
+      db: run.db,
+      registry: run.registry,
+      design: run.design,
+      visual: run.visual,
+      role: run.role,
+      proposals: run.proposals,
+    },
     name,
     input,
   )
@@ -337,7 +359,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
       system,
-      tools: specsFor(run.role, run.design) as unknown as Anthropic.Beta.BetaToolUnion[],
+      tools: specsFor(run.role, run.design, run.visual) as unknown as Anthropic.Beta.BetaToolUnion[],
       messages,
     })
 
@@ -392,7 +414,7 @@ const runClaude = async (run: Run): Promise<unknown[]> => {
 const runCompatible = async (run: Run): Promise<unknown[]> => {
   const provider = createProvider(compatibleConfig(run.credential))
 
-  const tools: ToolDef[] = specsFor(run.role, run.design).map(spec => ({
+  const tools: ToolDef[] = specsFor(run.role, run.design, run.visual).map(spec => ({
     name: spec.name,
     description: spec.description,
     parameters: spec.input_schema,
@@ -440,7 +462,12 @@ const runCompatible = async (run: Run): Promise<unknown[]> => {
   return messages
 }
 
-export const agentRoutes = (db: Connection, registry: Registry, design: Surfaces = {}): Route[] => {
+export const agentRoutes = (
+  db: Connection,
+  registry: Registry,
+  design: Surfaces = {},
+  visual: VisualPages = {},
+): Route[] => {
   const guard = pipeline(requireAuth(db), requireCan(can.useAi, "use the assistant"), parseJson)
   const limiter = createRateLimit(db)
   const audit = createAudit(db)
@@ -502,7 +529,7 @@ export const agentRoutes = (db: Connection, registry: Registry, design: Surfaces
         // only message this route builds itself.
         const conversation: unknown[] = [...history, { role: "user", content: opening.join("\n\n") }]
 
-        const system = await systemFor(db, identity.name || identity.email, identity.role, design)
+        const system = await systemFor(db, identity.name || identity.email, identity.role, design, visual)
         const proposals: Proposal[] = []
 
         audit.log({
@@ -524,6 +551,7 @@ export const agentRoutes = (db: Connection, registry: Registry, design: Surfaces
                 db,
                 registry,
                 design,
+                visual,
                 role: identity.role,
                 credential,
                 system,

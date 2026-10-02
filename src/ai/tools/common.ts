@@ -3,6 +3,7 @@ import type { Capability, Scope } from "../../auth/roles.ts"
 import type { Change, Surfaces } from "../../design/index.ts"
 import type { Field } from "../../fields/index.ts"
 import type { Registry } from "../../plugins/index.ts"
+import type { VisualPages } from "../../visual/index.ts"
 
 // What the agent is allowed to know and allowed to ask for.
 //
@@ -27,6 +28,7 @@ export type ToolContext = {
   readonly registry: Registry
   // What the host lets Inky restyle. Empty means the design tools do not exist.
   readonly design: Surfaces
+  readonly visual?: VisualPages
   readonly proposals: Proposal[]
 }
 

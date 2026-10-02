@@ -90,6 +90,12 @@ Authenticated delivery responses are private-cacheable and vary on
 cache keyed only by URL. Published content changes can invalidate that cache in
 realtime.
 
+Embedded hosts can compare `inkling.contentVersion()` before using an in-memory
+delivery cache and clear the cache when it changes. Do not let an older in-flight
+read refill a cache after a save. This counter is local to the running process;
+remote consumers use the realtime channel below. Public HTML should revalidate
+after edits, for example with `Cache-Control: public, max-age=0, must-revalidate`.
+
 Public media responses explicitly allow cross-origin embedding. Hashed admin
 assets are unrelated to delivery content and may be cached immutably.
 
@@ -112,6 +118,20 @@ subscribe with:
 Delivery keys may subscribe to `site` and to `content:<type>` for types within
 their scopes. They cannot subscribe to entry-presence topics. Change frames
 carry ids and slugs, not content; re-read the delivery API when one arrives.
+
+## Preview snapshots
+
+An authenticated editor may send `{ title, slug, data }` to
+`POST /api/entries/:id/preview` to preview unsaved changes. An empty request body
+previews the saved entry instead. The response includes `url`, `siteUrl`, `token`,
+and `expiresAt`. Both link types authorize one entry for up to an hour; unsaved
+snapshots also expire on server restart or eviction from the bounded preview
+store. They do not save or publish changes.
+
+Fetch `/preview/:token` on the site's server and substitute that entry only for
+the current request. Never cache preview content publicly. Send `no-store` and
+`X-Robots-Tag: noindex, nofollow` on the rendered page. Media expands normally;
+references do not expand into other drafts.
 
 ## Errors
 

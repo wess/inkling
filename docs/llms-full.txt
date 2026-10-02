@@ -58,6 +58,27 @@ one focused guide.
 
 Media and reference fields arrive expanded, so a page render is one request.
 
+Embedded hosts can compare `inkling.contentVersion()` to invalidate delivery
+caches after content changes. Do not store an in-flight response if the counter
+changed while fetching it. It is a local counter, not a durable revision.
+
+## Visual editing and previews
+
+`createInkling({ visual })` accepts a map from content-type names to sections,
+field selectors, optional related-entry pickers, and shared-collection links.
+The host applies `renderVisual(html, definition, entry.data.__layout, editing)`
+from `inkling/visual`. Layout is `{ order: string[], hidden: string[] }` and
+travels with ordinary entry saves and revisions. Public rendering applies order
+and hiding; editing rendering annotates fields and keeps hidden sections present.
+
+`POST /api/entries/:id/preview` accepts optional `{ title, slug, data }` for an
+unsaved snapshot. No body reads the saved entry. Both return a signed token,
+expiry, API URL, and site URL. The host substitutes the token's one entry only
+inside that render request and sends no-store/noindex. Enable visual annotations
+only for a validated preview with `visual=1`. Snapshot previews leave database
+content unchanged, expire within an hour, and disappear on restart or eviction.
+The store holds 100 snapshots/16 MiB total, at most 1 MiB each.
+
 ## Realtime
 
 Open `ws://host/realtime?ticket=…` after exchanging a credential for a ticket
@@ -82,7 +103,7 @@ All under `/api`: `/api/auth/*`, `/api/users`, `/api/types`,
 `/api/entries/:id/{publish,unpublish,status,duplicate,preview,revisions}`,
 `/api/entries/bulk`, `/api/media`, `/api/taxonomies`, `/api/menus`,
 `/api/settings`, `/api/keys`, `/api/agents`, `/api/webhooks`, `/api/search`,
-`/api/stats`, `/api/audit`, `/api/plugins`, `/api/ai/*`, `/api/realtime/ticket`.
+`/api/stats`, `/api/audit`, `/api/plugins`, `/api/visual`, `/api/ai/*`, `/api/realtime/ticket`.
 
 A new session-gated route goes inside the `prefixed("/api", […])` block in
 `src/app.ts`. At the root it would shadow an admin screen — `/settings`,
@@ -137,12 +158,15 @@ never in `settings`, and are never returned by the API.
   wire formats, Claude's own and OpenAI's, with Ollama taking the OpenAI path
   because it serves a compatible `/v1` endpoint locally and as Ollama Cloud (separate entries; the cloud one has a fixed endpoint so no URL can be mistyped). It
   reaches entries, content types, media, categories, menus, site settings,
-  plugins, people, delivery keys, webhooks, and the social setup — 38 tools, of
-  which 13 read, 24 propose, and one (`open_screen`) moves the admin. Its system
+  plugins, people, delivery keys, webhooks, and the social setup — 45 tools, of
+  which 19 read, 25 propose, and one (`open_screen`) moves the admin. Its system
   prompt is most of the feature: it assumes a non-technical asker, translates
   outcomes into model changes, and states the boundary that Inkling stores
-  content and does not render the site — so colours, fonts, and layout are the
-  consuming site's code, not Inky's. The transcript accepts `role: "tool"`
+  content while the consuming site renders it. The host can expose design
+  surfaces for style changes and visual pages for section order and visibility.
+  `get_page_layout` reads those sections; `propose_entry_update` carries their
+  reviewed changes as `data.__layout`. Content-model field order does not change
+  rendered section order. The transcript accepts `role: "tool"`
   (OpenAI carries tool results as their own messages) but never `system`.
   The admin mounts it as a dock in the corner of every screen (`InkyDock` in
   `src/web/app.tsx`); `describe(route, types)` turns the current route into one

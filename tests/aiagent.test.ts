@@ -122,8 +122,9 @@ test("a tool is only offered to a role that could apply what it produces", () =>
   // An owner gets everything there is — once the host has exposed something for
   // the design tools to act on. Without surfaces those two do not exist.
   const surfaces = { buttons: { label: "Buttons", selector: ".button" } }
-  expect(toolsFor("owner", surfaces)).toHaveLength(TOOLS.length)
-  expect(named("owner")).toHaveLength(TOOLS.length - 2)
+  const visual = { page: { sections: [{ id: "hero", label: "Hero", selector: ".hero", fields: [] }] } }
+  expect(toolsFor("owner", surfaces, visual)).toHaveLength(TOOLS.length)
+  expect(named("owner")).toHaveLength(TOOLS.length - 3)
 })
 
 test("a tool a role cannot reach is refused even if the model asks for it anyway", async () => {

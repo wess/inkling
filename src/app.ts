@@ -10,6 +10,7 @@ import { auditRoutes, registerContentAudit } from "./audit/index.ts"
 import { authRoutes } from "./auth/index.ts"
 import { config } from "./config/index.ts"
 import { contentTypeRoutes } from "./contenttypes/index.ts"
+import { contentVersion } from "./contentversion/index.ts"
 import { countRows } from "./db/dialect.ts"
 import { db } from "./db/index.ts"
 import { deliveryRoutes } from "./delivery/index.ts"
@@ -35,6 +36,7 @@ import { storageFromConfig } from "./storage/index.ts"
 import { taxonomyRoutes } from "./taxonomy/index.ts"
 import { now } from "./time/index.ts"
 import { createUser, userRoutes } from "./users/index.ts"
+import { type VisualPages, visualRoutes } from "./visual/index.ts"
 import { buildAdmin } from "./web/serve.ts"
 import { registerWebhookBridge, webhookRoutes } from "./webhooks/index.ts"
 
@@ -55,6 +57,7 @@ const ROOT = resolve(dirname(new URL(import.meta.url).pathname), "..")
 const fromRoot = (path: string): string => (isAbsolute(path) ? path : resolve(ROOT, path))
 
 export type { Surface, Surfaces } from "./design/index.ts"
+export type { VisualLayout, VisualPage, VisualPages, VisualSection } from "./visual/index.ts"
 
 export type InklingOptions = {
   // Where the admin answers. "/" is standalone: every unmatched path becomes
@@ -70,6 +73,7 @@ export type InklingOptions = {
   // The parts of the site Inky may restyle, in the host's own words. Absent or
   // empty switches the design tools off. See src/design.
   design?: Surfaces
+  visual?: VisualPages
 }
 
 // Bun.serve hands `fetch` a server exposing the raw socket peer. It is optional
@@ -91,6 +95,7 @@ export type Inkling = {
   // The generated design stylesheet, for a host that serves it itself. A
   // function rather than a string because approved changes land at runtime.
   designCss: () => Promise<string>
+  contentVersion: () => number
   adminBase: string
   db: typeof db
   config: typeof config
@@ -143,6 +148,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   // 3. Shared services.
   const store = storageFromConfig()
   const hooks = createHooks()
+  const version = contentVersion(hooks)
   registerWebhookBridge(db, hooks)
   registerContentAudit(db, hooks)
 
@@ -188,12 +194,12 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...authRoutes(db),
       ...userRoutes(db),
       ...auditRoutes(db),
-      ...contentTypeRoutes(db),
+      ...contentTypeRoutes(db, hooks),
       ...entryRoutes(db, hooks),
       ...mediaRoutes(db, store, hooks),
-      ...taxonomyRoutes(db),
-      ...menuRoutes(db),
-      ...settingsRoutes(db),
+      ...taxonomyRoutes(db, hooks),
+      ...menuRoutes(db, hooks),
+      ...settingsRoutes(db, hooks),
       ...apiKeyRoutes(db),
       ...agentKeyRoutes(db),
       ...webhookRoutes(db),
@@ -201,8 +207,9 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...previewRoutes(db),
       ...aiRoutes(db),
       ...assistantRoutes(db),
-      ...designRoutes(db, surfaces),
-      ...agentRoutes(db, registry, surfaces),
+      ...designRoutes(db, surfaces, hooks),
+      ...visualRoutes(db, options.visual ?? {}),
+      ...agentRoutes(db, registry, surfaces, options.visual ?? {}),
       ...socialRoutes(db, store, hooks),
       ...realtime.routes,
       ...pluginRoutes(db, hooks, registry, pluginDir),
@@ -323,6 +330,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
     },
     siteKey,
     designCss: () => readDesignCss(db, surfaces),
+    contentVersion: version,
     adminBase,
     db,
     config,

@@ -43,12 +43,17 @@ export const request = async <T>(path: string, options: Options = {}): Promise<T
 
   if (response.status === 204) return undefined as T
 
-  const payload = await response.json().catch(() => ({}) as Record<string, unknown>)
+  if (response.status === 401) clearToken()
+  let payload: Record<string, unknown>
+  try {
+    payload = await response.json()
+  } catch {
+    throw fail(response.status, "The site returned an unexpected response. Your change was not confirmed. Try again.")
+  }
 
   if (!response.ok) {
     // A dead session should drop the user at the login screen rather than
     // leaving every panel showing its own 401.
-    if (response.status === 401) clearToken()
     throw fail(
       response.status,
       typeof payload.error === "string" ? payload.error : `Request failed (${response.status})`,
@@ -112,6 +117,19 @@ export type Entry = {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+}
+
+export type VisualPage = {
+  sections: {
+    id: string
+    label: string
+    selector: string
+    fields: string[]
+    movable?: boolean
+    collection?: { type: string; label: string }
+  }[]
+  fields?: Record<string, string>
+  references?: Record<string, { type: string; label: string }>
 }
 
 // A machine's credential for this API — an MCP server, a build script. Narrower
@@ -682,9 +700,11 @@ export const api = {
   entries: (type: string, query: Record<string, string | number | undefined> = {}) =>
     request<Paged<Entry>>(`/types/${type}/entries`, { query }),
   entry: (id: string) => request<Entry>(`/entries/${id}`),
-  previewEntry: (id: string) =>
+  visualPages: () => request<{ data: Record<string, VisualPage> }>("/visual"),
+  previewEntry: (id: string, draft?: Pick<Entry, "title" | "slug" | "data">) =>
     request<{ token: string; expiresAt: string; url: string; siteUrl: string | null }>(`/entries/${id}/preview`, {
       method: "POST",
+      body: draft,
     }),
   createEntry: (type: string, input: Partial<Entry>) => request<Entry>(`/types/${type}/entries`, { body: input }),
   updateEntry: (id: string, input: Partial<Entry>) => request<Entry>(`/entries/${id}`, { method: "PUT", body: input }),

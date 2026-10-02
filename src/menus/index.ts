@@ -7,6 +7,7 @@ import { can } from "../auth/roles.ts"
 import { body, optionalText, requireText } from "../http/index.ts"
 import { id, isHandle, slugify } from "../ids/index.ts"
 import { decodeArray, encode } from "../json/index.ts"
+import type { Hooks } from "../plugins/hooks.ts"
 import { menus } from "../schema/index.ts"
 import { now } from "../time/index.ts"
 
@@ -86,7 +87,7 @@ const normalize = (input: unknown, depth = 0): MenuItem[] => {
   })
 }
 
-export const menuRoutes = (db: Connection): Route[] => {
+export const menuRoutes = (db: Connection, hooks?: Hooks): Route[] => {
   const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageMenus, "manage menus"), parseJson)
   const act = pipeline(requireAuth(db), requireCan(can.manageMenus, "manage menus"))
@@ -130,6 +131,7 @@ export const menuRoutes = (db: Connection): Route[] => {
           updated_at: timestamp,
         }
         await db.execute(from(menus).insert(row))
+        await hooks?.emit("menu.afterSave", { name: row.name })
         return json(c, 201, present(row))
       }),
     ),
@@ -150,6 +152,7 @@ export const menuRoutes = (db: Connection): Route[] => {
             .update(changes)
             .where(q => q("id").equals(row.id)),
         )
+        await hooks?.emit("menu.afterSave", { name: row.name })
         return json(c, 200, present({ ...row, ...changes } as MenuRow))
       }),
     ),
@@ -164,6 +167,7 @@ export const menuRoutes = (db: Connection): Route[] => {
             .where(q => q("id").equals(row.id))
             .del(),
         )
+        await hooks?.emit("menu.afterDelete", { name: row.name })
         return json(c, 200, { deleted: true })
       }),
     ),

@@ -353,6 +353,7 @@ export const mediaRoutes = (db: Connection, store: StorageDriver, hooks: Hooks):
             .update(changes)
             .where(q => q("id").equals(row.id)),
         )
+        await hooks.emit("media.afterSave", { media: { ...row, ...changes }, identity: auth(c) })
         return json(c, 200, present({ ...row, ...changes }))
       }),
     ),

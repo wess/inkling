@@ -9,6 +9,34 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.18.0 — 2026-10-02
+
+### Added
+
+- Connected sites can offer an actual-page editor: select text or pictures,
+  edit with guided controls, preview at phone size, and move or hide declared
+  sections. Hosts register `visual` definitions and render them with
+  `inkling/visual`; existing sites keep their field editor until connected.
+- Unsaved snapshot previews show changes without writing to published content.
+  Preview snapshots expire within an hour and can expire earlier after a
+  restart or when the bounded preview store fills.
+- Inky can read supported page sections and propose their order or visibility.
+  Catalog inspection supports pagination and selected fields, including
+  availability. Embedded sites can invalidate caches using `contentVersion()`.
+- Connected chats can discover the same supported page sections through the
+  read-only `get_visual_pages` tool and apply layouts through ordinary entry saves.
+
+### Fixed
+
+- Failed saves and deletions stay in the editor with an explanation; failed
+  deletion no longer navigates away as though it succeeded. Inky shows apply
+  errors on the proposal and stops a batch at the first failure.
+- Inky rejects unknown field keys and invalid content before offering a
+  change. Entry reference pickers support exact web-address lookups, and
+  catalog lists distinguish availability from publishing status.
+- Existing-page previews no longer save live content automatically. Taking
+  content off the website does not require saving unrelated unfinished edits.
+
 ## 1.17.1 — 2026-10-02
 
 ### Fixed

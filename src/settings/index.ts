@@ -6,6 +6,7 @@ import { requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import { body } from "../http/index.ts"
 import { decode, encode } from "../json/index.ts"
+import type { Hooks } from "../plugins/hooks.ts"
 import { media, settings } from "../schema/index.ts"
 import { now } from "../time/index.ts"
 
@@ -70,7 +71,7 @@ export const siteSettings = async (db: Connection): Promise<Record<string, unkno
   return { ...defaults, ...stored }
 }
 
-export const settingsRoutes = (db: Connection): Route[] => {
+export const settingsRoutes = (db: Connection, hooks?: Hooks): Route[] => {
   const read = pipeline(requireAuth(db), requireCan(can.readContent, "read content"))
   const write = pipeline(requireAuth(db), requireCan(can.manageSettings, "change site settings"), parseJson)
 
@@ -147,6 +148,7 @@ export const settingsRoutes = (db: Connection): Route[] => {
         await db.transaction(async tx => {
           for (const [key, value] of validated) await writeSetting(tx, SITE_SCOPE, key, value)
         })
+        await hooks?.emit("settings.afterSave", { scope: SITE_SCOPE })
         return json(c, 200, { data: await siteSettings(db) })
       }),
     ),

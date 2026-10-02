@@ -6,7 +6,7 @@ import { id } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { mintPreviewToken, previewPublicRoutes, previewRoutes, readPreviewToken } from "../src/preview/index.ts"
-import { contentTypes, entries, media as mediaTable } from "../src/schema/index.ts"
+import { contentTypes, entries, media as mediaTable, revisions } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 import { createUser } from "../src/users/index.ts"
 
@@ -104,7 +104,7 @@ const setup = async () => {
       }),
     )
 
-  return { db, call, draftId, editor: editorSession.token, author: authorSession.token }
+  return { db, call, draftId, typeId, mediaId, editor: editorSession.token, author: authorSession.token }
 }
 
 test("a preview token names one entry and is rejected once tampered with or expired", async () => {
@@ -180,5 +180,107 @@ test("an author cannot share a preview of someone else's entry", async () => {
   expect((await call(`/entries/${draftId}/preview`, { method: "POST" }, author)).status).toBe(400)
   expect((await call(`/entries/${draftId}/preview`, { method: "POST" }, editor)).status).toBe(201)
 
+  await db.close()
+})
+
+test("unsaved previews keep their snapshot without changing published content", async () => {
+  const { db, call, draftId, editor } = await setup()
+  await db.execute(
+    from(entries)
+      .update({ status: "published" })
+      .where(q => q("id").equals(draftId)),
+  )
+  const before = await db.one(from(entries).where(q => q("id").equals(draftId)))
+  const layout = { order: ["opening", "books"], hidden: ["books"] }
+  const issued = await call(
+    `/entries/${draftId}/preview`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Unsaved heading",
+        slug: "new-address",
+        data: { body: "Unsaved words", __layout: layout },
+      }),
+    },
+    editor,
+  )
+  expect(issued.status).toBe(201)
+  const link = (await issued.json()) as { token: string; siteUrl: string }
+  expect(link.siteUrl).toContain("/blog/new-address?")
+  expect(await db.one(from(entries).where(q => q("id").equals(draftId)))).toEqual(before)
+  expect(await db.all(from(revisions))).toHaveLength(0)
+
+  await db.execute(
+    from(entries)
+      .update({ title: "Another saved change", data: encode({ body: "Saved later" }) })
+      .where(q => q("id").equals(draftId)),
+  )
+  const preview = (await (await call(`/preview/${link.token}`)).json()) as any
+  expect(preview.data).toMatchObject({ title: "Unsaved heading", slug: "new-address", status: "published" })
+  expect(preview.data.data).toMatchObject({ body: "Unsaved words", __layout: layout, hero: { alt: "Hero" } })
+
+  const saved = (await (await call(`/entries/${draftId}/preview`, { method: "POST" }, editor)).json()) as {
+    token: string
+  }
+  const current = (await (await call(`/preview/${saved.token}`)).json()) as any
+  expect(current.data.title).toBe("Another saved change")
+  await db.execute(
+    from(entries)
+      .update({ deleted_at: now() })
+      .where(q => q("id").equals(draftId)),
+  )
+  expect((await call(`/preview/${link.token}`)).status).toBe(404)
+  await db.close()
+})
+
+test("unsaved previews enforce entry ownership and reject malformed drafts", async () => {
+  const { db, call, draftId, author, editor } = await setup()
+  const init = { method: "POST", body: JSON.stringify({ data: { body: "Changed" } }) }
+  expect((await call(`/entries/${draftId}/preview`, init)).status).toBe(401)
+  expect((await call(`/entries/${draftId}/preview`, init, author)).status).toBe(400)
+  for (const payload of [
+    "{bad",
+    "[]",
+    '{"status":"published"}',
+    '{"data":[]}',
+    '{"title":42}',
+    '{"data":{"__layout":{"style":"display:none"}}}',
+  ]) {
+    expect((await call(`/entries/${draftId}/preview`, { method: "POST", body: payload }, editor)).status).toBe(400)
+  }
+  await db.close()
+})
+
+test("preview expands nested list images but leaves referenced entries as ids", async () => {
+  const { db, call, draftId, typeId, mediaId, editor } = await setup()
+  await db.execute(
+    from(contentTypes)
+      .update({
+        fields: encode([
+          {
+            key: "cards",
+            type: "list",
+            label: "Cards",
+            fields: [
+              { key: "image", type: "media", label: "Image" },
+              { key: "book", type: "reference", label: "Book", of: "book" },
+            ],
+          },
+        ]),
+      })
+      .where(q => q("id").equals(typeId)),
+  )
+  const link = (await (
+    await call(
+      `/entries/${draftId}/preview`,
+      {
+        method: "POST",
+        body: JSON.stringify({ data: { cards: [{ image: mediaId, book: "a-private-book" }] } }),
+      },
+      editor,
+    )
+  ).json()) as { token: string }
+  const preview = (await (await call(`/preview/${link.token}`)).json()) as any
+  expect(preview.data.data.cards[0]).toMatchObject({ image: { alt: "Hero" }, book: "a-private-book" })
   await db.close()
 })

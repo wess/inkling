@@ -80,6 +80,7 @@ import type {
   Stats,
   Taxonomy,
   Term,
+  VisualPage,
   Webhook,
 } from "./api.ts"
 import { api, clearToken, getToken, setToken } from "./api.ts"
@@ -91,10 +92,12 @@ import {
   decide,
   type InkyContext,
   newConversation,
+  readInky,
   send as sendToInky,
   setDraft,
   useInky,
 } from "./inkystore.ts"
+import { VisualEditor } from "./visual/index.tsx"
 
 // Single-file admin SPA, following the same convention as the rest of the
 // stack: hooks only, no component classes, no router dependency. Routing is a
@@ -167,7 +170,12 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
 
-const errorOf = (error: unknown): string => (error instanceof Error ? error.message : "Something went wrong")
+const errorOf = (error: unknown): string => {
+  if (!(error instanceof Error)) return "Something went wrong"
+  const details = (error as { details?: { entries?: { title: string }[] } }).details
+  const titles = details?.entries?.map(entry => entry.title).filter(Boolean)
+  return titles?.length ? `${error.message} Used in: ${titles.join(", ")}.` : error.message
+}
 
 // Field errors come back as { details: { fields: [{key, message}] } } so the
 // editor can mark the specific inputs rather than showing one banner.
@@ -753,10 +761,12 @@ const ReferenceField = ({
   field,
   value,
   onChange,
+  valueKey = "id",
 }: {
   field: Field
   value: unknown
   onChange: (value: unknown) => void
+  valueKey?: "id" | "slug"
 }) => {
   const [entries, setEntries] = useState<Entry[]>([])
   const [busy, setBusy] = useState(true)
@@ -777,13 +787,19 @@ const ReferenceField = ({
       .entries(field.of, { limit: 50, q })
       .then(async result => {
         const selectedIds = multiple ? chosen : typeof value === "string" && value ? [value] : []
-        const missing = selectedIds.filter(entryId => !result.data.some(entry => entry.id === entryId))
-        const selected = await Promise.all(missing.map(entryId => api.entry(entryId).catch(() => null)))
+        const missing = selectedIds.filter(entryId => !result.data.some(entry => entry[valueKey] === entryId))
+        const selected = await Promise.all(
+          missing.map(async entryId => {
+            if (valueKey === "id") return api.entry(entryId).catch(() => null)
+            const found = await api.entries(field.of ?? "", { slug: entryId, limit: 1 })
+            return found.data[0] ?? null
+          }),
+        )
         setEntries([...selected.filter((entry): entry is Entry => entry !== null), ...result.data])
       })
       .catch(() => setEntries([]))
       .finally(() => setBusy(false))
-  }, [field.of, multiple, q, chosen, value])
+  }, [field.of, multiple, q, chosen, value, valueKey])
 
   if (!field.of) return <Note kind="warn">Choose a content type for this field in the content model.</Note>
 
@@ -827,13 +843,14 @@ const ReferenceField = ({
         onChange={event => setQ(event.target.value)}
       />
       <select
+        aria-label={field.label}
         value={typeof value === "string" ? value : ""}
         disabled={busy}
         onChange={event => onChange(event.target.value || null)}
       >
         <option value="">{busy ? "Loading…" : "Nothing selected"}</option>
         {entries.map(entry => (
-          <option key={entry.id} value={entry.id}>
+          <option key={entry.id} value={entry[valueKey]}>
             {entry.title || "Untitled"}
           </option>
         ))}
@@ -1598,24 +1615,37 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
   const [q, setQ] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [failure, setFailure] = useState("")
+  const availability = type.fields.find(field => field.type === "select" && /availability/i.test(field.label))
 
   useEffect(() => {
+    let active = true
     setBusy(true)
+    setFailure("")
     api
       .entries(type.name, { status, q, limit: 50, page })
       .then(result => {
+        if (!active) return
         setEntries(result.data)
         setTotal(result.meta.total)
       })
-      .finally(() => setBusy(false))
+      .catch(error => {
+        if (active) setFailure(errorOf(error))
+      })
+      .finally(() => {
+        if (active) setBusy(false)
+      })
+    return () => {
+      active = false
+    }
   }, [type.name, status, q, page])
 
   // A single-entry type has no list worth showing — go straight to its editor.
   useEffect(() => {
-    if (type.kind === "single" && !busy) {
+    if (type.kind === "single" && !busy && !failure) {
       go({ name: "editor", type: type.name, id: entries[0]?.id ?? null })
     }
-  }, [type.kind, type.name, busy, entries, go])
+  }, [type.kind, type.name, busy, entries, go, failure])
 
   return (
     <>
@@ -1667,7 +1697,14 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
       </div>
 
       <div className="card">
-        {busy ? (
+        {failure ? (
+          <div className="cardbody">
+            <p role="alert">Could not load this content. {failure}</p>
+            <button type="button" className="btn" onClick={() => location.reload()}>
+              Try again
+            </button>
+          </div>
+        ) : busy ? (
           <Spinner />
         ) : entries.length === 0 ? (
           <Empty
@@ -1698,6 +1735,7 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
                 <thead>
                   <tr>
                     <th>Title</th>
+                    {availability ? <th>{availability.label}</th> : null}
                     <th style={{ width: 110 }}>Status</th>
                     <th style={{ width: 120 }}>Updated</th>
                   </tr>
@@ -1714,6 +1752,12 @@ const Collection = ({ type, canWrite, go }: { type: ContentType; canWrite: boole
                           {entry.title || "Untitled"}
                         </button>
                       </td>
+                      {availability ? (
+                        <td>
+                          {availability.options?.find(option => option.value === entry.data[availability.key])?.label ??
+                            "Not set"}
+                        </td>
+                      ) : null}
                       <td>
                         <Pill status={entry.status} />
                       </td>
@@ -1848,7 +1892,27 @@ const Editor = ({
   const [scheduleAt, setScheduleAt] = useState("")
   const [siteUrl, setSiteUrl] = useState("")
   const [writers, setWriters] = useState<Identity[]>([])
+  const [definition, setDefinition] = useState<VisualPage | null>(null)
+  const [visual, setVisual] = useState(true)
+  const [failure, setFailure] = useState("")
+  const [action, setAction] = useState(false)
+  const saveLock = useRef(false)
   const mayEdit = canEdit && (!entry || canPublish || entry.authorId === identityId)
+  const locked = saving || action
+
+  useEffect(() => {
+    let active = true
+    setDefinition(null)
+    api
+      .visualPages()
+      .then(result => {
+        if (active) setDefinition(result.data[type.name] ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [type.name])
 
   // Only an editor may reassign a byline, so only an editor needs the roster.
   useEffect(() => {
@@ -1889,7 +1953,10 @@ const Editor = ({
         setSortOrder(row.sortOrder)
         setData(row.data)
       })
-      .catch(error => toast(errorOf(error), true))
+      .catch(error => {
+        setFailure(errorOf(error))
+        toast(errorOf(error), true)
+      })
       .finally(() => setBusy(false))
   }, [id, type.fields, toast])
 
@@ -1899,13 +1966,17 @@ const Editor = ({
     setErrors(current => {
       if (!current[key]) return current
       const { [key]: _, ...rest } = current
+      if (Object.keys(rest).length === 0) setFailure("")
       return rest
     })
   }
 
   const save = async (): Promise<Entry | null> => {
+    if (saveLock.current || !mayEdit) return null
+    saveLock.current = true
     setSaving(true)
     setErrors({})
+    setFailure("")
     try {
       const payload = {
         title: title || "Untitled",
@@ -1917,31 +1988,43 @@ const Editor = ({
       const saved = entry ? await api.updateEntry(entry.id, payload) : await api.createEntry(type.name, payload)
       setEntry(saved)
       setSlug(saved.slug)
+      setData(saved.data)
       setDirty(false)
       delete document.body.dataset.unsaved
-      toast("Saved")
+      toast(saved.status === "published" ? "Saved. Your website is updated." : "Draft saved")
       if (!entry) go({ name: "editor", type: type.name, id: saved.id })
       return saved
     } catch (error) {
       const fields = fieldErrors(error)
       setErrors(fields)
+      setFailure(
+        Object.keys(fields).length > 0
+          ? "Not saved yet. Check the fields below, then save again."
+          : `Not saved. ${errorOf(error)}`,
+      )
       toast(Object.keys(fields).length > 0 ? "Some fields need attention" : errorOf(error), true)
     } finally {
+      saveLock.current = false
       setSaving(false)
     }
     return null
   }
 
   const setStatus = async (publish: boolean) => {
-    if (!entry) return
+    if (!entry || locked) return
+    setAction(true)
+    setFailure("")
     try {
-      const target = dirty ? await save() : entry
+      const target = publish && dirty ? await save() : entry
       if (!target) return
       const updated = publish ? await api.publishEntry(target.id) : await api.unpublishEntry(target.id)
       setEntry(updated)
-      toast(publish ? "Published" : "Moved to draft")
+      toast(publish ? "Published on your website" : "Taken off your website. Kept as a draft.")
     } catch (error) {
+      setFailure(errorOf(error))
       toast(errorOf(error), true)
+    } finally {
+      setAction(false)
     }
   }
 
@@ -1960,9 +2043,28 @@ const Editor = ({
   }
 
   const remove = async () => {
-    if (!entry || !confirm(`Move "${entry.title || "Untitled"}" to trash?`)) return
-    await api.deleteEntry(entry.id).catch(error => toast(errorOf(error), true))
-    go({ name: "collection", type: type.name })
+    if (
+      !entry ||
+      locked ||
+      !confirm(
+        `Move "${entry.title || "Untitled"}" to trash? It will be taken off the website. You can restore it from Trash.`,
+      )
+    )
+      return
+    setAction(true)
+    setFailure("")
+    try {
+      await api.deleteEntry(entry.id)
+      setDirty(false)
+      delete document.body.dataset.unsaved
+      toast("Moved to trash and taken off your website")
+      go({ name: "collection", type: type.name })
+    } catch (error) {
+      setFailure(`Could not move to trash. ${errorOf(error)}`)
+      toast(errorOf(error), true)
+    } finally {
+      setAction(false)
+    }
   }
 
   const preview = async () => {
@@ -1975,12 +2077,12 @@ const Editor = ({
     }
     setPreviewing(true)
     try {
-      const target = dirty ? await save() : entry
+      const target = entry ?? (await save())
       if (!target) {
         tab.close()
         return
       }
-      const link = await api.previewEntry(target.id)
+      const link = await api.previewEntry(target.id, { title, slug: slug || target.slug, data })
       if (!link.siteUrl) throw new Error("Set a live page URL for this content type to preview it")
       tab.opener = null
       tab.location.replace(link.siteUrl)
@@ -1996,7 +2098,7 @@ const Editor = ({
   // the browser open a save-page dialog over the admin.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (mayEdit && (event.metaKey || event.ctrlKey) && event.key === "s") {
+      if (mayEdit && !locked && (event.metaKey || event.ctrlKey) && event.key === "s") {
         event.preventDefault()
         void save()
       }
@@ -2009,30 +2111,33 @@ const Editor = ({
 
   if (busy) return <Spinner />
 
+  if (id && !entry)
+    return (
+      <Note kind="warn">
+        Could not open this content. {failure}{" "}
+        <button type="button" className="btn" onClick={() => go({ name: "collection", type: type.name })}>
+          Back to {type.pluralLabel}
+        </button>
+      </Note>
+    )
+
   const liveUrl = entry?.status === "published" ? previewUrl(type.previewUrl, entry, type, siteUrl) : null
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 18 }}>
+      <div className="row editortoolbar" style={{ marginBottom: 8 }}>
         <button type="button" className="btn ghost sm" onClick={() => go({ name: "collection", type: type.name })}>
           <ChevronLeft size={15} /> {type.pluralLabel}
         </button>
         <div className="rowend">
           {entry ? <Pill status={entry.status} /> : <span className="pill">new</span>}
           {type.previewUrl ? (
-            <button type="button" className="btn" disabled={saving || previewing} onClick={() => void preview()}>
-              <ExternalLink size={14} />{" "}
-              {previewing
-                ? "Opening preview…"
-                : dirty && entry?.status === "published"
-                  ? "Save live & preview"
-                  : dirty
-                    ? "Save & preview"
-                    : "Preview page"}
+            <button type="button" className="btn" disabled={locked || previewing} onClick={() => void preview()}>
+              <ExternalLink size={14} /> {previewing ? "Opening preview…" : "Preview page"}
             </button>
           ) : null}
           {mayEdit ? (
-            <button type="button" className="btn primary" onClick={save} disabled={saving || (!dirty && !!entry)}>
+            <button type="button" className="btn primary" onClick={save} disabled={locked || (!dirty && !!entry)}>
               {saving ? <span className="spin" /> : null}
               {saving
                 ? "Saving…"
@@ -2048,258 +2153,383 @@ const Editor = ({
         </div>
       </div>
 
-      <div className="editor">
-        <fieldset className="editorset" disabled={!mayEdit}>
-          <div className="card">
-            <div className="cardbody">
-              <input
-                className="titleinput"
-                aria-label={`${type.label} title`}
-                placeholder={`${type.label} title`}
-                value={title}
-                onChange={event => {
-                  setTitle(event.target.value)
-                  setDirty(true)
-                  if (!entry) setSlug(slugify(event.target.value))
-                }}
-              />
-              <div className="slugline">
-                <span>/</span>
-                <input
-                  value={slug}
-                  placeholder="slug"
-                  aria-label="Web address"
-                  onChange={event => {
-                    setSlug(event.target.value)
-                    setDirty(true)
-                  }}
-                />
-                <Hint id="entry.slug" />
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="cardbody">
-              {type.fields.length === 0 ? (
-                <Empty title="No fields defined" hint={`Add fields to "${type.label}" to start capturing content.`} />
-              ) : (
-                type.fields.map(field => (
-                  <FieldInput
-                    key={field.key}
-                    field={field}
-                    value={data[field.key]}
-                    error={errors[field.key]}
-                    onChange={value => edit(field.key, value)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </fieldset>
-
-        <div className="rail">
-          <div className="card">
-            <div className="cardhead">
-              <h3>
-                Publishing
-                <Hint id="entry.status" />
-              </h3>
-            </div>
-            <div className="cardbody stack">
-              <p className="dim">
-                {entry?.status === "published"
-                  ? "This content is published. Saving changes updates the published version."
-                  : entry?.status === "scheduled"
-                    ? "This content will publish at its scheduled time. Saving updates what will be published."
-                    : "This content is not on your website. Save your work, then publish when it is ready."}
-                <Hint id="entry.save" />
-              </p>
-              {entry ? (
-                <>
-                  <div className="dim2">
-                    Created {ago(entry.createdAt)}
-                    <br />
-                    Updated {ago(entry.updatedAt)}
-                    {entry.publishedAt ? (
-                      <>
-                        <br />
-                        Published {ago(entry.publishedAt)}
-                      </>
-                    ) : null}
-                  </div>
-                  {canPublish && writers.length > 0 ? (
-                    <label className="field">
-                      <span className="fl">
-                        Credited to
-                        <Hint id="entry.author" />
-                      </span>
-                      <select
-                        value={entry.authorId ?? ""}
-                        onChange={async event => {
-                          try {
-                            setEntry(await api.updateEntry(entry.id, { authorId: event.target.value || null }))
-                            toast("Byline updated")
-                          } catch (error) {
-                            toast(errorOf(error), true)
-                          }
-                        }}
-                      >
-                        <option value="">Nobody</option>
-                        {writers.map(writer => (
-                          <option key={writer.id} value={writer.id}>
-                            {writer.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  {liveUrl ? (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => window.open(liveUrl, "_blank", "noopener,noreferrer")}
-                    >
-                      <ExternalLink size={14} /> View live
-                    </button>
-                  ) : null}
-                  {mayEdit ? (
-                    canPublish && entry.status === "published" ? (
-                      <button type="button" className="btn" onClick={() => setStatus(false)}>
-                        Take off website
-                      </button>
-                    ) : canPublish ? (
-                      <>
-                        <button type="button" className="btn primary" onClick={() => setStatus(true)}>
-                          Publish now
-                        </button>
-                        <details className="schedulebox">
-                          <summary>Schedule for later</summary>
-                          <label className="f">
-                            <span className="fl">
-                              Publish at
-                              <Hint id="entry.schedule" />
-                            </span>
-                            <input
-                              type="datetime-local"
-                              value={scheduleAt}
-                              min={localDateTime()}
-                              onChange={event => setScheduleAt(event.target.value)}
-                            />
-                          </label>
-                          <button type="button" className="btn" disabled={!scheduleAt} onClick={() => void schedule()}>
-                            Schedule
-                          </button>
-                        </details>
-                        {entry.status !== "review" ? (
-                          <button
-                            type="button"
-                            className="btn"
-                            onClick={async () => {
-                              try {
-                                const target = dirty ? await save() : entry
-                                if (!target) return
-                                setEntry(await api.setEntryStatus(target.id, "review"))
-                                toast("Sent for review")
-                              } catch (error) {
-                                toast(errorOf(error), true)
-                              }
-                            }}
-                          >
-                            Send for review
-                          </button>
-                        ) : null}
-                      </>
-                    ) : entry.status !== "review" ? (
-                      <button
-                        type="button"
-                        className="btn primary"
-                        onClick={async () => {
-                          try {
-                            const target = dirty ? await save() : entry
-                            if (!target) return
-                            setEntry(await api.setEntryStatus(target.id, "review"))
-                            toast("Sent for review")
-                          } catch (error) {
-                            toast(errorOf(error), true)
-                          }
-                        }}
-                      >
-                        Send for review
-                      </button>
-                    ) : (
-                      <Note kind="info">This is waiting for an editor to review it.</Note>
-                    )
-                  ) : (
-                    <Note kind="info">
-                      {canEdit
-                        ? "You can view this entry, but only its author or an editor can change it."
-                        : "Your role has read-only access."}
-                    </Note>
-                  )}
-                  {mayEdit ? (
-                    <button type="button" className="btn danger" onClick={remove}>
-                      <Trash2 size={14} /> Move to trash
-                    </button>
-                  ) : null}
-                </>
-              ) : (
-                <p className="dim2">Save this {type.label.toLowerCase()} before publishing it.</p>
-              )}
-            </div>
-          </div>
-
-          <details className="card editdetails">
-            <summary>More options</summary>
-            <div className="cardbody">
-              <label className="f">
-                <span className="fl">
-                  Language
-                  <Hint id="entry.locale" />
-                </span>
-                <input
-                  type="text"
-                  value={locale}
-                  disabled={!mayEdit}
-                  placeholder="en"
-                  onChange={event => {
-                    setLocale(event.target.value)
-                    setDirty(true)
-                  }}
-                />
-                <span className="fh">A language code such as en or es-MX.</span>
-              </label>
-              <label className="f" style={{ marginBottom: 0 }}>
-                <span className="fl">
-                  Display order
-                  <Hint id="entry.sortOrder" />
-                </span>
-                <input
-                  type="number"
-                  value={sortOrder}
-                  disabled={!mayEdit}
-                  onChange={event => {
-                    setSortOrder(Number(event.target.value) || 0)
-                    setDirty(true)
-                  }}
-                />
-                <span className="fh">Lower numbers appear first when a site sorts by display order.</span>
-              </label>
-            </div>
-          </details>
-
-          {entry ? <EntryTaxonomies entryId={entry.id} canEdit={mayEdit} toast={toast} /> : null}
-          {entry ? (
-            <Revisions
-              entry={entry}
-              fields={type.fields}
-              canRestore={mayEdit}
-              toast={toast}
-              onRestore={() => location.reload()}
-            />
+      {failure ? (
+        <div className="editorfailure" role="alert">
+          <strong>{failure}</strong>
+          {Object.keys(errors).length > 0 ? (
+            <ul>
+              {Object.entries(errors).map(([key, message]) => (
+                <li key={key}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVisual(false)
+                      requestAnimationFrame(() => document.getElementById(`f-${key}`)?.focus())
+                    }}
+                  >
+                    {type.fields.find(field => field.key === key)?.label ?? key}: {message}
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
-      </div>
+      ) : null}
+      {definition && entry ? (
+        <fieldset className="editormodes" aria-label="Editor view">
+          <button
+            type="button"
+            className={cx("btn", visual && "primary")}
+            aria-pressed={visual}
+            onClick={() => setVisual(true)}
+          >
+            Edit page
+          </button>
+          <button
+            type="button"
+            className={cx("btn", !visual && "primary")}
+            aria-pressed={!visual}
+            onClick={() => setVisual(false)}
+          >
+            All fields & publishing
+          </button>
+          <span className="editorstate" role="status">
+            {dirty ? "Unsaved changes" : "All changes saved"}
+          </span>
+        </fieldset>
+      ) : null}
+      {definition && entry && visual ? (
+        <VisualEditor
+          entry={entry}
+          type={type}
+          definition={definition}
+          title={title}
+          slug={slug}
+          data={data}
+          errors={errors}
+          disabled={!mayEdit || locked}
+          edit={edit}
+          openCollection={name => go({ name: "collection", type: name })}
+          renderField={field =>
+            field.key === "$title" ? (
+              <label className="f">
+                <span className="fl">Title</span>
+                <input
+                  value={title}
+                  onChange={event => {
+                    setTitle(event.target.value)
+                    setDirty(true)
+                  }}
+                />
+              </label>
+            ) : definition.references?.[field.key] ? (
+              <div className="f">
+                <span className="fl">{definition.references[field.key].label}</span>
+                <ReferenceField
+                  field={{
+                    ...field,
+                    of: definition.references[field.key].type,
+                    label: definition.references[field.key].label,
+                  }}
+                  value={data[field.key]}
+                  valueKey="slug"
+                  onChange={value => edit(field.key, value)}
+                />
+              </div>
+            ) : (
+              <FieldInput
+                field={field}
+                value={data[field.key]}
+                error={errors[field.key]}
+                onChange={value => edit(field.key, value)}
+              />
+            )
+          }
+          actions={
+            <>
+              <span className="dim2">
+                {entry.status === "published"
+                  ? "This page is live. Save to update it."
+                  : "This page is not published yet."}
+              </span>
+              {canPublish ? (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={locked}
+                  onClick={() => void setStatus(entry.status !== "published")}
+                >
+                  {entry.status === "published" ? "Take off website" : "Publish page"}
+                </button>
+              ) : null}
+              {mayEdit ? (
+                <button type="button" className="btn danger" disabled={locked} onClick={() => void remove()}>
+                  <Trash2 size={14} />
+                  Move to trash
+                </button>
+              ) : null}
+            </>
+          }
+        />
+      ) : (
+        <div className="editor">
+          <fieldset className="editorset" disabled={!mayEdit || locked}>
+            <div className="card">
+              <div className="cardbody">
+                <input
+                  className="titleinput"
+                  aria-label={`${type.label} title`}
+                  placeholder={`${type.label} title`}
+                  value={title}
+                  onChange={event => {
+                    setTitle(event.target.value)
+                    setDirty(true)
+                    if (!entry) setSlug(slugify(event.target.value))
+                  }}
+                />
+                <div className="slugline">
+                  <span>/</span>
+                  <input
+                    value={slug}
+                    placeholder="slug"
+                    aria-label="Web address"
+                    onChange={event => {
+                      setSlug(event.target.value)
+                      setDirty(true)
+                    }}
+                  />
+                  <Hint id="entry.slug" />
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardbody">
+                {type.fields.length === 0 ? (
+                  <Empty title="No fields defined" hint={`Add fields to "${type.label}" to start capturing content.`} />
+                ) : (
+                  type.fields.map(field => (
+                    <FieldInput
+                      key={field.key}
+                      field={field}
+                      value={data[field.key]}
+                      error={errors[field.key]}
+                      onChange={value => edit(field.key, value)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </fieldset>
+
+          <div className="rail">
+            <div className="card">
+              <div className="cardhead">
+                <h3>
+                  Publishing
+                  <Hint id="entry.status" />
+                </h3>
+              </div>
+              <div className="cardbody stack">
+                <p className="dim">
+                  {entry?.status === "published"
+                    ? "This content is published. Saving changes updates the published version."
+                    : entry?.status === "scheduled"
+                      ? "This content will publish at its scheduled time. Saving updates what will be published."
+                      : "This content is not on your website. Save your work, then publish when it is ready."}
+                  <Hint id="entry.save" />
+                </p>
+                {entry ? (
+                  <>
+                    <div className="dim2">
+                      Created {ago(entry.createdAt)}
+                      <br />
+                      Updated {ago(entry.updatedAt)}
+                      {entry.publishedAt ? (
+                        <>
+                          <br />
+                          Published {ago(entry.publishedAt)}
+                        </>
+                      ) : null}
+                    </div>
+                    {canPublish && writers.length > 0 ? (
+                      <label className="field">
+                        <span className="fl">
+                          Credited to
+                          <Hint id="entry.author" />
+                        </span>
+                        <select
+                          value={entry.authorId ?? ""}
+                          onChange={async event => {
+                            try {
+                              setEntry(await api.updateEntry(entry.id, { authorId: event.target.value || null }))
+                              toast("Byline updated")
+                            } catch (error) {
+                              toast(errorOf(error), true)
+                            }
+                          }}
+                        >
+                          <option value="">Nobody</option>
+                          {writers.map(writer => (
+                            <option key={writer.id} value={writer.id}>
+                              {writer.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    {liveUrl ? (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => window.open(liveUrl, "_blank", "noopener,noreferrer")}
+                      >
+                        <ExternalLink size={14} /> View live
+                      </button>
+                    ) : null}
+                    {mayEdit ? (
+                      canPublish && entry.status === "published" ? (
+                        <button type="button" className="btn" onClick={() => setStatus(false)}>
+                          Take off website
+                        </button>
+                      ) : canPublish ? (
+                        <>
+                          <button type="button" className="btn primary" onClick={() => setStatus(true)}>
+                            Publish now
+                          </button>
+                          <details className="schedulebox">
+                            <summary>Schedule for later</summary>
+                            <label className="f">
+                              <span className="fl">
+                                Publish at
+                                <Hint id="entry.schedule" />
+                              </span>
+                              <input
+                                type="datetime-local"
+                                value={scheduleAt}
+                                min={localDateTime()}
+                                onChange={event => setScheduleAt(event.target.value)}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={!scheduleAt}
+                              onClick={() => void schedule()}
+                            >
+                              Schedule
+                            </button>
+                          </details>
+                          {entry.status !== "review" ? (
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={async () => {
+                                try {
+                                  const target = dirty ? await save() : entry
+                                  if (!target) return
+                                  setEntry(await api.setEntryStatus(target.id, "review"))
+                                  toast("Sent for review")
+                                } catch (error) {
+                                  toast(errorOf(error), true)
+                                }
+                              }}
+                            >
+                              Send for review
+                            </button>
+                          ) : null}
+                        </>
+                      ) : entry.status !== "review" ? (
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={async () => {
+                            try {
+                              const target = dirty ? await save() : entry
+                              if (!target) return
+                              setEntry(await api.setEntryStatus(target.id, "review"))
+                              toast("Sent for review")
+                            } catch (error) {
+                              toast(errorOf(error), true)
+                            }
+                          }}
+                        >
+                          Send for review
+                        </button>
+                      ) : (
+                        <Note kind="info">This is waiting for an editor to review it.</Note>
+                      )
+                    ) : (
+                      <Note kind="info">
+                        {canEdit
+                          ? "You can view this entry, but only its author or an editor can change it."
+                          : "Your role has read-only access."}
+                      </Note>
+                    )}
+                    {mayEdit ? (
+                      <button type="button" className="btn danger" onClick={remove}>
+                        <Trash2 size={14} /> Move to trash
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="dim2">Save this {type.label.toLowerCase()} before publishing it.</p>
+                )}
+              </div>
+            </div>
+
+            <details className="card editdetails">
+              <summary>More options</summary>
+              <div className="cardbody">
+                <label className="f">
+                  <span className="fl">
+                    Language
+                    <Hint id="entry.locale" />
+                  </span>
+                  <input
+                    type="text"
+                    value={locale}
+                    disabled={!mayEdit}
+                    placeholder="en"
+                    onChange={event => {
+                      setLocale(event.target.value)
+                      setDirty(true)
+                    }}
+                  />
+                  <span className="fh">A language code such as en or es-MX.</span>
+                </label>
+                <label className="f" style={{ marginBottom: 0 }}>
+                  <span className="fl">
+                    Display order
+                    <Hint id="entry.sortOrder" />
+                  </span>
+                  <input
+                    type="number"
+                    value={sortOrder}
+                    disabled={!mayEdit}
+                    onChange={event => {
+                      setSortOrder(Number(event.target.value) || 0)
+                      setDirty(true)
+                    }}
+                  />
+                  <span className="fh">Lower numbers appear first when a site sorts by display order.</span>
+                </label>
+              </div>
+            </details>
+
+            {entry ? <EntryTaxonomies entryId={entry.id} canEdit={mayEdit} toast={toast} /> : null}
+            {entry ? (
+              <Revisions
+                entry={entry}
+                fields={type.fields}
+                canRestore={mayEdit}
+                toast={toast}
+                onRestore={() => location.reload()}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -6758,7 +6988,17 @@ const changesIn = (proposal: AgentProposal): Change[] => {
       if (proposal.patch.slug !== undefined) {
         out.push({ key: "slug", before: proposal.before.slug, after: proposal.patch.slug })
       }
-      for (const [key, after] of Object.entries(data)) out.push({ key, before: proposal.before[key] ?? null, after })
+      for (const [key, after] of Object.entries(data)) {
+        if (key === "__layout" && after && typeof after === "object") {
+          const before = (proposal.before[key] ?? {}) as Record<string, unknown>
+          for (const [part, value] of Object.entries(after))
+            out.push({
+              key: part === "order" ? "Section order" : "Hidden sections",
+              before: before[part] ?? [],
+              after: value,
+            })
+        } else out.push({ key, before: proposal.before[key] ?? null, after })
+      }
       return out
     }
 
@@ -7004,6 +7244,8 @@ const ProposalCard = ({
   onApply,
   onDismiss,
   onPreview,
+  pending,
+  failure,
 }: {
   proposal: AgentProposal
   decided: "applied" | "dismissed" | undefined
@@ -7014,6 +7256,8 @@ const ProposalCard = ({
   onApply: () => void
   onDismiss: () => void
   onPreview?: () => void
+  pending?: boolean
+  failure?: string
 }) => {
   const changes = changesIn(proposal)
   const target = targetOf(proposal)
@@ -7050,23 +7294,28 @@ const ProposalCard = ({
             <span className="pill archived">dismissed</span>
           ) : (
             <>
-              <button type="button" className="btn sm" onClick={onDismiss}>
+              <button type="button" className="btn sm" disabled={pending} onClick={onDismiss}>
                 Dismiss
               </button>
               <button
                 type="button"
                 className="btn primary sm"
-                disabled={!canApply}
+                disabled={!canApply || pending}
                 title={canApply ? undefined : "Your role cannot make this change"}
                 onClick={onApply}
               >
-                <Check size={13} /> Apply
+                <Check size={13} /> {pending ? "Applying…" : failure ? "Try again" : "Apply"}
               </button>
             </>
           )}
         </div>
       </div>
 
+      {failure ? (
+        <div className="editorfailure" role="alert">
+          {failure}
+        </div>
+      ) : null}
       {changes.length > 0 ? (
         <table className="difftable">
           <tbody>
@@ -7201,6 +7450,10 @@ const AgentPanel = ({
   // are created. Everything else about a proposal can be looked at again.
   const [fresh, setFresh] = useState<{ title: string; value: string } | null>(null)
   const [created, setCreated] = useState<Record<string, string>>({})
+  const [applying, setApplying] = useState<string | null>(null)
+  const [applyErrors, setApplyErrors] = useState<Record<string, string>>({})
+  const [batch, setBatch] = useState(false)
+  const applyLock = useRef(false)
   const tail = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -7242,7 +7495,11 @@ const AgentPanel = ({
   // the screens use — so it is validated, revisioned, and audited as this user's
   // change rather than as something a machine did. Two of them hand back a
   // secret that exists exactly once, which is what `fresh` is for.
-  const apply = async (proposal: AgentProposal) => {
+  const apply = async (proposal: AgentProposal): Promise<boolean> => {
+    if (applyLock.current || readInky().decided[proposal.id]) return false
+    applyLock.current = true
+    setApplying(proposal.id)
+    setApplyErrors(current => ({ ...current, [proposal.id]: "" }))
     try {
       switch (proposal.kind) {
         case "entry.update":
@@ -7358,14 +7615,27 @@ const AgentPanel = ({
           const route = routeFor(proposal)
           if (route) go(route)
           else toast("Inky asked for a screen that does not exist", true)
-          return
+          return !!route
         }
       }
 
       decide(proposal.id, "applied")
       toast("Change applied")
+      return true
     } catch (error) {
+      const fields = fieldErrors(error)
+      const detail = Object.entries(fields)
+        .map(([key, message]) => `${key}: ${message}`)
+        .join(". ")
+      setApplyErrors(current => ({
+        ...current,
+        [proposal.id]: `Not applied. ${detail || errorOf(error)}. Your other changes are still here.`,
+      }))
       toast(errorOf(error), true)
+      return false
+    } finally {
+      applyLock.current = false
+      setApplying(null)
     }
   }
 
@@ -7490,11 +7760,17 @@ const AgentPanel = ({
               <button
                 type="button"
                 className="btn sm rowend"
+                disabled={batch || applying !== null}
                 onClick={async () => {
-                  for (const proposal of open) await apply(proposal)
+                  setBatch(true)
+                  try {
+                    for (const proposal of open) if (!(await apply(proposal))) break
+                  } finally {
+                    setBatch(false)
+                  }
                 }}
               >
-                Apply all
+                {batch ? "Applying changes…" : "Apply all"}
               </button>
             ) : null}
           </div>
@@ -7509,7 +7785,9 @@ const AgentPanel = ({
               key={proposal.id}
               proposal={proposal}
               decided={decided[proposal.id]}
-              canApply={allowed(proposal)}
+              canApply={allowed(proposal) && applying === null && !batch}
+              pending={applying === proposal.id}
+              failure={applyErrors[proposal.id]}
               onApply={() => void apply(proposal)}
               onDismiss={() => decide(proposal.id, "dismissed")}
               onPreview={

@@ -16,11 +16,15 @@ const meta = (version: string) => ({
   "io.modelcontextprotocol/clientCapabilities": {},
 })
 
-const run = async (url: string, messages: unknown[]): Promise<{ messages: Rpc[]; stderr: string }> => {
+const run = async (
+  url: string,
+  messages: unknown[],
+  env: Record<string, string> = {},
+): Promise<{ messages: Rpc[]; stderr: string }> => {
   const process = Bun.spawn({
     cmd: [Bun.which("bun") ?? "bun", "run", "scripts/mcp.ts"],
     cwd: ROOT,
-    env: { ...Bun.env, INKLING_URL: url, INKLING_KEY: "inkagt_test" },
+    env: { ...Bun.env, INKLING_URL: url, INKLING_KEY: "inkagt_test", ...env },
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -138,6 +142,56 @@ test("the MCP server supports current discovery and legacy initialization", asyn
     expect(legacy.messages.find(message => message.id === 1)?.result?.protocolVersion).toBe("2025-11-25")
     expect(legacy.messages.find(message => message.id === 2)?.result?.resultType).toBeUndefined()
     expect(legacy.stderr).toContain("tools against")
+  } finally {
+    site.stop(true)
+  }
+})
+
+test("visual discovery stays available in read-only mode and requires the content read grant", async () => {
+  let grants = ["content.read", "content.write"]
+  const seen: { method: string; path: string }[] = []
+  const pages = {
+    homepage: { sections: [{ id: "intro", label: "Introduction", selector: ".intro", fields: ["heading"] }] },
+  }
+  const site = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      const path = new URL(request.url).pathname
+      seen.push({ method: request.method, path })
+      if (path === "/api/agents/me") return Response.json({ data: { kind: "agent", role: "editor", grants } })
+      if (path === "/api/visual") return Response.json({ data: pages })
+      return new Response("Not found", { status: 404 })
+    },
+  })
+  try {
+    const url = `http://${site.hostname}:${site.port}`
+    const messages = [
+      { jsonrpc: "2.0", id: "list", method: "tools/list", params: { _meta: meta("2026-07-28") } },
+      {
+        jsonrpc: "2.0",
+        id: "visual",
+        method: "tools/call",
+        params: { _meta: meta("2026-07-28"), name: "get_visual_pages", arguments: {} },
+      },
+    ]
+    const allowed = await run(url, messages, { INKLING_MCP_READONLY: "1" })
+    const tools = allowed.messages.find(message => message.id === "list")?.result?.tools as { name: string }[]
+    expect(tools.some(tool => tool.name === "get_visual_pages")).toBe(true)
+    expect(tools.some(tool => tool.name === "update_entry")).toBe(false)
+    const result = allowed.messages.find(message => message.id === "visual")?.result
+    expect(result?.isError).toBe(false)
+    expect(JSON.parse(result?.content[0].text)).toEqual({ data: pages })
+    expect(seen.filter(request => request.path === "/api/visual")).toEqual([{ method: "GET", path: "/api/visual" }])
+
+    grants = ["content.write"]
+    const denied = await run(url, messages)
+    const restricted = denied.messages.find(message => message.id === "list")?.result?.tools as { name: string }[]
+    expect(restricted.some(tool => tool.name === "get_visual_pages")).toBe(false)
+    const refusal = denied.messages.find(message => message.id === "visual")?.result
+    expect(refusal?.isError).toBe(true)
+    expect(refusal?.content[0].text).toContain('needs the "content.read" grant')
+    expect(seen.filter(request => request.path === "/api/visual")).toHaveLength(1)
   } finally {
     site.stop(true)
   }

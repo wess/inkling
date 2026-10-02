@@ -4,13 +4,16 @@ import type { ContentTypeRow } from "../../contenttypes/index.ts"
 import { present as presentType, byId as typeById, byName as typeByName } from "../../contenttypes/index.ts"
 import { contains, rows } from "../../db/dialect.ts"
 import type { EntryRow } from "../../entries/index.ts"
+import { STATUSES } from "../../entries/index.ts"
 import type { Field } from "../../fields/index.ts"
 import { decodeArray, decodeObject } from "../../json/index.ts"
 import type { MediaRow } from "../../media/index.ts"
 import { publicUrl } from "../../media/index.ts"
 import { contentTypes, entries, media, taxonomies, terms } from "../../schema/index.ts"
+import { readLayout } from "../../visual/layout.ts"
 import type { Tool, ToolRun } from "./common.ts"
 import { clampLimit, fail, fieldShape, list, queued, readableData, record, text } from "./common.ts"
+import { checkEntryData } from "./entrycheck.ts"
 
 // Everything that is content: the shapes pages take, the pages themselves, the
 // files they hang off, and the categories they are filed under.
@@ -68,7 +71,7 @@ export const contentTools: readonly Tool[] = [
   {
     name: "list_entries",
     description:
-      "List entries of one content type, newest first. Use it to find the page you are being asked about, or to see how sibling pages are written before drafting a new one.",
+      "List entries of one content type, newest first. Use offset to read beyond the first page. For catalog reviews, request field keys such as availability or author in fields so each result includes those values; use the real keys from list_content_types. Publication status is separate from any availability field inside data. Read the full entry before proposing a change.",
     input_schema: {
       type: "object",
       properties: {
@@ -76,6 +79,17 @@ export const contentTools: readonly Tool[] = [
         status: { type: "string", description: "Optional filter: draft, review, scheduled, published, or archived." },
         q: { type: "string", description: "Optional title search." },
         limit: { type: "number", description: "Up to 50. Defaults to 20." },
+        offset: {
+          type: "integer",
+          minimum: 0,
+          description: "Skip this many results. Continue until a page has fewer than limit results.",
+        },
+        fields: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional data field keys to include in each result. Up to 8, from the content type's field shape.",
+        },
       },
       required: ["type"],
       additionalProperties: false,
@@ -84,17 +98,37 @@ export const contentTools: readonly Tool[] = [
     run: async (run, input) => {
       const type = await typeByName(run.db, text(input, "type"))
       if (!type) return fail(`No content type named "${text(input, "type")}". Call list_content_types.`)
+      const fields = decodeArray<Field>(type.fields)
+      const keys = [...new Set(list(input, "fields"))]
+      if (keys.length > 8) return fail("Request at most eight data fields at once.")
+      const unknown = keys.filter(key => !fields.some(field => field.key === key))
+      if (unknown.length)
+        return fail(`Unknown field keys: ${unknown.join(", ")}. Call list_content_types for the real keys.`)
+      const offset = Number(input.offset ?? 0)
+      if (!Number.isSafeInteger(offset) || offset < 0) return fail("offset must be a whole number of zero or more.")
 
       let query = from("entries", "e")
         .where(q => q("e.content_type_id").equals(type.id))
         .where(q => q("e.deleted_at").isNull())
 
       const status = text(input, "status")
+      if (status && !STATUSES.includes(status as (typeof STATUSES)[number])) {
+        return fail(
+          `status filters publication state only: ${STATUSES.join(", ")}. For availability, request its data key in fields and inspect those values.`,
+        )
+      }
       if (status) query = query.where(q => q("e.status").equals(status))
       const search = text(input, "q")
       if (search) query = query.where(q => q.raw(contains(run.db, "e.title", search)))
 
-      const found = await rows<{ id: string; title: string; slug: string; status: string; updated_at: string }>(
+      const found = await rows<{
+        id: string
+        title: string
+        slug: string
+        status: string
+        updated_at: string
+        data: string
+      }>(
         run.db,
         query
           .select(
@@ -103,9 +137,12 @@ export const contentTools: readonly Tool[] = [
             "e.slug as slug",
             "e.status as status",
             "e.updated_at as updated_at",
+            "e.data as data",
           )
           .orderBy("e.updated_at", "DESC")
-          .limit(clampLimit(input.limit)),
+          .orderBy("e.id", "ASC")
+          .limit(clampLimit(input.limit))
+          .offset(offset),
       )
 
       return {
@@ -115,6 +152,14 @@ export const contentTools: readonly Tool[] = [
           slug: row.slug,
           status: row.status,
           updatedAt: row.updated_at,
+          ...(keys.length
+            ? {
+                data: readableData(
+                  fields.filter(field => keys.includes(field.key)),
+                  decodeObject(row.data),
+                ),
+              }
+            : {}),
         })),
       }
     },
@@ -289,7 +334,8 @@ export const contentTools: readonly Tool[] = [
         slug: { type: "string" },
         data: {
           type: "object",
-          description: "Field values to change, keyed by the content type's field keys.",
+          description:
+            "Field values to change, keyed by the content type's field keys. For visual section order or visibility, read get_page_layout first and use __layout with order and hidden arrays of its section ids.",
           additionalProperties: true,
         },
       },
@@ -301,15 +347,23 @@ export const contentTools: readonly Tool[] = [
       const entry = await loadEntry(run, text(input, "entryId"))
       if (!entry) return fail("No entry with that id — it may have been deleted.")
       const type = await typeById(run.db, entry.content_type_id)
+      if (!type) return fail("This entry's content type no longer exists.")
 
       const patch: Record<string, unknown> = {}
       if (text(input, "title")) patch.title = text(input, "title")
       if (text(input, "slug")) patch.slug = text(input, "slug")
       const data = record(input, "data")
-      if (Object.keys(data).length > 0) patch.data = data
+      const stored = decodeObject(entry.data)
+      if (data.__layout && typeof data.__layout === "object" && !Array.isArray(data.__layout)) {
+        data.__layout = { ...readLayout(stored.__layout), ...data.__layout }
+      }
+      if (Object.keys(data).length > 0) {
+        const checked = await checkEntryData(run.db, type, data, stored, run.visual?.[type.name])
+        if (checked) return checked
+        patch.data = data
+      }
       if (Object.keys(patch).length === 0) return fail("Nothing to change — send a title, a slug, or some data.")
 
-      const stored = decodeObject(entry.data)
       const before: Record<string, unknown> = { title: entry.title, slug: entry.slug }
       for (const key of Object.keys(data)) before[key] = stored[key] ?? null
 
@@ -350,6 +404,8 @@ export const contentTools: readonly Tool[] = [
       const type = await typeByName(run.db, text(input, "type"))
       if (!type) return fail(`No content type named "${text(input, "type")}". Call list_content_types.`)
       if (!text(input, "title")) return fail("A new entry needs a title.")
+      const checked = await checkEntryData(run.db, type, record(input, "data"), {}, run.visual?.[type.name])
+      if (checked) return checked
 
       const payload: Record<string, unknown> = { title: text(input, "title"), data: record(input, "data") }
       if (text(input, "slug")) payload.slug = text(input, "slug")

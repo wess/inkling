@@ -83,7 +83,9 @@ database of its own.
   presence, so you can see who else is in a record) and to consuming sites, so
   caches invalidate without polling
 - **Shareable previews** — a signed, hour-long link that shows an unpublished
-  entry to someone who has no account
+  entry to someone who has no account; unsaved previews leave published content alone
+- **Visual page editing** — click text or pictures on the actual page, edit with
+  guided controls, and move or hide sections declared by the site
 - **Bulk actions** and one-click duplication across a selection
 - **An editorial assistant** — drafting, rewriting, summarizing, titles, and
   metadata that know your content model, on the fields where you are already
@@ -456,6 +458,20 @@ restyle (`{ buttons: { label: "Buttons", selector: ".button" } }`), so a client
 can say "make every button black" and approve the result; load
 `GET /site/design.css` (or `inkling.designCss()`) after your own stylesheet.
 Omit it and Inky has no design tools.
+
+`visual` maps content types to editable sections and field selectors in your
+existing HTML. Pass the same definition to `renderVisual` from `inkling/visual`
+when rendering the page, together with `entry.data.__layout`. The admin uses a
+temporary preview to show unsaved changes; saving uses the ordinary entry route,
+including validation and revisions. Related-entry pickers can store an existing
+slug field, and section links lead editors to shared collections. See the
+[visual editor contract](https://wess.io/inkling/reference/#visual).
+
+If the host caches delivery reads, compare `inkling.contentVersion()` before
+using that cache and clear it when the value changes. The counter advances on
+content changes, including scheduled publication. Avoid letting a request that
+started before a change refill the new cache with an old response. Browser HTML
+must also revalidate after edits, for example with `max-age=0, must-revalidate`.
 
 This is still one instance per process: `config` and the database connection are
 module-level, so mounting twice gives you two route sets over the same data.

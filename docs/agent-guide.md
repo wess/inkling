@@ -33,8 +33,8 @@ prompt, transcript, issue, or shell history.
 ### ChatGPT desktop
 
 Use the HTTPS connection for an ordinary ChatGPT chat. On the site you want to
-edit, the MCP URL is its public origin followed by `/mcp` — for Warren, it is
-`https://warren.wess.dev/mcp`. In ChatGPT, enable Developer mode under
+edit, the MCP URL is its public origin followed by `/mcp`, for example
+`https://your-site.example/mcp`. In ChatGPT, enable Developer mode under
 **Settings → Security and login**, then add that URL under **ChatGPT Plugins**.
 Choose the connection in a new chat. The account-linking page asks the person
 to sign in to that Inkling site. The resulting connection acts as that account,
@@ -121,6 +121,20 @@ Prefer existing media when it fits. A remote import refuses loopback, link-local
 and private-network destinations. That protects the machine running the MCP
 process from server-side request forgery; it is not an upload failure to retry
 against another private address.
+
+### Arrange a page
+
+Call `get_visual_pages` to read the supported sections for each content type.
+This read-only tool requires `content.read` and is available through both the
+HTTPS connector and the local bridge. An empty map means the site has not
+connected visual editing.
+
+Read the page with `get_entry`, then use the existing `update_entry` tool to
+change `data.__layout`: `{ "order": ["intro", "news"], "hidden": ["news"] }`.
+Use the site's declared section IDs and preserve the saved order or hidden list
+unless the request changes it. Fixed sections keep their positions. The update
+requires `content.write`, uses the ordinary save route, and updates a published
+page immediately. Read the entry back to confirm the saved layout.
 
 ### Work in production
 

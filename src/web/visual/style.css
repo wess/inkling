@@ -1,0 +1,248 @@
+.visualeditor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--paper);
+}
+.visualstage {
+  min-width: 0;
+  background: var(--paper3);
+}
+.visualtools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.visualhint {
+  font-size: 13px;
+  color: var(--text2);
+}
+.visualstatus {
+  min-height: 34px;
+  padding: 7px 16px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text2);
+}
+.visualcanvas {
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  height: max(540px, calc(100vh - 295px));
+}
+.visualframe {
+  display: block;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  background: white;
+}
+.visualframe.phone {
+  flex: 0 0 min(390px, 100%);
+  width: min(390px, 100%);
+}
+.visualempty {
+  display: grid;
+  place-content: center;
+  padding: 32px;
+  max-width: 50ch;
+  text-align: center;
+  color: var(--text2);
+}
+.visualinspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+}
+.visualtabs {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+.visualtabs button {
+  flex: 1;
+  font: inherit;
+  cursor: pointer;
+  color: var(--text2);
+  padding: 16px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+}
+.visualtabs button[aria-pressed="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.visualtools button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accentwash);
+}
+.visualcontrols {
+  border: 0;
+  margin: 0;
+  padding: 18px;
+  min-width: 0;
+  flex: 1;
+  overflow: auto;
+  max-height: calc(100vh - 310px);
+}
+.visualcontrols .f {
+  margin-bottom: 18px;
+}
+.visualfield {
+  padding: 10px 0;
+}
+.visualfield.selected {
+  background: var(--accentwash);
+  border-radius: var(--radius2);
+  padding: 10px;
+  margin: 0 -10px;
+}
+.visualfield .f {
+  margin-bottom: 0;
+}
+.visualnotice {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: var(--warnwash);
+  color: var(--warn);
+  font-size: 13px;
+}
+.visualerror {
+  color: var(--bad);
+  font-size: 12px;
+}
+.visualrelated {
+  margin-bottom: 18px;
+  color: var(--text2);
+  font-size: 12px;
+}
+.visualrelated p {
+  margin-bottom: 6px;
+}
+.visualsections {
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+.visualsections li {
+  padding: 12px 0;
+  border-top: 1px solid var(--line2);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+}
+.visualsectionname {
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 0;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.visualsectionname small {
+  display: block;
+  color: var(--text2);
+  font-size: 11px;
+  margin-top: 3px;
+}
+.visualsections .row {
+  gap: 0;
+}
+.visualactions {
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.editortoolbar {
+  position: sticky;
+  top: 58px;
+  z-index: 10;
+  background: var(--paper2);
+  padding: 12px 0;
+  flex-wrap: wrap;
+}
+.editormodes {
+  padding: 0;
+  border: 0;
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.visualsize {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.editormodes .editorstate {
+  margin-left: auto;
+  color: var(--text2);
+  font-size: 12px;
+}
+.editorfailure {
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius2);
+  color: var(--bad);
+  background: var(--badwash);
+}
+.editorfailure ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.editorfailure button {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (max-width: 1100px) {
+  .visualeditor {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+@media (max-width: 800px) {
+  .visualeditor {
+    display: flex;
+    flex-direction: column;
+  }
+  .visualcanvas {
+    height: 440px;
+  }
+  .visualinspector {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .visualcontrols {
+    max-height: none;
+  }
+  .editortoolbar {
+    top: 58px;
+  }
+  .visualhint {
+    font-size: 12px;
+  }
+}
