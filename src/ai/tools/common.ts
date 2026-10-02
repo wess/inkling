@@ -160,6 +160,7 @@ export type Proposal =
     })
   | (Base & {
       readonly kind: "menu.create"
+      readonly menuName?: string
       readonly menuLabel: string
       readonly items: unknown[]
     })

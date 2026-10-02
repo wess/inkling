@@ -178,6 +178,8 @@ test("visual discovery stays available in read-only mode and requires the conten
     const allowed = await run(url, messages, { INKLING_MCP_READONLY: "1" })
     const tools = allowed.messages.find(message => message.id === "list")?.result?.tools as { name: string }[]
     expect(tools.some(tool => tool.name === "get_visual_pages")).toBe(true)
+    expect(tools.some(tool => tool.name === "get_shared_areas")).toBe(true)
+    expect(tools.some(tool => tool.name === "create_menu")).toBe(false)
     expect(tools.some(tool => tool.name === "update_entry")).toBe(false)
     const result = allowed.messages.find(message => message.id === "visual")?.result
     expect(result?.isError).toBe(false)
@@ -188,6 +190,7 @@ test("visual discovery stays available in read-only mode and requires the conten
     const denied = await run(url, messages)
     const restricted = denied.messages.find(message => message.id === "list")?.result?.tools as { name: string }[]
     expect(restricted.some(tool => tool.name === "get_visual_pages")).toBe(false)
+    expect(restricted.some(tool => tool.name === "get_shared_areas")).toBe(false)
     const refusal = denied.messages.find(message => message.id === "visual")?.result
     expect(refusal?.isError).toBe(true)
     expect(refusal?.content[0].text).toContain('needs the "content.read" grant')

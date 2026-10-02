@@ -641,3 +641,18 @@ test("a key is required wherever there is nowhere else to authenticate", () => {
   }
   expect(PROVIDERS.ollama.needsKey).toBe(false)
 })
+
+test("a proposed shared menu keeps its template handle even when its display label differs", async () => {
+  const { db } = await setup()
+  const proposals: Proposal[] = []
+  const result = await call(db, proposals, "propose_menu_create", {
+    name: "main",
+    label: "Top navigation",
+    items: [{ label: "Books", url: "/books" }],
+    summary: "Update the top links",
+  })
+  expect(result.isError).not.toBe(true)
+  expect(proposals[0]).toMatchObject({ kind: "menu.create", menuName: "main", menuLabel: "Top navigation" })
+  expect(await db.all(from(menus))).toHaveLength(0)
+  await db.close()
+})

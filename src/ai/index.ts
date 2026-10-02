@@ -33,6 +33,7 @@ import {
   redirectUri,
   refresh as refreshOauth,
 } from "./oauth.ts"
+import { probeTools } from "./probe.ts"
 import type { ProviderName } from "./providers.ts"
 import { isProvider, PROVIDERS, providerCatalog } from "./providers.ts"
 import { open, seal } from "./secrets.ts"
@@ -432,6 +433,18 @@ export const aiRoutes = (db: Connection): Route[] => {
         }
 
         try {
+          if (c.query.tools === "1") {
+            const ok = await probeTools(credential)
+            return json(c, 200, {
+              ok,
+              tools: ok,
+              provider: credential.provider,
+              model: credential.model,
+              error: ok
+                ? undefined
+                : "The model did not make the tool call Inky needs. Choose a model that supports tools, then test again.",
+            })
+          }
           const result = await complete(credential, {
             system: "Reply with the single word OK.",
             prompt: "Reply with the single word OK.",

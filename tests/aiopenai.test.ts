@@ -303,3 +303,44 @@ test("Ollama is the same wire format pointed somewhere else", async () => {
   mock.server.stop()
   await db.close()
 })
+
+test("shared website connections reach the model with exact editable sources", async () => {
+  const mock = mockProvider([{ text: "The footer uses shared contact details." }])
+  const { db, token } = await setup(mock.baseUrl)
+  const website = {
+    previewUrl: "/",
+    parts: [
+      {
+        id: "footer",
+        label: "Footer contact",
+        description: "Across every page",
+        selector: ".contact",
+        source: { kind: "entry" as const, type: "house", fields: ["email"] },
+      },
+    ],
+  }
+  const handle = router(...agentRoutes(db, noPlugins, {}, {}, website))
+  const response = await handle(
+    new Request("http://localhost/ai/agent", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ message: "Where do I change the footer email?" }),
+    }),
+  )
+  expect(response.status).toBe(200)
+  await response.text()
+  const sent = mock.seen[0]?.body.messages[0].content
+  expect(sent).toContain('"type":"house","fields":["email"]')
+  expect(sent).toContain("shared edits affect all pages")
+  mock.server.stop()
+  await db.close()
+})
+
+test("an empty model response gives an actionable error in the conversation stream", async () => {
+  const mock = mockProvider([{ text: "" }])
+  const { db, token } = await setup(mock.baseUrl)
+  const { frames } = await ask(db, token, "Update the footer")
+  expect(frames.find(frame => frame.event === "error")?.data.message).toContain("empty answer")
+  mock.server.stop()
+  await db.close()
+})

@@ -1270,3 +1270,26 @@ browsable, randomized so two uploads of `logo.png` never collide.
 
 Image dimensions are parsed from PNG/JPEG/GIF/WebP headers directly, which is
 enough for the editor to lay out an image without a native image dependency.
+
+## Shared website editing
+
+`src/website` exposes the host's `Website` manifest at session-gated
+`GET /api/website`. Parts map selectors and readable labels to singleton fields,
+menu handles with optional fallback links, or registered site settings. The
+admin's `src/web/website` loads a single selected source, saves only its changed
+fields through existing routes, and refreshes a same-origin sandboxed preview.
+Page previews use the same selectors to open those controls. Nothing seeds or
+migrates client content when a manifest is installed.
+
+The manifest also reaches Inky's system context and the MCP `get_shared_areas`
+read tool. `create_menu` can materialize a fallback under its declared handle.
+Menu delivery resolves published `entryId` destinations from content-type
+preview templates, while respecting delivery key scopes. Shared editing cannot
+create a template capability the consuming site does not implement.
+
+Inky's provider test can request `?tools=1` to verify streamed tool arguments
+without a site tool. Errors and interrupted streams remain visible in the chat.
+The admin prevents proposal application over unsaved manual edits and refreshes
+clean editors after successful application. Previous proposal outcomes are
+reported back as client observations; the model is instructed to read saved
+content before relying on them.

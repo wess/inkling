@@ -1,0 +1,80 @@
+.sharedscreen {
+  display: grid;
+  gap: 20px;
+}
+
+.sharedparts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sharedparts [aria-pressed="true"] {
+  background: var(--accentwash);
+  color: var(--text);
+  border-color: var(--accent);
+}
+.sharedintro {
+  padding: 18px 20px 0;
+}
+.sharedintro h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.sharedintro p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.sharedscreen .visualinspector > .note {
+  margin: 12px 20px 0;
+}
+.sharedscreen .visualactions p {
+  margin: 0 0 12px;
+}
+.visualshared {
+  margin: 12px;
+}
+.sharedscreen .menuitemeditor {
+  padding: 12px;
+}
+.sharedscreen .menuitemfields {
+  grid-template-columns: 1fr;
+}
+
+.sharedscreen > header > p {
+  margin: 8px 0 0;
+  max-width: 72ch;
+}
+
+.menupages {
+  display: grid;
+  gap: 8px;
+}
+.menupages .btn {
+  display: grid;
+  text-align: left;
+  justify-content: start;
+}
+.menupages small {
+  color: var(--text2);
+}
+
+@media (max-width: 800px) {
+  .sharedscreen {
+    padding-bottom: 132px;
+  }
+  .sharedscreen .visualactions {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    padding: 12px 86px 12px 16px;
+    background: var(--paper);
+    box-shadow: 0 -2px 12px rgb(0 0 0 / 12%);
+  }
+  .sharedscreen .visualactions p {
+    margin: 0;
+  }
+
+  .sharedscreen .visualcanvas {
+    height: 260px;
+  }
+}

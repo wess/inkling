@@ -54,3 +54,9 @@ test("save failures preserve field details for the editor's recovery controls", 
     details: { fields: [{ key: "title", message: "is required" }] },
   })
 })
+
+test("a truncated Inky stream reports interruption instead of silently succeeding", async () => {
+  response('event: text\ndata: {"text":"Let me check"}\n\n', 200, "text/event-stream")
+  const { runAgent } = await import("../src/web/api.ts")
+  await expect(runAgent({ message: "Update the footer" }, () => {})).rejects.toThrow("ended before the answer finished")
+})

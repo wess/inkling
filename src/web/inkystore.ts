@@ -188,16 +188,21 @@ export const send = async (context: InkyContext | undefined): Promise<void> => {
       turns: current.turns.map((turn, index) => (index === current.turns.length - 1 ? change(turn) : turn)),
     }))
 
-  // With nothing mounted there is no toast to show, so the failure goes where
-  // the person will find it when they come back.
+  // keep failures in the conversation after the toast disappears.
   const complain = (text: string) => {
-    if (bridge) bridge.toast(text, true)
-    else onto(turn => ({ ...turn, text: `${turn.text}${turn.text ? "\n\n" : ""}${text}` }))
+    bridge?.toast(text, true)
+    onto(turn => ({ ...turn, text: `${turn.text}${turn.text ? "\n\n" : ""}${text}` }))
   }
 
   const history = state.history
   try {
-    await runAgent({ message, history, ...context }, event => {
+    const outcomes = state.proposals
+      .filter(proposal => state.decided[proposal.id])
+      .slice(-20)
+      .map(proposal => `${state.decided[proposal.id]}: ${proposal.summary}`)
+      .join("\n")
+      .slice(0, 4000)
+    await runAgent({ message, history, outcomes, ...context }, event => {
       switch (event.type) {
         case "text":
           onto(turn => ({ ...turn, text: turn.text + event.text }))

@@ -98,6 +98,8 @@ import {
   useInky,
 } from "./inkystore.ts"
 import { VisualEditor } from "./visual/index.tsx"
+import { SharedScreen } from "./website/index.tsx"
+import { MenuLink } from "./website/link.tsx"
 
 // Single-file admin SPA, following the same convention as the rest of the
 // stack: hooks only, no component classes, no router dependency. Routing is a
@@ -211,6 +213,7 @@ type Route =
   | { name: "types"; type?: string }
   | { name: "taxonomy" }
   | { name: "menus" }
+  | { name: "website"; part?: string }
   | { name: "trash" }
   | { name: "webhooks" }
   | { name: "plugins" }
@@ -246,6 +249,7 @@ const parse = (path: string): Route => {
   if (head === "activity") return { name: "activity" }
   if (head === "types") return { name: "types", type: a }
   if (head === "taxonomy") return { name: "taxonomy" }
+  if (head === "website") return { name: "website", part: a }
   if (head === "menus") return { name: "menus" }
   if (head === "trash") return { name: "trash" }
   if (head === "webhooks") return { name: "webhooks" }
@@ -268,6 +272,8 @@ const parse = (path: string): Route => {
 
 const href = (route: Route): string => {
   switch (route.name) {
+    case "website":
+      return `/website${route.part ? `/${route.part}` : ""}`
     case "collection":
       return `/c/${route.type}`
     case "editor":
@@ -1537,6 +1543,9 @@ const Dashboard = ({ go, types, role }: { go: (route: Route) => void; types: Con
         ) : null}
       </section>
       <div className="homeactions">
+        <button type="button" className="btn" onClick={() => go({ name: "website" })}>
+          <MenuIcon size={16} /> Header & footer
+        </button>
         <button type="button" className="btn" onClick={() => go({ name: "media" })}>
           <ImageIcon size={16} /> Photos & files
         </button>
@@ -2209,6 +2218,7 @@ const Editor = ({
           errors={errors}
           disabled={!mayEdit || locked}
           edit={edit}
+          openShared={part => go({ name: "website", part })}
           openCollection={name => go({ name: "collection", type: name })}
           renderField={field =>
             field.key === "$title" ? (
@@ -4150,6 +4160,7 @@ const MenuItemEditor = ({
   index,
   count,
   depth,
+  nested = true,
   onChange,
   onRemove,
   onMove,
@@ -4158,6 +4169,7 @@ const MenuItemEditor = ({
   index: number
   count: number
   depth: number
+  nested?: boolean
   onChange: (item: EditableMenuItem) => void
   onRemove: () => void
   onMove: (direction: -1 | 1) => void
@@ -4168,20 +4180,12 @@ const MenuItemEditor = ({
       <div className="menuitemfields">
         <label className="f">
           <span className="fl">Label</span>
-          <input value={item.label} onChange={event => onChange({ ...item, label: event.target.value })} />
+          <input type="text" value={item.label} onChange={event => onChange({ ...item, label: event.target.value })} />
         </label>
-        <label className="f">
-          <span className="fl">
-            Link
-            <Hint id="menu.link" />
-          </span>
-          <input
-            type="text"
-            value={item.url ?? ""}
-            placeholder="/shop or https://…"
-            onChange={event => onChange({ ...item, url: event.target.value })}
-          />
-        </label>
+        <MenuLink
+          item={item}
+          onChange={next => onChange({ ...item, label: next.label, url: next.url, entryId: next.entryId })}
+        />
         <label className="check menuitemtarget">
           <input
             type="checkbox"
@@ -4210,7 +4214,7 @@ const MenuItemEditor = ({
         >
           <ArrowDown size={14} />
         </button>
-        {depth < 3 ? (
+        {nested && depth < 3 ? (
           <button
             type="button"
             className="btn ghost sm"
@@ -4255,6 +4259,44 @@ const MenuItemEditor = ({
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+const SharedMenuInput = ({ value, onChange }: { value: MenuItem[]; onChange: (items: MenuItem[]) => void }) => {
+  const [items, setItems] = useState(() => editableMenuItems(value))
+  const change = (next: EditableMenuItem[]) => {
+    setItems(next)
+    onChange(storedMenuItems(next))
+  }
+  return (
+    <div className="menuitems">
+      {items.map((item, index) => (
+        <MenuItemEditor
+          key={item.key}
+          item={item}
+          index={index}
+          count={items.length}
+          depth={0}
+          nested={false}
+          onChange={next => change(items.map((value, at) => (at === index ? next : value)))}
+          onRemove={() => change(items.filter((_, at) => at !== index))}
+          onMove={direction => {
+            const next = [...items]
+            const target = index + direction
+            if (target < 0 || target >= items.length) return
+            const moved = next[index]
+            const other = next[target]
+            if (!moved || !other) return
+            next[index] = other
+            next[target] = moved
+            change(next)
+          }}
+        />
+      ))}
+      <button type="button" className="btn" onClick={() => change([...items, newMenuItem()])}>
+        <Plus size={14} /> Add a link
+      </button>
     </div>
   )
 }
@@ -7206,6 +7248,7 @@ const PLAIN_SCREENS = new Set([
   "media",
   "taxonomy",
   "menus",
+  "website",
   "trash",
   "webhooks",
   "plugins",
@@ -7357,6 +7400,8 @@ const describe = (route: Route, types: ContentType[]): InkyContext => {
       return route.type
         ? { screen: `changing the shape of ${labelOf(route.type)} pages`, type: route.type }
         : { screen: "looking at the shapes their pages can take" }
+    case "website":
+      return { screen: `editing shared website details${route.part ? ` (${route.part})` : ""}` }
     case "menus":
       return { screen: "editing the site's navigation menus" }
     case "settings":
@@ -7497,6 +7542,14 @@ const AgentPanel = ({
   // secret that exists exactly once, which is what `fresh` is for.
   const apply = async (proposal: AgentProposal): Promise<boolean> => {
     if (applyLock.current || readInky().decided[proposal.id]) return false
+    if (document.body.dataset.unsaved === "true") {
+      setApplyErrors(current => ({
+        ...current,
+        [proposal.id]:
+          "Save or discard your open edits first, then apply this change. This keeps your work from being overwritten.",
+      }))
+      return false
+    }
     applyLock.current = true
     setApplying(proposal.id)
     setApplyErrors(current => ({ ...current, [proposal.id]: "" }))
@@ -7558,7 +7611,7 @@ const AgentPanel = ({
           )
           break
         case "menu.create":
-          await api.createMenu(proposal.menuLabel, proposal.items as MenuItem[])
+          await api.createMenu(proposal.menuLabel, proposal.items as MenuItem[], proposal.menuName)
           break
         case "menu.delete":
           await api.deleteMenu(proposal.menuName)
@@ -7620,6 +7673,7 @@ const AgentPanel = ({
       }
 
       decide(proposal.id, "applied")
+      window.dispatchEvent(new Event("inkling:changed"))
       toast("Change applied")
       return true
     } catch (error) {
@@ -7719,7 +7773,7 @@ const AgentPanel = ({
             </p>
             <div className="agentseeds">
               {[
-                "Add a section for customer quotes to the about page",
+                "Update the contact details in our footer",
                 "Make the homepage opening shorter and warmer",
                 "Help me set up posting to Instagram",
                 "Give our new designer an account that can publish",
@@ -7861,6 +7915,8 @@ const AgentPanel = ({
 }
 
 const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => void }) => {
+  const [testing, setTesting] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; text: string }>>({})
   const [providers, setProviders] = useState<AiProvider[]>([])
   const [redirectUri, setRedirectUri] = useState("")
   const [items, setItems] = useState<AiCredential[]>([])
@@ -7936,22 +7992,38 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
                         <button
                           type="button"
                           className="btn sm"
+                          disabled={testing !== null}
                           onClick={async () => {
+                            setTesting(item.id)
                             try {
-                              const result = await api.testAiCredential(item.id)
+                              const result = await api.testAiCredential(item.id, true)
+                              setTestResults(current => ({
+                                ...current,
+                                [item.id]: {
+                                  ok: result.ok,
+                                  text: result.ok
+                                    ? "Editing tools connected"
+                                    : (result.error ?? "The model could not use editing tools."),
+                                },
+                              }))
                               toast(
                                 result.ok
-                                  ? `${result.model} answered`
+                                  ? `${result.model} can use Inky’s editing tools`
                                   : (result.error ?? "The provider did not answer"),
                                 !result.ok,
                               )
                               await load()
                             } catch (error) {
-                              toast(errorOf(error), true)
+                              setTestResults(current => ({
+                                ...current,
+                                [item.id]: { ok: false, text: errorOf(error) },
+                              }))
+                            } finally {
+                              setTesting(null)
                             }
                           }}
                         >
-                          Test
+                          {testing === item.id ? "Testing…" : "Test Inky"}
                         </button>
                         {item.isDefault ? null : (
                           <button
@@ -7986,6 +8058,11 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
                           <Trash2 size={13} />
                         </button>
                       </div>
+                      {testResults[item.id] ? (
+                        <p role="status" className={testResults[item.id]?.ok ? "dim" : "bad"}>
+                          {testResults[item.id]?.text}
+                        </p>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -7998,6 +8075,10 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
       <div className="card">
         <div className="cardbody">
           <h3 style={{ marginTop: 0 }}>Connect a provider</h3>
+          <p className="dim2">
+            This connection powers Inky for everyone on this website. Your editors do not need to set up their own
+            provider. Test Inky after connecting to check that the model can use editing tools.
+          </p>
 
           <label className="f">
             <span className="fl">
@@ -8126,6 +8207,26 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
 
       <div className="card">
         <div className="cardbody">
+          <h3 style={{ marginTop: 0 }}>Use your ChatGPT account</h3>
+          <p className="dim2">
+            You can connect this website inside ChatGPT and work there with your ChatGPT account.{" "}
+            <a href="https://inkling.host/school/chatgpt" target="_blank" rel="noreferrer">
+              Follow the connection guide
+            </a>
+            .
+          </p>
+          <p className="dim2">
+            A “Sign in with ChatGPT” connection that powers Inky on this hosted website requires approval from OpenAI.
+            It is not enabled here. An OpenAI API connection uses separate API billing.
+          </p>
+          <a href="https://developers.openai.com/siwc/token-sharing-open-source" target="_blank" rel="noreferrer">
+            ChatGPT plan usage requirements
+          </a>
+        </div>
+      </div>
+      <details className="card">
+        <summary className="cardbody">Advanced connection setup</summary>
+        <div className="cardbody">
           <h3 style={{ marginTop: 0 }}>Using OAuth</h3>
           <p className="dim2">
             An OAuth button appears above only for providers this install has a registered client for. Register one with
@@ -8148,7 +8249,7 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
             </button>
           </div>
         </div>
-      </div>
+      </details>
     </>
   )
 }
@@ -9885,6 +9986,12 @@ const SocialSettings = ({
 }
 
 const App = () => {
+  const [screenVersion, setScreenVersion] = useState(0)
+  useEffect(() => {
+    const changed = () => setScreenVersion(value => value + 1)
+    addEventListener("inkling:changed", changed)
+    return () => removeEventListener("inkling:changed", changed)
+  }, [])
   const [me, setMe] = useState<Identity | null>(null)
   const [booted, setBooted] = useState(false)
   const [types, setTypes] = useState<ContentType[]>([])
@@ -10005,6 +10112,23 @@ const App = () => {
       case "taxonomy":
         if (!hasRole(me.role, "editor")) return <Note kind="warn">An editor manages categories.</Note>
         return <TaxonomiesScreen toast={toast} />
+      case "website":
+        return (
+          <SharedScreen
+            partId={route.part}
+            role={me.role}
+            onSelect={part => go({ name: "website", part })}
+            renderMenu={(items, change) => (
+              <SharedMenuInput key={route.part ?? "first"} value={items} onChange={change} />
+            )}
+            renderField={(field, value, onChange) => <FieldInput field={field} value={value} onChange={onChange} />}
+            fallback={
+              <button type="button" className="btn" onClick={() => go({ name: "menus" })}>
+                Open website menus
+              </button>
+            }
+          />
+        )
       case "menus":
         if (!hasRole(me.role, "editor")) return <Note kind="warn">An editor manages menus.</Note>
         return <MenusScreen toast={toast} />
@@ -10176,12 +10300,13 @@ const App = () => {
           {hasRole(me.role, "author") ? (
             <details
               className="navgroup navsection"
-              key={`manage-${["taxonomy", "menus", "trash", "activity", "users", "settings"].includes(route.name)}`}
-              open={["taxonomy", "menus", "trash", "activity", "users", "settings"].includes(route.name)}
+              key={`manage-${["taxonomy", "menus", "website", "trash", "activity", "users", "settings"].includes(route.name)}`}
+              open={["taxonomy", "menus", "website", "trash", "activity", "users", "settings"].includes(route.name)}
             >
               <summary>Manage website</summary>
               {hasRole(me.role, "editor") ? nav({ name: "taxonomy" }, "Categories", ListTree) : null}
-              {hasRole(me.role, "editor") ? nav({ name: "menus" }, "Website menus", MenuIcon) : null}
+              {nav({ name: "website" }, "Header & footer", MenuIcon)}
+              {hasRole(me.role, "editor") ? nav({ name: "menus" }, "All menus", MenuIcon) : null}
               {hasRole(me.role, "author") ? nav({ name: "trash" }, "Trash", Trash2) : null}
               {hasRole(me.role, "admin") ? nav({ name: "activity" }, "Activity", Activity) : null}
               {hasRole(me.role, "admin") ? nav({ name: "users" }, "People & access", Users) : null}
@@ -10223,7 +10348,9 @@ const App = () => {
           <GlobalSearch go={go} />
           <div className="topspacer" />
         </header>
-        <div className="body">{screen}</div>
+        <div className="body" key={route.name === "ai" ? "ai" : screenVersion}>
+          {screen}
+        </div>
       </main>
 
       {changingPassword ? <ChangePassword onClose={() => setChangingPassword(false)} toast={toast} /> : null}

@@ -249,6 +249,14 @@ const TOOLS: readonly Tool[] = [
     run: a => call(`/entries/${encodeURIComponent(a.id)}`),
   },
   {
+    name: "get_shared_areas",
+    description:
+      "Read the actual sources for the header, navbar, footer, logo, announcements and shared contact details. Entry sources name a singleton type and fields; settings sources name keys; menu sources name the exact saved menu and fallback links. Read the source before changing it. If a menu has not been saved, create it with the declared name and preserve its default links except for the requested edit. Changes affect every page using this part.",
+    inputSchema: object({}),
+    needs: "content.read",
+    run: () => call("/website"),
+  },
+  {
     name: "get_visual_pages",
     description:
       "Read the site's supported visual page sections, keyed by content type. Each section has an id, label, editable fields, and whether it can move. Read get_entry for the page's current data.__layout before using update_entry to set its order and hidden arrays. Use only declared section ids, preserve unrelated layout values, and never promise to move a fixed section. An empty map means visual sections are not connected for this site.",
@@ -473,6 +481,21 @@ const TOOLS: readonly Tool[] = [
       if (!response.ok) throw new Error(`POST /media → ${response.status} ${text.slice(0, 300)}`)
       return JSON.parse(text)
     },
+  },
+  {
+    name: "create_menu",
+    description:
+      "Save a menu that is not yet stored. For shared website parts, use the exact name from get_shared_areas and start with its default links, preserving links outside the requested change. Creating an arbitrary menu does not place it on the website.",
+    inputSchema: object(
+      {
+        name: str("The declared menu name"),
+        label: str("The display label"),
+        items: { type: "array", items: { type: "object", additionalProperties: true } },
+      },
+      ["name", "label", "items"],
+    ),
+    needs: "menus.manage",
+    run: a => call("/menus", { method: "POST", body: { name: a.name, label: a.label, items: a.items } }),
   },
   {
     name: "update_menu",

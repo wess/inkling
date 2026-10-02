@@ -39,6 +39,7 @@ import { createUser, userRoutes } from "./users/index.ts"
 import { type VisualPages, visualRoutes } from "./visual/index.ts"
 import { buildAdmin } from "./web/serve.ts"
 import { registerWebhookBridge, webhookRoutes } from "./webhooks/index.ts"
+import { type Website, websiteRoutes } from "./website/index.ts"
 
 // Inkling as something a host process can mount, rather than a server that owns
 // the port. `src/server.ts` is the standalone spelling of exactly this — it
@@ -59,6 +60,8 @@ const fromRoot = (path: string): string => (isAbsolute(path) ? path : resolve(RO
 export type { Surface, Surfaces } from "./design/index.ts"
 export type { VisualLayout, VisualPage, VisualPages, VisualSection } from "./visual/index.ts"
 
+export type { SharedPart, Website } from "./website/index.ts"
+
 export type InklingOptions = {
   // Where the admin answers. "/" is standalone: every unmatched path becomes
   // the admin. A host that owns "/" passes something like "/admin", and then
@@ -73,6 +76,7 @@ export type InklingOptions = {
   // The parts of the site Inky may restyle, in the host's own words. Absent or
   // empty switches the design tools off. See src/design.
   design?: Surfaces
+  website?: Website
   visual?: VisualPages
 }
 
@@ -209,7 +213,8 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
       ...assistantRoutes(db),
       ...designRoutes(db, surfaces, hooks),
       ...visualRoutes(db, options.visual ?? {}),
-      ...agentRoutes(db, registry, surfaces, options.visual ?? {}),
+      ...websiteRoutes(db, options.website ?? { previewUrl: "/", parts: [] }),
+      ...agentRoutes(db, registry, surfaces, options.visual ?? {}, options.website),
       ...socialRoutes(db, store, hooks),
       ...realtime.routes,
       ...pluginRoutes(db, hooks, registry, pluginDir),

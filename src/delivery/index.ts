@@ -19,6 +19,7 @@ import { contentTypes, entries, media, menus } from "../schema/index.ts"
 import { siteSettings } from "../settings/index.ts"
 import { termsForEntries } from "../taxonomy/index.ts"
 import { now } from "../time/index.ts"
+import { resolveMenu } from "./menus.ts"
 
 // The public, read-only face of the CMS — what a website actually calls.
 // Everything here is key-authenticated, returns published content only, and
@@ -377,7 +378,11 @@ export const deliveryRoutes = (db: Connection, hooks: Hooks): Route[] => {
         )
         if (!row) throw notFound("Menu not found")
         return json(privateCache(c, 60), 200, {
-          data: { name: row.name, label: row.label, items: decodeArray(row.items) },
+          data: {
+            name: row.name,
+            label: row.label,
+            items: await resolveMenu(db, decodeArray(row.items), keyIdentity(c)),
+          },
         })
       }),
     ),

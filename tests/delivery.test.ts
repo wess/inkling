@@ -6,7 +6,7 @@ import { id, secretToken, sha256 } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { createHooks } from "../src/plugins/hooks.ts"
-import { apiKeys, contentTypes, entries, media as mediaTable, users } from "../src/schema/index.ts"
+import { apiKeys, contentTypes, entries, media as mediaTable, menus, users } from "../src/schema/index.ts"
 import { now } from "../src/time/index.ts"
 
 // Exercises the contract a consuming site actually depends on: key auth,
@@ -331,5 +331,45 @@ test("include accepts terms and author together", async () => {
   // No author is assigned, so the key is present but null rather than missing.
   expect(body.data[0].author).toBeNull()
 
+  await db.close()
+})
+
+test("menu page references resolve to published page URLs and respect delivery scopes", async () => {
+  const { db, call, key } = await setup()
+  await db.execute(
+    from(contentTypes)
+      .update({ preview_url: "/drinks/{slug}" })
+      .where(q => q("name").equals("drink")),
+  )
+  const all = await db.all<{ id: string; slug: string }>(from(entries).select("id", "slug"))
+  const live = all.find(entry => entry.slug === "latte")
+  const draft = all.find(entry => entry.slug === "secret")
+  expect(live).toBeDefined()
+  expect(draft).toBeDefined()
+  await db.execute(
+    from(menus).insert({
+      id: id(),
+      name: "main",
+      label: "Main",
+      items: encode([
+        { label: "Our drinks", entryId: live?.id },
+        { label: "Private page", entryId: draft?.id },
+        { label: "External", url: "https://example.com" },
+        { label: "More", children: [{ label: "Latte", entryId: live?.id }] },
+      ]),
+      created_at: now(),
+      updated_at: now(),
+    }),
+  )
+  const read = async () =>
+    (await (await call("/site/menus/main", { "x-api-key": key })).json()) as { data: { items: any[] } }
+  const first = await read()
+  expect(first.data.items.map(item => item.label)).toEqual(["Our drinks", "External", "More"])
+  expect(first.data.items[0].url).toBe("/drinks/latte")
+  expect(first.data.items[2].children[0].url).toBe("/drinks/latte")
+  await db.execute(from(apiKeys).update({ scopes: encode(["another"]) }))
+  const restricted = await read()
+  expect(JSON.stringify(restricted)).not.toContain("/drinks/latte")
+  expect(restricted.data.items.find(item => item.label === "External").url).toBe("https://example.com")
   await db.close()
 })

@@ -312,6 +312,30 @@ const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</
       the password again, so a borrowed browser cannot quietly make one.
     </p>
 
+    <h2 id="shared">Shared website parts</h2>
+    <p>Pass a <code>website</code> manifest to <code>createInkling()</code> to connect the header, footer, logo, announcement, and other shared details to their existing sources. The admin provides one Header &amp; footer screen and selectable shared parts inside visual page previews. Inky receives the same map.</p>
+    <div class="screen"><pre>const website = {
+  previewUrl: "/",
+  parts: [{
+    id: "navigation", label: "Top navigation",
+    description: "The menu across every page", selector: "header nav",
+    source: {
+      kind: "menu", name: "main", label: "Main navigation",
+      defaults: [{ label: "Home", url: "/" }],
+    },
+  }, {
+    id: "contact", label: "Contact details",
+    description: "The address in every footer", selector: "footer address",
+    source: { kind: "entry", type: "house", fields: ["street", "email"] },
+  }, {
+    id: "logo", label: "Logo", description: "Your website logo",
+    selector: ".brand", source: { kind: "settings", fields: ["logoId"] },
+  }],
+}
+const inkling = await createInkling({ adminBase: "/admin", website })</pre></div>
+    <p><code>GET /api/website</code> requires content read access. Entry sources require an existing singleton. Each save uses the usual entry, menu, or settings route and its permissions; only changed fields belonging to that part are sent. Shared entry drafts remain drafts. The preview is same-origin and refreshes after saving. A missing menu starts with declared fallback links and is first created when an editor saves; the template must read the declared menu name. The shared menu editor edits a flat list. Nested menus remain available in All menus for sites that render them.</p>
+    <p>Choose a page searches published entries whose content type has a preview address. Menu delivery resolves their <code>entryId</code> references to <code>url</code> using that address template, excluding draft, deleted, or out-of-scope destinations. Existing address links are preserved.</p>
+
     <h2 id="ai">AI providers and agent tools</h2>
 
     <p>
@@ -336,6 +360,8 @@ const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</
       assistant does not.
     </p>
 
+    <p><b>Test Inky</b> checks streamed tool calling with a synthetic marker, without reading or changing content. It verifies the connection and transport, not the quality of every future answer. Stream failures remain in the conversation; an interrupted stream cannot silently report success. Applying a proposal refreshes a clean open editor. Unsaved manual edits must be saved or discarded before applying a proposal.</p>
+    <p>Working through the ChatGPT connector uses the editor's own ChatGPT account. Using ChatGPT plan usage to power Inky on a remotely hosted website requires an approved OpenAI integration; the local open-source sign-in flow is not a hosted website login. See <a href="https://developers.openai.com/siwc/token-sharing-open-source">the current integration requirements</a>. A normal OpenAI API key uses separate API billing.</p>
     <h3>What Inky can do</h3>
 
     <p>

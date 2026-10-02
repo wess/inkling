@@ -25,6 +25,7 @@ const SCREENS: Readonly<Record<string, string>> = {
   types: "the shapes pages can take — optionally one of them, with `type`",
   taxonomy: "categories and tags",
   menus: "the navigation menus",
+  website: "the header, footer, logo, announcement and shared contact details",
   trash: "deleted content, and where it is restored from",
   settings: "the site-wide details",
   users: "people and their roles, and the only place an account is created",

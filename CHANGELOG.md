@@ -9,6 +9,32 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.19.0 — 2026-10-02
+
+### Added
+
+- Hosts can register shared website parts with `createInkling({ website })`.
+  Editors can select a header, footer, or other shared area in the actual page
+  and change its existing menu, entry fields, or settings in one place.
+  Saves show their result, preserve failed edits, and remain accessible on phones.
+- Menu links can be chosen by page title. Connected chats can discover shared
+  areas and create menus using the host's declared handle.
+- Provider settings include a Test Inky check that verifies the model can call
+  an editing tool. The check uses synthetic data and makes no site changes.
+
+### Fixed
+
+- Delivered menus resolve entry references to their published website addresses.
+  Draft, deleted, and inaccessible targets are omitted instead of becoming broken
+  links. Existing URL links are unchanged.
+- Inky receives the host's shared-area map, so it can find the actual source of
+  navigation, footer details, and other connected elements.
+- Interrupted or empty responses leave a persistent explanation in the chat.
+  Applied changes refresh the open editor, and unsaved edits must be handled
+  before applying a proposal so an old form cannot overwrite the result.
+- Guides distinguish connecting an existing ChatGPT account from provider setup
+  for hosted Inky. Hosted sign-in requires provider approval.
+
 ## 1.18.2 — 2026-10-02
 
 ### Fixed

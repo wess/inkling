@@ -171,3 +171,12 @@ For implementation details and route invariants, read the
 [architecture](https://raw.githubusercontent.com/wess/inkling/main/docs/ARCHITECTURE.md).
 For the complete tool inventory, inspect
 [`scripts/mcp.ts`](https://github.com/wess/inkling/blob/main/scripts/mcp.ts).
+
+## Shared parts
+
+Call `get_shared_areas` before changing navigation, a header, a footer, a logo,
+or shared contact details. The manifest identifies the real entry fields, menu
+name, or settings keys the site renders. Read those sources before updating.
+For a missing menu, start from the declared defaults and use `create_menu` with
+the exact name. Preserve links outside the requested change. Shared edits affect
+all pages using that part; creating an arbitrary menu does not display it.

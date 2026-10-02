@@ -205,6 +205,7 @@ export const siteTools: readonly Tool[] = [
       type: "object",
       properties: {
         label: { type: "string", description: 'As a person would say it, e.g. "Footer".' },
+        name: { type: "string", description: "The exact menu name declared by a shared website part, if supplied." },
         summary: { type: "string", description: "One line, for the person." },
         items: {
           type: "array",
@@ -228,6 +229,7 @@ export const siteTools: readonly Tool[] = [
         kind: "menu.create",
         summary: text(input, "summary") || `Add a ${label} menu`,
         menuLabel: label,
+        menuName: text(input, "name") || undefined,
         items,
       })
 

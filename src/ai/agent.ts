@@ -12,6 +12,7 @@ import type { Registry } from "../plugins/index.ts"
 import { createAudit, createRateLimit } from "../security/index.ts"
 import { siteSettings } from "../settings/index.ts"
 import type { VisualPages } from "../visual/index.ts"
+import type { Website } from "../website/index.ts"
 import type { ResolvedCredential } from "./complete.ts"
 // Betas and fallbacks are decided once, in complete.ts, because they are
 // properties of the credential and the model rather than of a call site — and
@@ -95,6 +96,7 @@ const systemFor = async (
   role: string,
   design: Surfaces,
   visual: VisualPages,
+  website?: Website,
 ): Promise<string> => {
   const settings = await siteSettings(db).catch(() => ({}) as Record<string, unknown>)
   const title = typeof settings.title === "string" ? settings.title : "this site"
@@ -117,6 +119,13 @@ const systemFor = async (
     "",
     "Around that sit the things a site needs but no single page owns: categories and tags, navigation menus, the site's own details, the files in the media library, the people with accounts, the keys a website reads content with, and the social accounts it posts from.",
     "",
+    ...(website?.parts.length
+      ? [
+          "SHARED WEBSITE PARTS",
+          JSON.stringify(website.parts),
+          "These are the actual connections to the rendered website. For header, navbar, footer, announcement, logo or contact requests, use the matching source above. Read its current entry/settings/menu before proposing edits. Preserve other values. A menu source may still use its declared defaults when list_menus has no saved menu; propose_menu_create with its exact name and existing default links plus the requested change. Explain that shared edits affect all pages. Do not create a new page or content type for an existing shared part.",
+        ]
+      : []),
     "WHAT YOU CAN CHANGE",
     "",
     "- The words, images, and values on any page.",
@@ -187,6 +196,7 @@ const systemFor = async (
     "- Never invent facts, prices, dates, names, quotes, or testimonials. If a section needs content you do not have, propose the structure and leave the values empty, then say what they need to fill in.",
     "- Match the voice of what is already written on the site. Read a sibling page before drafting a new one.",
     "- Say what a change costs before you queue it, when it costs something: a content type change touches every page of that type, a deleted menu may still be named in the site's code, a new key or webhook is standing access until somebody revokes it.",
+    "- A queued proposal has not been saved. Say it is ready to apply; never claim the website changed until you have read the saved result in a later turn. A failed tool call is not a completed change: fix the arguments using the error and try again, or explain the specific blocker.",
     "- Stop when the work is queued. Do not propose the same change twice.",
     "",
     "HOW TO TALK",
@@ -284,7 +294,10 @@ const dispatch = async (
 
 const outOfSteps = (run: Run, step: number) => {
   if (step === MAX_STEPS - 1) {
-    run.emit("error", { message: "The agent ran out of steps. Ask again with a narrower request." })
+    run.emit("error", {
+      message:
+        "I reached the limit for this turn. Review any changes already prepared, then say “continue” to finish the rest.",
+    })
   }
 }
 
@@ -449,7 +462,14 @@ const runCompatible = async (run: Run): Promise<unknown[]> => {
     }
 
     messages.push({ role: "assistant", content: text, toolCalls: calls.length > 0 ? calls : undefined })
-    if (calls.length === 0) break
+    if (calls.length === 0) {
+      if (!text.trim())
+        run.emit("error", {
+          message:
+            "The model returned an empty answer. Try again, or ask your administrator to run Test Inky in Providers.",
+        })
+      break
+    }
 
     for (const call of calls) {
       const result = await dispatch(run, call.name, call.arguments ?? {})
@@ -467,6 +487,7 @@ export const agentRoutes = (
   registry: Registry,
   design: Surfaces = {},
   visual: VisualPages = {},
+  website?: Website,
 ): Route[] => {
   const guard = pipeline(requireAuth(db), requireCan(can.useAi, "use the assistant"), parseJson)
   const limiter = createRateLimit(db)
@@ -523,13 +544,18 @@ export const agentRoutes = (
         if (opening.length > 0) {
           opening.push('When they say "this" or "here", that is what they mean unless they say otherwise.')
         }
+        const outcomes = optionalText(input, "outcomes")?.slice(0, 4000)
+        if (outcomes)
+          opening.push(
+            `The editor reports these previous proposals as applied or dismissed. Read current saved content before relying on them:\n${outcomes}`,
+          )
         opening.push(prompt)
 
         // Both shapes happen to agree on a plain-text user turn, which is the
         // only message this route builds itself.
         const conversation: unknown[] = [...history, { role: "user", content: opening.join("\n\n") }]
 
-        const system = await systemFor(db, identity.name || identity.email, identity.role, design, visual)
+        const system = await systemFor(db, identity.name || identity.email, identity.role, design, visual, website)
         const proposals: Proposal[] = []
 
         audit.log({

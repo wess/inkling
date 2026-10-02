@@ -24,6 +24,7 @@ const WRITES = new Set([
   "delete_entry",
   "bulk_entries",
   "update_menu",
+  "create_menu",
   "update_settings",
   "update_design",
 ])

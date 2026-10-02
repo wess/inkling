@@ -1,3 +1,5 @@
+import type { Website } from "../website/index.ts"
+
 // Typed client for the admin API. Everything goes through /api/*, which
 // src/web/serve.ts proxies to the API process — the browser never talks to the
 // API port directly, so the bearer token rides one origin.
@@ -564,7 +566,7 @@ export type AgentProposal =
       patch: Record<string, unknown>
       before: Record<string, unknown>
     })
-  | (Proposed & { kind: "menu.create"; menuLabel: string; items: unknown[] })
+  | (Proposed & { kind: "menu.create"; menuName?: string; menuLabel: string; items: unknown[] })
   | (Proposed & { kind: "menu.delete"; menuName: string; menuLabel: string })
   | (Proposed & { kind: "plugin.state"; pluginName: string; pluginLabel: string; enabled: boolean })
   | (Proposed & {
@@ -605,7 +607,7 @@ export type AgentEvent =
 // Server-sent events, hand-parsed because the browser's EventSource cannot set
 // an Authorization header and this API has no cookie to fall back on.
 export const runAgent = async (
-  input: { message: string; history?: unknown[]; entryId?: string; type?: string; screen?: string },
+  input: { message: string; outcomes?: string; history?: unknown[]; entryId?: string; type?: string; screen?: string },
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> => {
@@ -629,6 +631,7 @@ export const runAgent = async (
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
+  let finished = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -647,6 +650,7 @@ export const runAgent = async (
       if (!name || !data) continue
       try {
         const parsed = JSON.parse(data) as Record<string, unknown>
+        if (name === "done" || name === "error") finished = true
         onEvent(
           name === "proposal"
             ? ({ type: "proposal", proposal: parsed as unknown as AgentProposal } as AgentEvent)
@@ -658,6 +662,10 @@ export const runAgent = async (
       }
     }
   }
+  if (!finished)
+    throw new Error(
+      "Inky’s connection ended before the answer finished. Your prepared changes are still available. Send your request again to continue.",
+    )
 }
 
 type Wrapped<T> = { data: T }
@@ -701,6 +709,7 @@ export const api = {
   entries: (type: string, query: Record<string, string | number | undefined> = {}) =>
     request<Paged<Entry>>(`/types/${type}/entries`, { query }),
   entry: (id: string) => request<Entry>(`/entries/${id}`),
+  website: () => request<Website>("/website"),
   visualPages: () => request<{ data: Record<string, VisualPage> }>("/visual"),
   previewEntry: (id: string, draft?: Pick<Entry, "title" | "slug" | "data">) =>
     request<{ token: string; expiresAt: string; url: string; siteUrl: string | null }>(`/entries/${id}/preview`, {
@@ -869,7 +878,8 @@ export const api = {
   menus: () => request<Wrapped<Menu[]>>("/menus").then(r => r.data),
   saveMenu: (name: string, label: string, items: MenuItem[]) =>
     request<Menu>(`/menus/${name}`, { method: "PUT", body: { label, items } }),
-  createMenu: (label: string, items: MenuItem[] = []) => request<Menu>("/menus", { body: { label, items } }),
+  createMenu: (label: string, items: MenuItem[] = [], name?: string) =>
+    request<Menu>("/menus", { body: { label, items, name } }),
   deleteMenu: (name: string) => request<{ deleted: boolean }>(`/menus/${name}`, { method: "DELETE" }),
 
   aiProviders: () => request<{ data: AiProvider[]; redirectUri: string }>("/ai/providers"),
@@ -879,9 +889,9 @@ export const api = {
   updateAiCredential: (id: string, input: Record<string, unknown>) =>
     request<AiCredential>(`/ai/credentials/${id}`, { method: "PUT", body: input }),
   deleteAiCredential: (id: string) => request<{ deleted: boolean }>(`/ai/credentials/${id}`, { method: "DELETE" }),
-  testAiCredential: (id: string) =>
+  testAiCredential: (id: string, tools = false) =>
     request<{ ok: boolean; provider: string; model: string; refused?: boolean; error?: string }>(
-      `/ai/credentials/${id}/test`,
+      `/ai/credentials/${id}/test${tools ? "?tools=1" : ""}`,
       { method: "POST" },
     ),
   startAiOauth: (provider: string) =>

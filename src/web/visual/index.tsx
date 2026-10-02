@@ -20,6 +20,7 @@ export const VisualEditor = ({
   renderField,
   actions,
   openCollection,
+  openShared,
 }: {
   entry: Entry
   type: ContentType
@@ -32,8 +33,16 @@ export const VisualEditor = ({
   edit: (key: string, value: unknown) => void
   renderField: (field: Field) => ReactNode
   actions: ReactNode
+  openShared: (id?: string) => void
   openCollection: (type: string) => void
 }) => {
+  const [website, setWebsite] = useState<Awaited<ReturnType<typeof api.website>> | null>(null)
+  useEffect(() => {
+    void api
+      .website()
+      .then(setWebsite)
+      .catch(() => {})
+  }, [])
   const [selected, setSelected] = useState<Selection>({ section: definition.sections[0]?.id })
   const [tab, setTab] = useState<"content" | "sections">("content")
   const [phone, setPhone] = useState(false)
@@ -92,6 +101,10 @@ export const VisualEditor = ({
   }, [entry.id, snapshot, retry])
 
   const select = (next: Selection) => {
+    if (next.shared) {
+      openShared(next.shared)
+      return
+    }
     const parent = definition.sections.find(item => item.id === next.section || item.fields.includes(next.field ?? ""))
     setSelected({ ...next, section: parent?.id })
     setTab("content")
@@ -159,6 +172,7 @@ export const VisualEditor = ({
           {preview ? (
             <Canvas
               {...preview}
+              parts={website?.parts}
               selected={selected}
               onSelect={select}
               phone={phone}
@@ -177,6 +191,11 @@ export const VisualEditor = ({
         </div>
       </div>
       <aside className="visualinspector" aria-label="Page editing controls">
+        {website?.parts.length ? (
+          <button type="button" className="btn visualshared" onClick={() => openShared()}>
+            Header, footer & shared details
+          </button>
+        ) : null}
         <fieldset className="visualtabs" aria-label="Editing controls">
           <button type="button" aria-pressed={tab === "content"} onClick={() => setTab("content")}>
             Content
