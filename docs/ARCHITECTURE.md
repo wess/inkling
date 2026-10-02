@@ -414,10 +414,17 @@ annotate sections and fields with `data-inkling-section` and
 
 The visual editor requests a snapshot, adds `visual=1` to the preview URL, and
 fetches the rendered page. The host enables editing annotations only after
-validating the preview token. The admin strips executable content and displays
-the result in an iframe with scripts and forms disabled; selection is bound by
-the parent. The canvas changes only the local draft. Save remains explicit and
-uses the same validation, revision and audit path as the field editor.
+validating the preview token. The admin strips host scripts, handlers, frames,
+and forms' ability to submit. The iframe uses `allow-scripts` without
+`allow-same-origin`: its only allowed script is the byte-stable owned event
+bridge in `src/web/visual/bridge.ts`, hash-pinned in both the inherited admin
+policy and the preview's restrictive policy. This lets Safari dispatch preview
+events without giving the frame access to the admin's origin or session.
+Messages require the exact frame window and a fresh per-document channel;
+selections and geometry are validated against registered controls. The bridge
+checks the parent window and origin. A ready handshake exposes startup failures
+with a retry action. The canvas changes only the local draft. Save remains
+explicit and uses the field editor's validation, revision and audit path.
 
 Double-click opens the selected content controls. A right-click context menu
 and visible Actions button expose editing, section movement, visibility and
@@ -1247,8 +1254,9 @@ policy only governs a document, and a blanket one would also land on media,
 where `frame-ancestors 'none'` would stop a consuming site embedding a PDF it is
 entitled to. It matters because the admin keeps a fourteen-day bearer token in
 `localStorage`, which makes any script on this origin a session thief:
-`script-src 'self'` plus a **sha256 hash** of the one inline line (`__INKLING_BASE__`)
-is what keeps that from being one bad `innerHTML` away. Hash rather than
+`script-src 'self'` plus **sha256 hashes** of the setup line (`__INKLING_BASE__`)
+and the owned preview bridge keeps that from being one bad `innerHTML` away. The
+preview needs its hash here because `srcdoc` inherits this policy. Hash rather than
 `'unsafe-inline'`, which would defeat the point. `connect-src` names the
 WebSocket origin explicitly — `'self'` does cover same-origin `ws:` in current
 browsers, but the rule is subtle enough to be worth spelling out.
@@ -1284,7 +1292,7 @@ enough for the editor to lay out an image without a native image dependency.
 `GET /api/website`. Parts map selectors and readable labels to singleton fields,
 menu handles with optional fallback links, or registered site settings. The
 admin's `src/web/website` loads a single selected source, saves only its changed
-fields through existing routes, and refreshes a same-origin sandboxed preview.
+fields through existing routes, and refreshes an isolated sandboxed preview.
 Page previews use the same selectors to open those controls. Nothing seeds or
 migrates client content when a manifest is installed.
 

@@ -152,7 +152,9 @@ const body = renderVisual(html, visual.homepage, entry.data.__layout, editing)</
       visible to the editor, and fields and sections receive selection attributes.
       Enable this mode only inside a valid preview request with
       <code>visual=1</code>. The admin fetches that page into a sandboxed canvas;
-      it does not run the site's scripts or submit forms.
+      it does not run the site's scripts or submit forms. An isolated, hash-pinned
+      editor bridge handles selection in the preview, including Safari. If its
+      controls cannot start, the canvas offers Reload preview.
     </p>
 
     <h3>Unsaved previews</h3>

@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { config } from "../config/index.ts"
+import { BRIDGE_HASH } from "./visual/bridge.ts"
 
 // The admin is bundled by the same process that serves the API, and handed back
 // as a plain handler rather than a second server. There is no proxy and no
@@ -29,8 +30,8 @@ export type AdminHandler = (url: URL) => Promise<Response>
 // (media in particular must stay embeddable cross-origin).
 //
 // Bun.build emits the bundle as external module chunks, so `script-src 'self'`
-// covers everything except the one inline line above; that one is pinned by
-// hash rather than allowed with 'unsafe-inline', which would defeat the point.
+// covers the bundle. The setup line and the isolated preview's owned event
+// bridge are hash-pinned; srcdoc inherits this policy as well as its own.
 // Styles keep 'unsafe-inline' because React writes style attributes, and there
 // is no hash for those.
 //
@@ -44,7 +45,7 @@ const documentCsp = async (inlineScript: string): Promise<string> => {
 
   return [
     "default-src 'self'",
-    `script-src 'self' 'sha256-${hash}'`,
+    `script-src 'self' 'sha256-${hash}' 'sha256-${BRIDGE_HASH}'`,
     "style-src 'self' 'unsafe-inline'",
     // Media may be on a CDN, and an entry's rich text can carry a remote image.
     "img-src 'self' data: blob: https:",

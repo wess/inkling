@@ -9,6 +9,16 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.20.1 — 2026-10-02
+
+### Fixed
+
+- Safari now handles preview selection, double-click editing, and element
+  context menus. An isolated editor bridge replaces parent-installed handlers
+  that Safari blocked. Host scripts stay disabled and the preview cannot read
+  the admin session.
+- Preview controls show a recoverable error if they cannot start.
+
 ## 1.20.0 — 2026-10-02
 
 ### Added

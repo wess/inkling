@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { buildAdmin } from "../src/web/serve.ts"
+import { BRIDGE_HASH } from "../src/web/visual/bridge.ts"
 
 test("the admin serves one in-memory build with immutable assets", async () => {
   const handle = await buildAdmin("/admin")
@@ -9,6 +10,7 @@ test("the admin serves one in-memory build with immutable assets", async () => {
   expect((await handle(new URL("http://localhost/admin/help"))).status).toBe(200)
   expect(document.headers.get("cache-control")).toBe("no-store")
   expect(document.headers.get("content-security-policy")).toContain("script-src 'self'")
+  expect(document.headers.get("content-security-policy")).toContain(`'sha256-${BRIDGE_HASH}'`)
 
   const html = await document.text()
   const paths = [...html.matchAll(/(?:src|href)="(\/admin\/chunk-[^"]+)"/g)].map(match => match[1] as string)
