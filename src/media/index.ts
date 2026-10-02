@@ -122,10 +122,19 @@ export const storedMime = (declared: string, bytes: Uint8Array): string => {
   return MARKUP.test(head) ? "application/octet-stream" : declared
 }
 
-const dispositionFor = (mime: string, filename: string): { contentType: string; disposition: string } =>
+// A header value has to be ASCII, and a filename is whatever the uploader's OS
+// called it — macOS puts U+202F in "Screenshot … 9.52.32 AM.png", which Bun
+// refuses as a header value, so the file uploaded fine and then 500'd on every
+// read. Send a plain fallback plus the RFC 5987 form that carries the real name.
+const contentDisposition = (kind: "inline" | "attachment", filename: string): string => {
+  const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, "_")
+  return `${kind}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`
+}
+
+export const dispositionFor = (mime: string, filename: string): { contentType: string; disposition: string } =>
   INLINE_SAFE.has(mime)
-    ? { contentType: mime, disposition: `inline; filename="${filename.replace(/"/g, "")}"` }
-    : { contentType: "application/octet-stream", disposition: `attachment; filename="${filename.replace(/"/g, "")}"` }
+    ? { contentType: mime, disposition: contentDisposition("inline", filename) }
+    : { contentType: "application/octet-stream", disposition: contentDisposition("attachment", filename) }
 
 // PNG/JPEG/GIF/WebP dimensions from the file header. Enough to let the editor
 // lay out an image without pulling in a native image library.

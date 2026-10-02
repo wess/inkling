@@ -7,6 +7,7 @@ import { embeds } from "../src/db/dialect.ts"
 import { deliveryRoutes } from "../src/delivery/index.ts"
 import { id, secretToken, sha256 } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"
+import { dispositionFor } from "../src/media/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { createHooks } from "../src/plugins/hooks.ts"
 import { apiKeys, contentTypes, entries, entryTerms, taxonomies, terms as termsTable } from "../src/schema/index.ts"
@@ -353,4 +354,21 @@ test("storage keys carry the randomness their justification claims", () => {
 
   // Traversal and separators are stripped from the caller-supplied name.
   expect(makeKey("../../etc/passwd")).toMatch(/^\d{4}\/\d{2}\/[0-9a-f]{16}\/etc-passwd$/)
+})
+
+test("a media filename with non-ASCII characters yields a valid content-disposition", () => {
+  const { disposition } = dispositionFor("image/png", "Screenshot 9.52.32 AM.png")
+  // Constructing the Headers is the check: Bun throws on a non-ASCII value.
+  expect(new Headers({ "content-disposition": disposition }).get("content-disposition")).toBe(disposition)
+  expect(disposition).toContain("filename*=UTF-8''Screenshot%209.52.32%E2%80%AFAM.png")
+  expect(dispositionFor("text/html", 'a"b.html').disposition.startsWith("attachment;")).toBe(true)
+})
+
+test("every custom property the admin stylesheet reads is defined", async () => {
+  // `.dock` painted with var(--panel), which nothing defines, so the AI panel
+  // rendered transparent. An undefined var() is silent; this makes it loud.
+  const css = await Bun.file("src/web/style.css").text()
+  const defined = new Set([...css.matchAll(/(--[\w-]+)\s*:/g)].map(m => m[1]))
+  const used = new Set([...css.matchAll(/var\((--[\w-]+)\s*\)/g)].map(m => m[1]))
+  expect([...used].filter(name => !defined.has(name))).toEqual([])
 })

@@ -703,11 +703,38 @@ export const api = {
 
   media: (query: Record<string, string | number | undefined> = {}) => request<Paged<Media>>("/media", { query }),
   mediaItem: (id: string) => request<Media>(`/media/${id}`),
-  uploadMedia: (file: File, extra: Record<string, string> = {}) => {
+  // XHR rather than fetch when someone is watching: fetch has no upload progress.
+  uploadMedia: (file: File, extra: Record<string, string> = {}, onProgress?: (fraction: number) => void) => {
     const form = new FormData()
     form.set("file", file)
     for (const [key, value] of Object.entries(extra)) form.set(key, value)
-    return request<Media>("/media", { form })
+    if (!onProgress) return request<Media>("/media", { form })
+    return new Promise<Media>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open("POST", new URL("/api/media", location.origin).toString())
+      const token = getToken()
+      if (token) xhr.setRequestHeader("authorization", `Bearer ${token}`)
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable) onProgress(event.loaded / event.total)
+      }
+      xhr.onerror = () => reject(fail(0, "Upload failed: the connection dropped", undefined, undefined))
+      xhr.onload = () => {
+        let payload: Record<string, unknown> = {}
+        try {
+          payload = JSON.parse(xhr.responseText)
+        } catch {}
+        if (xhr.status >= 200 && xhr.status < 300) return resolve(payload as unknown as Media)
+        if (xhr.status === 401) clearToken()
+        const message =
+          xhr.status === 413
+            ? "That file is too large to upload"
+            : typeof payload.error === "string"
+              ? payload.error
+              : `Upload failed (${xhr.status})`
+        reject(fail(xhr.status, message, payload.code as string | undefined, payload.details))
+      }
+      xhr.send(form)
+    })
   },
   updateMedia: (id: string, input: Partial<Media>) => request<Media>(`/media/${id}`, { method: "PUT", body: input }),
   deleteMedia: (id: string) => request<{ deleted: boolean }>(`/media/${id}`, { method: "DELETE" }),

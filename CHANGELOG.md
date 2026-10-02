@@ -9,6 +9,23 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.14.2 — 2026-10-02
+
+### Fixes
+
+- A media file whose name contains a non-ASCII character (macOS screenshots put
+  a narrow no-break space in "9.52.32 AM") uploaded fine and then failed on
+  every read with a 500, because the name went into `content-disposition`
+  verbatim. The header now carries an ASCII fallback plus the RFC 5987
+  `filename*` form. Files already uploaded start serving with no migration.
+- The AI panel (the Inky dock) was transparent: it painted with `--panel`, which
+  was never defined, so page content showed through it. It uses `--paper` now,
+  and its "where you are" label no longer reads the undefined `--dim`.
+- Uploading in the media library or the image picker now shows a progress bar
+  with the file name, percent, and "n of m". The picker used to swallow upload
+  errors; failures now name the file and the reason, and one bad file no longer
+  stops the rest of a batch.
+
 ## 1.14.1 — 2026-09-20
 
 ### Documentation

@@ -2332,7 +2332,7 @@ tbody tr.click:hover {
   max-height: min(620px, calc(100vh - 130px));
   display: flex;
   flex-direction: column;
-  background: var(--panel);
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: 0 24px 60px rgba(20, 22, 26, 0.22);
@@ -2361,7 +2361,7 @@ tbody tr.click:hover {
 /* What Inky thinks you are looking at, shown rather than assumed — if it says
    the wrong thing, that is worth seeing before you ask it to change "this". */
 .dockwhere {
-  color: var(--dim);
+  color: var(--text2);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -468,6 +468,49 @@ const Empty = ({ title, hint, action }: { title: string; hint: string; action?: 
 
 // media picker
 
+type UploadState = { name: string; index: number; total: number; fraction: number } | null
+
+// One file at a time so the bar means something, and so one bad file does not
+// hide behind the others: failures are reported by name and the rest carry on.
+const useUploader = (onDone: () => void, onError: (message: string) => void) => {
+  const [state, setState] = useState<UploadState>(null)
+  const run = async (files: FileList | File[] | null) => {
+    const list = Array.from(files ?? [])
+    if (list.length === 0) return
+    for (const [index, file] of list.entries()) {
+      const at = (fraction: number) => setState({ name: file.name, index: index + 1, total: list.length, fraction })
+      at(0)
+      await api.uploadMedia(file, {}, at).catch(error => onError(`${file.name}: ${errorOf(error)}`))
+    }
+    setState(null)
+    onDone()
+  }
+  return { state, run }
+}
+
+const UploadBar = ({ state }: { state: UploadState }) =>
+  state ? (
+    <div className="card" style={{ padding: "10px 14px", marginBottom: 16 }} role="status" aria-live="polite">
+      <div style={{ fontSize: 13, marginBottom: 6, display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          Uploading {state.name}
+          {state.total > 1 ? ` (${state.index} of ${state.total})` : ""}
+        </span>
+        <span>{state.fraction >= 1 ? "Processing…" : `${Math.round(state.fraction * 100)}%`}</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: "var(--line)", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${Math.round(state.fraction * 100)}%`,
+            background: "var(--accent)",
+            transition: "width 0.12s linear",
+          }}
+        />
+      </div>
+    </div>
+  ) : null
+
 const MediaPicker = ({
   value,
   multiple,
@@ -505,11 +548,11 @@ const MediaPicker = ({
 
   useEffect(load, [load])
 
-  const upload = async (files: FileList | null) => {
-    if (!files?.length) return
-    setBusy(true)
-    for (const file of Array.from(files)) await api.uploadMedia(file).catch(() => {})
-    load()
+  const [uploadError, setUploadError] = useState("")
+  const uploader = useUploader(load, setUploadError)
+  const upload = (files: FileList | null) => {
+    setUploadError("")
+    return uploader.run(files)
   }
 
   const toggle = (id: string) =>
@@ -551,6 +594,12 @@ const MediaPicker = ({
         <Upload size={19} style={{ marginBottom: 6 }} />
         <div style={{ fontSize: 13 }}>Click to upload</div>
       </label>
+      <UploadBar state={uploader.state} />
+      {uploadError ? (
+        <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginBottom: 12 }}>
+          {uploadError}
+        </div>
+      ) : null}
 
       <div className="search" style={{ width: "100%", maxWidth: "none", marginBottom: 14 }}>
         <Search size={14} />
@@ -2340,14 +2389,8 @@ const MediaLibrary = ({
 
   useEffect(load, [load])
 
-  const upload = async (files: FileList | File[] | null) => {
-    if (!files || files.length === 0) return
-    setBusy(true)
-    for (const file of Array.from(files)) {
-      await api.uploadMedia(file).catch(error => toast(errorOf(error), true))
-    }
-    load()
-  }
+  const uploader = useUploader(load, message => toast(message, true))
+  const upload = uploader.run
 
   return (
     <>
@@ -2411,6 +2454,8 @@ const MediaLibrary = ({
           Drop files here to upload
         </button>
       ) : null}
+
+      <UploadBar state={uploader.state} />
 
       {busy ? (
         <Spinner />
