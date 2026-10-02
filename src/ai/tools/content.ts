@@ -18,6 +18,11 @@ import { clampLimit, fail, fieldShape, list, queued, readableData, record, text 
 type TaxonomyRow = { id: string; name: string; label: string; hierarchical: number }
 type TermRow = { id: string; taxonomy_id: string; slug: string; label: string; parent_id: string | null }
 
+const mediaDescription =
+  "COALESCE(filename, '') || ' ' || COALESCE(alt, '') || ' ' || COALESCE(caption, '') || ' ' || COALESCE(folder, '')"
+const mediaWords = `REPLACE(REPLACE(REPLACE(REPLACE(LOWER(${mediaDescription}), ' ', ''), '.', ''), '-', ''), '_', '')`
+const mediaNeedle = (value: string): string => value.toLowerCase().replace(/[\s._-]/g, "")
+
 const loadEntry = (run: ToolRun, entryId: string) =>
   run.db.one<EntryRow>(
     from(entries)
@@ -118,7 +123,7 @@ export const contentTools: readonly Tool[] = [
   {
     name: "search_site",
     description:
-      "Find a page or a file by name across every content type at once. Use this when someone names a page but not what kind of page it is — which is most of the time.",
+      "Find a page by title or a file by filename, alt text, caption, or folder across the site. Use this when someone names a page but not what kind of page it is — which is most of the time.",
     input_schema: {
       type: "object",
       properties: {
@@ -148,7 +153,7 @@ export const contentTools: readonly Tool[] = [
       const files = await run.db.all<MediaRow>(
         from(media)
           .where(q => q("deleted_at").isNull())
-          .where(q => q.raw(contains(run.db, "filename", term)))
+          .where(q => q.raw(contains(run.db, mediaWords, mediaNeedle(term))))
           .limit(limit),
       )
 
@@ -161,7 +166,14 @@ export const contentTools: readonly Tool[] = [
             slug: row.slug,
             status: row.status,
           })),
-          media: files.map(row => ({ id: row.id, filename: row.filename, url: publicUrl(row.url), alt: row.alt })),
+          media: files.map(row => ({
+            id: row.id,
+            filename: row.filename,
+            url: publicUrl(row.url),
+            alt: row.alt,
+            caption: row.caption,
+            folder: row.folder,
+          })),
         },
       }
     },
@@ -207,22 +219,26 @@ export const contentTools: readonly Tool[] = [
   {
     name: "list_media",
     description:
-      "List images and files already uploaded to this site. Media and gallery fields hold ids from here; never invent one. You cannot upload — send someone to the media library with open_screen when a file they want does not exist yet.",
+      "Find images and files already uploaded to this site. Search filename, alt text, caption, and folder; spaces and common filename separators do not matter. Try short subject words, then browse without q and use offset for older files before deciding one is missing. Media and gallery fields hold ids from here; never invent one. You cannot upload — send someone to the media library with open_screen when a file they want does not exist yet.",
     input_schema: {
       type: "object",
       properties: {
-        q: { type: "string", description: "Optional filename or alt-text search." },
+        q: { type: "string", description: "Optional subject words from the filename, alt text, caption, or folder." },
         limit: { type: "number", description: "Up to 50. Defaults to 20." },
+        offset: { type: "number", description: "Skip this many results to browse older files. Defaults to 0." },
       },
       additionalProperties: false,
     },
     needs: can.readContent,
     run: async (run, input) => {
       let query = from(media).where(q => q("deleted_at").isNull())
-      const search = text(input, "q")
-      if (search) query = query.where(q => q.raw(contains(run.db, "filename", search)))
+      const words = text(input, "q").trim().split(/\s+/).filter(Boolean)
+      for (const word of words) query = query.where(q => q.raw(contains(run.db, mediaWords, mediaNeedle(word))))
 
-      const found = await run.db.all<MediaRow>(query.orderBy("created_at", "DESC").limit(clampLimit(input.limit)))
+      const offset = Math.min(Math.max(Number(input.offset) || 0, 0), 10_000)
+      const found = await run.db.all<MediaRow>(
+        query.orderBy("created_at", "DESC").limit(clampLimit(input.limit)).offset(offset),
+      )
       return {
         output: found.map(row => ({
           id: row.id,

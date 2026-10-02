@@ -228,10 +228,11 @@ const ENTRIES = {
   },
 
   "type.previewUrl": {
-    title: "Live page URL",
-    what: "Where content of this kind appears on your real website. Fill it in and the view button opens the actual page.",
+    title: "Page URL",
+    what: "Where content of this kind appears on your real website. Fill it in to view the live page or open a draft preview.",
     example: "https://example.com/blog/{slug} — the {slug} part is filled in for each entry.",
-    careful: "Leave it empty and the view button has to guess, which is usually wrong.",
+    careful:
+      "Your website must read the preview token to show drafts. Without that support, the link may show the published page instead.",
   },
 
   "field.key": {

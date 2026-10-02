@@ -352,6 +352,13 @@ something meant to be disposable. Nothing is revocable, which is why the lifetim
 is short. References are *not* expanded: that would mean deciding whether a
 referenced draft is also in scope, and one token should mean one entry.
 
+The entry editor opens the site's rendered preview from the content type's URL
+template. It saves pending edits first, then mints a token and opens the site in
+a new tab. Saving a published entry updates the live page before previewing; the
+button says **Save live & preview** in that state. The consuming site must read
+the `preview` query parameter and fetch `/preview/:token` to render a draft.
+Inkling cannot render a consuming site's templates on its own.
+
 ## AI
 
 Optional, and off until an operator connects a provider. Three parts:

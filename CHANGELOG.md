@@ -9,6 +9,25 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.16.0 — 2026-10-02
+
+### Added
+
+- Entry editors can open the consuming site's rendered preview for drafts and
+  saved changes. The button saves pending edits first; on a published entry it
+  explicitly says **Save live & preview**. Applied Inky page proposals also have
+  a **Preview page** action. The consuming site must support the existing
+  `preview` token parameter to show drafts.
+
+### Fixed
+
+- Inky's media search now checks alt text, captions, and folders as well as
+  filenames. It ignores spaces and common filename separators, so a request
+  for `ibpamember.png` finds `IBPA member.png`. It also accepts an offset for
+  older files and checks the library before reporting that an image is missing.
+- On sites that expose design surfaces, Inky no longer says every colour, size,
+  and spacing request requires a developer; it checks those surfaces first.
+
 ## 1.15.1 — 2026-10-02
 
 ### Fixes

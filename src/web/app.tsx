@@ -1843,6 +1843,7 @@ const Editor = ({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [scheduleAt, setScheduleAt] = useState("")
   const [siteUrl, setSiteUrl] = useState("")
@@ -1964,6 +1965,33 @@ const Editor = ({
     go({ name: "collection", type: type.name })
   }
 
+  const preview = async () => {
+    if (!type.previewUrl) return
+    // Open synchronously so browsers allow the new tab after the API request.
+    const tab = window.open("about:blank", "_blank")
+    if (!tab) {
+      toast("Allow pop-ups to open the preview", true)
+      return
+    }
+    setPreviewing(true)
+    try {
+      const target = dirty ? await save() : entry
+      if (!target) {
+        tab.close()
+        return
+      }
+      const link = await api.previewEntry(target.id)
+      if (!link.siteUrl) throw new Error("Set a live page URL for this content type to preview it")
+      tab.opener = null
+      tab.location.replace(link.siteUrl)
+    } catch (error) {
+      tab.close()
+      toast(errorOf(error), true)
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   // Cmd/Ctrl-S is the reflex in every editor; intercept it rather than letting
   // the browser open a save-page dialog over the admin.
   useEffect(() => {
@@ -1991,6 +2019,18 @@ const Editor = ({
         </button>
         <div className="rowend">
           {entry ? <Pill status={entry.status} /> : <span className="pill">new</span>}
+          {type.previewUrl ? (
+            <button type="button" className="btn" disabled={saving || previewing} onClick={() => void preview()}>
+              <ExternalLink size={14} />{" "}
+              {previewing
+                ? "Opening preview…"
+                : dirty && entry?.status === "published"
+                  ? "Save live & preview"
+                  : dirty
+                    ? "Save & preview"
+                    : "Preview page"}
+            </button>
+          ) : null}
           {mayEdit ? (
             <button type="button" className="btn primary" onClick={save} disabled={saving || (!dirty && !!entry)}>
               {saving ? <span className="spin" /> : null}
@@ -6963,6 +7003,7 @@ const ProposalCard = ({
   canApply,
   onApply,
   onDismiss,
+  onPreview,
 }: {
   proposal: AgentProposal
   decided: "applied" | "dismissed" | undefined
@@ -6972,6 +7013,7 @@ const ProposalCard = ({
   canApply: boolean
   onApply: () => void
   onDismiss: () => void
+  onPreview?: () => void
 }) => {
   const changes = changesIn(proposal)
   const target = targetOf(proposal)
@@ -6996,7 +7038,14 @@ const ProposalCard = ({
               <ExternalLink size={13} /> {(proposal as Extract<AgentProposal, { kind: "admin.open" }>).label}
             </button>
           ) : decided === "applied" ? (
-            <span className="pill published">applied</span>
+            <>
+              {onPreview ? (
+                <button type="button" className="btn sm" onClick={onPreview}>
+                  <ExternalLink size={13} /> Preview page
+                </button>
+              ) : null}
+              <span className="pill published">applied</span>
+            </>
           ) : decided === "dismissed" ? (
             <span className="pill archived">dismissed</span>
           ) : (
@@ -7151,6 +7200,7 @@ const AgentPanel = ({
   // A delivery key and a webhook secret exist exactly once, at the moment they
   // are created. Everything else about a proposal can be looked at again.
   const [fresh, setFresh] = useState<{ title: string; value: string } | null>(null)
+  const [created, setCreated] = useState<Record<string, string>>({})
   const tail = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -7198,9 +7248,11 @@ const AgentPanel = ({
         case "entry.update":
           await api.updateEntry(proposal.entryId, proposal.patch as Partial<Entry>)
           break
-        case "entry.create":
-          await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+        case "entry.create": {
+          const saved = await api.createEntry(proposal.typeName, proposal.payload as Partial<Entry>)
+          setCreated(current => ({ ...current, [proposal.id]: saved.id }))
           break
+        }
         case "entry.restore":
           await api.restoreRevision(proposal.revisionId)
           break
@@ -7341,6 +7393,38 @@ const AgentPanel = ({
   // the browser — see `scopesFor`.
   const allowed = (proposal: AgentProposal) => status.scopes.includes(proposal.needs)
 
+  const previewId = (proposal: AgentProposal): string | null => {
+    switch (proposal.kind) {
+      case "entry.update":
+      case "entry.restore":
+      case "entry.untrash":
+      case "entry.status":
+      case "entry.terms":
+        return proposal.entryId
+      case "entry.create":
+        return created[proposal.id] ?? null
+      default:
+        return null
+    }
+  }
+
+  const previewApplied = async (entryId: string) => {
+    const tab = window.open("about:blank", "_blank")
+    if (!tab) {
+      toast("Allow pop-ups to open the preview", true)
+      return
+    }
+    try {
+      const link = await api.previewEntry(entryId)
+      if (!link.siteUrl) throw new Error("Set a page URL for this content type to preview it")
+      tab.opener = null
+      tab.location.replace(link.siteUrl)
+    } catch (error) {
+      tab.close()
+      toast(errorOf(error), true)
+    }
+  }
+
   // Navigation cards are not pending decisions: they have already happened, and
   // sweeping one into "Apply all" would move the screen mid-batch.
   const open = proposals.filter(
@@ -7428,6 +7512,11 @@ const AgentPanel = ({
               canApply={allowed(proposal)}
               onApply={() => void apply(proposal)}
               onDismiss={() => decide(proposal.id, "dismissed")}
+              onPreview={
+                decided[proposal.id] === "applied" && previewId(proposal)
+                  ? () => void previewApplied(previewId(proposal) as string)
+                  : undefined
+              }
             />
           ))}
           <p className="dim2" style={{ fontSize: 12 }}>

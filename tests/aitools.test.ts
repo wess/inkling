@@ -173,6 +173,61 @@ test("alt text can be proposed for a file, and the row does not move", async () 
   await db.close()
 })
 
+test("Inky finds media by description, caption, and folder", async () => {
+  const { db, mediaId } = await setup()
+  await db.execute(
+    from(media)
+      .where(q => q("id").equals(mediaId))
+      .update({ alt: "Blue shop front", caption: "Morning on Main Street", folder: "Campaign photos" }),
+  )
+  const proposals: Proposal[] = []
+  for (const search of ["blue shop", "main morning", "campaign", "storefront"]) {
+    const result = (await call(db, proposals, "list_media", { q: search })).output as { id: string }[]
+    expect(result.map(file => file.id)).toContain(mediaId)
+  }
+  const site = (await call(db, proposals, "search_site", { q: "Main Street" })).output as {
+    media: { id: string }[]
+  }
+  expect(site.media.map(file => file.id)).toContain(mediaId)
+  const firstPage = (await call(db, proposals, "list_media", { limit: 1 })).output as { id: string }[]
+  const secondPage = (await call(db, proposals, "list_media", { limit: 1, offset: 1 })).output as { id: string }[]
+  expect(firstPage).toHaveLength(1)
+  expect(secondPage).toHaveLength(0)
+  expect(proposals).toHaveLength(0)
+  await db.close()
+})
+
+test("Inky finds a filename even when the request leaves its spaces out", async () => {
+  const { db } = await setup()
+  const badgeId = id()
+  await db.execute(
+    from(media).insert({
+      id: badgeId,
+      filename: "IBPA member.png",
+      storage_key: "ibpa.png",
+      url: "/media/file/ibpa.png",
+      mime: "image/png",
+      size: 1024,
+      width: 200,
+      height: 100,
+      alt: "Independent Book Publishers Association member badge",
+      caption: null,
+      folder: null,
+      uploaded_by: null,
+      created_at: now(),
+      deleted_at: null,
+    }),
+  )
+  const proposals: Proposal[] = []
+  const files = (await call(db, proposals, "list_media", { q: "ibpamember.png" })).output as { id: string }[]
+  expect(files.map(file => file.id)).toContain(badgeId)
+  const site = (await call(db, proposals, "search_site", { q: "ibpamember.png" })).output as {
+    media: { id: string }[]
+  }
+  expect(site.media.map(file => file.id)).toContain(badgeId)
+  await db.close()
+})
+
 test("a menu can be added and removed, and a bad link is caught in both", async () => {
   const { db } = await setup()
   const proposals: Proposal[] = []

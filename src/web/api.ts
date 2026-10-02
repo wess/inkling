@@ -682,6 +682,10 @@ export const api = {
   entries: (type: string, query: Record<string, string | number | undefined> = {}) =>
     request<Paged<Entry>>(`/types/${type}/entries`, { query }),
   entry: (id: string) => request<Entry>(`/entries/${id}`),
+  previewEntry: (id: string) =>
+    request<{ token: string; expiresAt: string; url: string; siteUrl: string | null }>(`/entries/${id}/preview`, {
+      method: "POST",
+    }),
   createEntry: (type: string, input: Partial<Entry>) => request<Entry>(`/types/${type}/entries`, { body: input }),
   updateEntry: (id: string, input: Partial<Entry>) => request<Entry>(`/entries/${id}`, { method: "PUT", body: input }),
   publishEntry: (id: string, at?: string) =>
