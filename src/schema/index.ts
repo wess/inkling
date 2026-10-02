@@ -31,6 +31,16 @@ export const sessions = defineSchema("sessions", {
   revoked_at: column.text().nullable(),
 })
 
+export const mcpOauthCodes = defineSchema("mcp_oauth_codes", {
+  hashed_code: column.text().primaryKey(),
+  user_id: column.text(),
+  client_id: column.text(),
+  redirect_uri: column.text(),
+  challenge: column.text(),
+  resource: column.text(),
+  expires_at: column.text(),
+})
+
 // A content type is a user-defined shape. `fields` holds the ordered field
 // definitions (see src/fields) as JSON. `owner_plugin` is set when a plugin
 // declared the type, which makes it read-only in the UI and lets disabling the
@@ -169,6 +179,7 @@ export const agentKeys = defineSchema("agent_keys", {
   last_ip: column.text().nullable(),
   expires_at: column.text(),
   revoked_at: column.text().nullable(),
+  audience: column.text().nullable(),
 })
 
 export const webhooks = defineSchema("webhooks", {

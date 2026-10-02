@@ -187,6 +187,13 @@ returns the same answer as JSON.
 
 ### An agent working the site from outside
 
+For ordinary ChatGPT chats, add the site's HTTPS MCP URL under ChatGPT Plugins:
+`https://cms.yoursite.com/mcp`. The person signs in with their own Inkling
+account in the browser. The link follows that account's role and can be revoked
+under Agent keys. No local setup or copied key is required. The
+[School connection lesson](https://inkling.host/school/chatgpt) walks a new
+editor through the desktop app.
+
 Inky is for the person at the admin. For a coding agent in a terminal somewhere
 else, `bun run mcp` serves the admin API as MCP tools over stdio — entries,
 content types, media, menus, settings, taxonomy, search, and revisions.

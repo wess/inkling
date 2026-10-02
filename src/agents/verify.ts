@@ -23,6 +23,7 @@ export type AgentKeyRow = {
   last_ip: string | null
   expires_at: string
   revoked_at: string | null
+  audience: string | null
 }
 
 export const looksLikeAgentKey = (value: string): boolean => value.startsWith(`${AGENT_PREFIX}_`)

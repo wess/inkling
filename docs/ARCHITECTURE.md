@@ -32,6 +32,13 @@ It does not render your site.
 | Routes | `/api/auth`, `/api/types`, `/api/entries`, … | `/content/*`, `/site/*` |
 | Consumers | the admin | your websites |
 
+The root-mounted `/mcp` endpoint is a third audience: a connected account using
+remote tools. Its OAuth link issues an expiring agent key bound to this site's
+`/mcp` resource. The endpoint checks that audience before running a tool; the
+ordinary admin API still checks the key's grants and its owner's current role
+on every operation. OAuth discovery and consent live beside `/mcp`, while the
+existing stdio bridge remains available for local clients.
+
 They share one origin and are separated by path. Everything session-gated is
 mounted through `prefixed("/api", …)`; everything public keeps a root path,
 because those paths are pasted into other people's code — a media URL is stored

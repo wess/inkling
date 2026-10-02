@@ -1,6 +1,6 @@
 # Operating an Inkling site with an agent
 
-Inkling exposes its existing admin API as MCP tools over stdio. The MCP process
+Inkling exposes its existing admin API as MCP tools over stdio and HTTPS. The MCP process
 does not bypass the application: every operation takes the same authenticated
 route as the admin, so validation, revisions, hooks, and the audit log still
 apply.
@@ -29,6 +29,25 @@ expiry and the smallest useful grant set. Do not put a key in a repository,
 prompt, transcript, issue, or shell history.
 
 ## Connect
+
+### ChatGPT desktop
+
+Use the HTTPS connection for an ordinary ChatGPT chat. On the site you want to
+edit, the MCP URL is its public origin followed by `/mcp` — for Warren, it is
+`https://warren.wess.dev/mcp`. In ChatGPT, enable Developer mode under
+**Settings → Security and login**, then add that URL under **ChatGPT Plugins**.
+Choose the connection in a new chat. The account-linking page asks the person
+to sign in to that Inkling site. The resulting connection acts as that account,
+is limited to the content tools and the account's current role, and appears as
+**ChatGPT connection** under Agent keys. Revoking that key cuts off the link.
+The link expires after 90 days; connect again when prompted.
+
+Unlike Inky's proposals in the admin, MCP write tools save through the admin API
+when called. Review a write before allowing it, then read the result back.
+No local checkout, Bun installation, or copied agent key is needed on the
+person's computer.
+
+### Local coding agents
 
 1. Sign in to the Inkling admin as the account the agent should act as.
 2. Open **Agent keys**, create a key, choose its expiry, and grant only the work

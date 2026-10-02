@@ -48,12 +48,14 @@ import pkg from "../package.json"
 
 const BASE = process.env.INKLING_URL ?? ""
 const KEY = process.env.INKLING_KEY ?? ""
+const DESCRIBE = process.env.INKLING_MCP_DESCRIBE === "1"
+const REMOTE = process.env.INKLING_MCP_REMOTE === "1"
 // Narrows further than the key does — for pointing an agent at production to
 // look rather than touch without minting a second key. It is a convenience and
 // nothing more: the key is what production actually enforces.
 const READONLY = /^(1|true|yes)$/i.test(process.env.INKLING_MCP_READONLY ?? "")
 
-if (!BASE || !KEY) {
+if (!BASE || (!KEY && !DESCRIBE)) {
   console.error(
     "Set INKLING_URL and INKLING_KEY.\n" +
       "INKLING_KEY is an agent key — mint one in the admin under Settings → Agent keys,\n" +
@@ -62,7 +64,7 @@ if (!BASE || !KEY) {
   process.exit(1)
 }
 
-if (!KEY.startsWith("inkagt_")) {
+if (!DESCRIBE && !KEY.startsWith("inkagt_")) {
   console.error(
     "INKLING_KEY does not look like an agent key (they start with `inkagt_`).\n" +
       "A delivery key (`ink_…`) reads published content and cannot reach the admin API;\n" +
@@ -291,6 +293,14 @@ const TOOLS: readonly Tool[] = [
     run: () => call("/settings"),
   },
   {
+    name: "get_design",
+    description:
+      "Show the site's named design surfaces, allowed properties, and current overrides. Read this before changing how the site looks.",
+    inputSchema: object({}),
+    needs: "content.read",
+    run: () => call("/design"),
+  },
+  {
     name: "list_taxonomies",
     description: "Taxonomies and their terms — categories, tags, whatever this site defines.",
     inputSchema: object({}),
@@ -484,6 +494,29 @@ const TOOLS: readonly Tool[] = [
     needs: "settings.manage",
     run: a => call("/settings", { method: "PUT", body: a.values }),
   },
+  {
+    name: "update_design",
+    description:
+      "Change the site's appearance on named surfaces from get_design. Each change has a surface, an allowed property, and a value; null removes an override. Changes are live immediately.",
+    inputSchema: object(
+      {
+        changes: {
+          type: "array",
+          items: object(
+            {
+              surface: str("Surface name from get_design"),
+              property: str("Allowed property from get_design"),
+              value: { type: ["string", "null"], description: "New CSS value, or null to restore the original" },
+            },
+            ["surface", "property", "value"],
+          ),
+        },
+      },
+      ["changes"],
+    ),
+    needs: "settings.manage",
+    run: a => call("/design", { method: "PUT", body: { changes: a.changes } }),
+  },
 ]
 
 // what this key can actually do
@@ -509,10 +542,14 @@ const introspect = async (): Promise<Whoami["data"]> => {
   }
 }
 
-const me = await introspect()
+const me = DESCRIBE
+  ? { kind: "agent", name: "Inkling", email: "", role: "editor", grants: [...WRITES, "content.read"] }
+  : await introspect()
 const held = new Set(me.grants)
 
-const available = TOOLS.filter(tool => held.has(tool.needs) && !(READONLY && WRITES.has(tool.needs)))
+const available = TOOLS.filter(
+  tool => held.has(tool.needs) && !(READONLY && WRITES.has(tool.needs)) && !(REMOTE && tool.name === "upload_media"),
+)
 const byName = new Map(available.map(tool => [tool.name, tool]))
 
 // JSON-RPC over stdio

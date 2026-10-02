@@ -171,7 +171,9 @@ export const agentKeyRoutes = (db: Connection): Route[] => {
             grants:
               identity.grants === null
                 ? CAPABILITIES.filter(capability => capability(identity.role)).map(capability => capability.scope)
-                : [...identity.grants],
+                : CAPABILITIES.filter(
+                    capability => capability(identity.role) && identity.grants?.has(capability.scope),
+                  ).map(capability => capability.scope),
           },
         })
       }),
@@ -229,6 +231,7 @@ export const agentKeyRoutes = (db: Connection): Route[] => {
           last_ip: null,
           expires_at: expiresAt,
           revoked_at: null,
+          audience: null,
         }
 
         await db.execute(from(agentKeys).insert(row))

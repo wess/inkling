@@ -17,6 +17,7 @@ import { designPublicRoutes, designRoutes, readDesignCss, type Surfaces } from "
 import { entryRoutes, publishDue } from "./entries/index.ts"
 import { prefixed } from "./http/index.ts"
 import { apiKeyRoutes, ensureNamedKey } from "./keys/index.ts"
+import { mcpRoutes } from "./mcp/index.ts"
 import { mediaFileRoutes, mediaRoutes } from "./media/index.ts"
 import { menuRoutes } from "./menus/index.ts"
 import { up as migrate } from "./migrate/index.ts"
@@ -182,6 +183,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   // a session-gated route exports two arrays (see mediaRoutes / mediaFileRoutes)
   // rather than being mounted twice.
   const routes = [
+    ...mcpRoutes(db),
     ...prefixed("/api", [
       ...authRoutes(db),
       ...userRoutes(db),

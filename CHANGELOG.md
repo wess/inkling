@@ -9,6 +9,18 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.17.0 — 2026-10-02
+
+### Added
+
+- Inkling can now connect to ordinary ChatGPT chats over HTTPS at `/mcp`.
+  Account linking uses the site's own login and issues a 90-day, revocable
+  agent key restricted to the account's current role and the content tools.
+  A connection can read and edit entries, menus, settings, and named design
+  surfaces. The existing local stdio bridge remains available.
+- The School has a step-by-step connection lesson for editors with no coding
+  setup. A remote connection cannot upload a local file from the site server.
+
 ## 1.16.0 — 2026-10-02
 
 ### Added
