@@ -433,6 +433,22 @@ navigation. Ask Inky attaches `src/web/inky` beside the selected element on a
 desktop and uses the existing dock on narrow screens. The conversation carries
 the selected field, section or shared part rather than only the current route.
 
+The entry editor keeps bounded page-wide undo and redo history, including content
+and layout. Text input coalesces within a field; discrete layout changes remain
+separate steps. Saved shared values are merged into every history snapshot so
+undo cannot overwrite a shared save. Sections support handle dragging and keyboard
+arrows, with fixed sections acting as movement boundaries. Save and undo shortcuts
+inside the isolated canvas are forwarded through the same checked message channel.
+
+Unsaved page drafts are copied to session storage on each change, scoped to the
+account and entry. Reloading or returning to that entry offers Restore local draft
+or Discard local draft, with a warning if saved content has changed. Recovery never
+saves automatically, and a confirmed save clears the copy. The copy lasts only for
+the current browser tab; it is not a server autosave and does not cover unsaved
+shared-source edits. Storage failures leave editing available and show save guidance.
+Preview requests cancel superseded work and time out after fifteen seconds with
+retry controls; failed saves retain the draft.
+
 ## AI
 
 Optional, and off until an operator connects a provider. Three parts:

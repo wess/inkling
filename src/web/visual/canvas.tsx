@@ -90,6 +90,17 @@ export const Canvas = ({
         initialize()
         return
       }
+      if (value.kind === "shortcut" && ["s", "z"].includes(value.key)) {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: value.key,
+            metaKey: value.metaKey === true,
+            ctrlKey: value.ctrlKey === true,
+            shiftKey: value.shiftKey === true,
+          }),
+        )
+        return
+      }
       if (value.kind === "scroll") {
         setMenu(null)
         return

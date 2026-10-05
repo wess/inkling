@@ -184,6 +184,29 @@
   font-size: 11px;
   margin-top: 3px;
 }
+.visualsectionname {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.visualgrip {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 32px;
+  cursor: grab;
+  flex-shrink: 0;
+}
+.visualgrip:active {
+  cursor: grabbing;
+}
+.visualsections li.droptarget {
+  background: var(--accentwash);
+  outline: 2px solid var(--accent);
+}
+.visualsections .row {
+  flex-shrink: 0;
+}
 .visualsections .row {
   gap: 0;
 }
@@ -272,4 +295,17 @@
   .visualhint {
     font-size: 12px;
   }
+}
+
+.visualannouncement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.visualtools,
+.visualstatus {
+  flex-wrap: wrap;
 }

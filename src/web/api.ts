@@ -23,7 +23,13 @@ const fail = (status: number, message: string, code?: string, details?: unknown)
   return error
 }
 
-type Options = { method?: string; body?: unknown; form?: FormData; query?: Record<string, string | number | undefined> }
+type Options = {
+  signal?: AbortSignal
+  method?: string
+  body?: unknown
+  form?: FormData
+  query?: Record<string, string | number | undefined>
+}
 
 export const request = async <T>(path: string, options: Options = {}): Promise<T> => {
   // Everything the admin owns lives under /api. A plugin's own routes do not:
@@ -40,11 +46,22 @@ export const request = async <T>(path: string, options: Options = {}): Promise<T
   if (token) headers.authorization = `Bearer ${token}`
   if (options.body !== undefined) headers["content-type"] = "application/json"
 
-  const response = await fetch(url, {
-    method: options.method ?? (options.body !== undefined || options.form ? "POST" : "GET"),
-    headers,
-    body: options.form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      signal: options.signal,
+      method: options.method ?? (options.body !== undefined || options.form ? "POST" : "GET"),
+      headers,
+      body: options.form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
+    })
+  } catch (error) {
+    if (options.signal?.aborted) throw error
+    throw fail(
+      0,
+      "Could not reach the site. Check your connection, then try again. Your edits are still here.",
+      "NETWORK_ERROR",
+    )
+  }
 
   if (response.status === 204) return undefined as T
 
@@ -722,10 +739,11 @@ export const api = {
   entry: (id: string) => request<Entry>(`/entries/${id}`),
   website: () => request<Website>("/website"),
   visualPages: () => request<{ data: Record<string, VisualPage> }>("/visual"),
-  previewEntry: (id: string, draft?: Pick<Entry, "title" | "slug" | "data">) =>
+  previewEntry: (id: string, draft?: Pick<Entry, "title" | "slug" | "data">, signal?: AbortSignal) =>
     request<{ token: string; expiresAt: string; url: string; siteUrl: string | null }>(`/entries/${id}/preview`, {
       method: "POST",
       body: draft,
+      signal,
     }),
   createEntry: (type: string, input: Partial<Entry>) => request<Entry>(`/types/${type}/entries`, { body: input }),
   updateEntry: (id: string, input: Partial<Entry>) => request<Entry>(`/entries/${id}`, { method: "PUT", body: input }),

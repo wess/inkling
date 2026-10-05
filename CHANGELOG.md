@@ -9,6 +9,26 @@ Dates are release dates. From 1.0 this is semver: a major for a breaking change
 to the delivery API, `createInkling()`, the plugin interface, or the shape of a
 content type; a minor for new surface; a patch for fixes alone.
 
+## 1.21.0 — 2026-10-05
+
+### Added
+
+- Page-wide Undo and Redo cover content and section layout. Shared details that
+  have already been saved stay intact when undoing page changes.
+- Unsaved page drafts have a recovery copy in the current browser tab. Reloading
+  offers Restore local draft or Discard local draft and warns if saved content
+  has changed. Recovery is scoped to the account and entry; saves stay explicit.
+- Section handles support dragging, with keyboard move arrows alongside them.
+  Fixed sections cannot be moved or crossed.
+
+### Fixed
+
+- Preview requests cancel superseded work and time out with retry guidance.
+  Connection failures explain how to retry while keeping page edits.
+- Save and undo shortcuts work when focus is inside the isolated page preview.
+- Returning to the saved content through undo clears the unsaved warning.
+  Entry loads cannot replace a newer selection after navigation.
+
 ## 1.20.2 — 2026-10-02
 
 ### Fixed

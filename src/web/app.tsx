@@ -85,6 +85,7 @@ import type {
   Webhook,
 } from "./api.ts"
 import { api, clearToken, getToken, setToken } from "./api.ts"
+import { useDraft } from "./draft/index.ts"
 import type { HelpId } from "./help.ts"
 import { HELP, helpFor } from "./help.ts"
 import { HelpContent, HelpScreen } from "./helpview.tsx"
@@ -1902,16 +1903,17 @@ const Editor = ({
   toast: (message: string, bad?: boolean) => void
 }) => {
   const [entry, setEntry] = useState<Entry | null>(null)
-  const [title, setTitle] = useState("")
-  const [slug, setSlug] = useState("")
-  const [locale, setLocale] = useState("en")
-  const [sortOrder, setSortOrder] = useState(0)
-  const [data, setData] = useState<Record<string, unknown>>({})
+  const draft = useDraft(`${identityId}:${type.name}:${id ?? "new"}`)
+  const { title, slug, locale, sortOrder, data } = draft.value
+  const { dirty } = draft
+  const setTitle = (value: string) => draft.set("title", value)
+  const setSlug = (value: string) => draft.set("slug", value)
+  const setLocale = (value: string) => draft.set("locale", value)
+  const setSortOrder = (value: number) => draft.set("sortOrder", value)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(true)
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
-  const [dirty, setDirty] = useState(false)
   const [sharedDirty, setSharedDirty] = useState(false)
   const [sharedSaving, setSharedSaving] = useState(false)
   const sharedState = useCallback((dirty: boolean, saving: boolean) => {
@@ -1927,7 +1929,7 @@ const Editor = ({
   const [action, setAction] = useState(false)
   const saveLock = useRef(false)
   const mayEdit = canEdit && (!entry || canPublish || entry.authorId === identityId)
-  const locked = saving || action || sharedSaving
+  const locked = saving || action || sharedSaving || (mayEdit && !!draft.recovery)
 
   useEffect(() => {
     let active = true
@@ -1963,35 +1965,41 @@ const Editor = ({
   useEffect(() => {
     if (!id) {
       setEntry(null)
-      setTitle("")
-      setSlug("")
-      setLocale("en")
-      setSortOrder(0)
-      setData(Object.fromEntries(type.fields.map(f => [f.key, f.default ?? null])))
+      draft.reset({
+        title: "",
+        slug: "",
+        locale: "en",
+        sortOrder: 0,
+        data: Object.fromEntries(type.fields.map(f => [f.key, f.default ?? null])),
+      })
       setBusy(false)
       return
     }
+    let active = true
     setBusy(true)
     api
       .entry(id)
       .then(row => {
+        if (!active) return
         setEntry(row)
-        setTitle(row.title)
-        setSlug(row.slug)
-        setLocale(row.locale)
-        setSortOrder(row.sortOrder)
-        setData(row.data)
+        draft.reset({ title: row.title, slug: row.slug, locale: row.locale, sortOrder: row.sortOrder, data: row.data })
       })
       .catch(error => {
+        if (!active) return
         setFailure(errorOf(error))
         toast(errorOf(error), true)
       })
-      .finally(() => setBusy(false))
-  }, [id, type.fields, toast])
+      .finally(() => {
+        if (active) setBusy(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [id, type.fields, toast, draft.reset])
 
   const edit = (key: string, value: unknown) => {
-    setData(current => ({ ...current, [key]: value }))
-    setDirty(true)
+    if (!mayEdit || locked) return
+    draft.set("data", current => ({ ...current, [key]: value }), typeof value === "string" ? `field:${key}` : "")
     setErrors(current => {
       if (!current[key]) return current
       const { [key]: _, ...rest } = current
@@ -2001,7 +2009,7 @@ const Editor = ({
   }
 
   const save = async (): Promise<Entry | null> => {
-    if (saveLock.current || !mayEdit || sharedDirty || sharedSaving) return null
+    if (saveLock.current || !mayEdit || sharedDirty || sharedSaving || draft.recovery) return null
     saveLock.current = true
     setSaving(true)
     setErrors({})
@@ -2016,9 +2024,13 @@ const Editor = ({
       }
       const saved = entry ? await api.updateEntry(entry.id, payload) : await api.createEntry(type.name, payload)
       setEntry(saved)
-      setSlug(saved.slug)
-      setData(saved.data)
-      setDirty(false)
+      draft.markSaved({
+        title: saved.title,
+        slug: saved.slug,
+        locale: saved.locale,
+        sortOrder: saved.sortOrder,
+        data: saved.data,
+      })
       toast(saved.status === "published" ? "Saved. Your website is updated." : "Draft saved")
       if (!entry) {
         delete document.body.dataset.unsaved
@@ -2086,7 +2098,7 @@ const Editor = ({
     setFailure("")
     try {
       await api.deleteEntry(entry.id)
-      setDirty(false)
+      draft.clear()
       delete document.body.dataset.unsaved
       toast("Moved to trash and taken off your website")
       go({ name: "collection", type: type.name })
@@ -2129,7 +2141,20 @@ const Editor = ({
   // the browser open a save-page dialog over the admin.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+      const target = event.target instanceof HTMLElement ? event.target : null
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "z" &&
+        !target?.closest("input, textarea, [contenteditable='true']")
+      ) {
+        event.preventDefault()
+        if (!mayEdit || locked || sharedDirty) return
+        if (event.shiftKey) draft.redo()
+        else draft.undo()
+        setErrors({})
+        setFailure("")
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault()
         if (!mayEdit || locked) return
         if (sharedDirty) {
@@ -2166,6 +2191,32 @@ const Editor = ({
           <ChevronLeft size={15} /> {type.pluralLabel}
         </button>
         <div className="rowend">
+          <button
+            type="button"
+            className="btn"
+            aria-label="Undo page change"
+            disabled={!mayEdit || locked || sharedDirty || !draft.canUndo}
+            onClick={() => {
+              draft.undo()
+              setErrors({})
+              setFailure("")
+            }}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="btn"
+            aria-label="Redo page change"
+            disabled={!mayEdit || locked || sharedDirty || !draft.canRedo}
+            onClick={() => {
+              draft.redo()
+              setErrors({})
+              setFailure("")
+            }}
+          >
+            Redo
+          </button>
           {entry ? <Pill status={entry.status} /> : <span className="pill">new</span>}
           {type.previewUrl ? (
             <button type="button" className="btn" disabled={locked || previewing} onClick={() => void preview()}>
@@ -2196,6 +2247,24 @@ const Editor = ({
         </div>
       </div>
 
+      {draft.recovery && mayEdit ? (
+        <Note kind="warn">
+          {draft.recoveryConflict
+            ? "An earlier local draft was found. This page has changed since then. Restoring replaces the editing controls with that draft; review it before saving."
+            : "Unsaved edits from your last visit are available in this tab."}
+          <div className="row" style={{ marginTop: 12 }}>
+            <button type="button" className="btn" onClick={draft.restore}>
+              Restore local draft
+            </button>
+            <button type="button" className="btn" onClick={draft.discardRecovery}>
+              Discard local draft
+            </button>
+          </div>
+        </Note>
+      ) : null}
+      {draft.storageFailure && dirty ? (
+        <Note kind="warn">This browser could not keep a recovery copy. Keep this tab open and save your edits.</Note>
+      ) : null}
       {failure ? (
         <div className="editorfailure" role="alert">
           <strong>{failure}</strong>
@@ -2238,11 +2307,13 @@ const Editor = ({
             All fields & publishing
           </button>
           <span className="editorstate" role="status">
-            {sharedDirty
-              ? "Unsaved shared changes — save in the sidebar"
-              : dirty
-                ? "Unsaved page changes"
-                : "All changes saved"}
+            {draft.recovery && mayEdit
+              ? "Local draft waiting for review"
+              : sharedDirty
+                ? "Unsaved shared changes — save in the sidebar"
+                : dirty
+                  ? "Unsaved page changes"
+                  : "All changes saved"}
           </span>
         </fieldset>
       ) : null}
@@ -2261,7 +2332,7 @@ const Editor = ({
           onSharedState={sharedState}
           onSharedSaved={(entryId, values) => {
             if (entryId !== entry.id) return
-            setData(current => ({ ...current, ...values }))
+            draft.sharedSaved(values)
             setEntry(current => (current ? { ...current, data: { ...current.data, ...values } } : current))
           }}
           sharedInputs={{
@@ -2277,7 +2348,6 @@ const Editor = ({
                   value={title}
                   onChange={event => {
                     setTitle(event.target.value)
-                    setDirty(true)
                   }}
                 />
               </label>
@@ -2342,7 +2412,6 @@ const Editor = ({
                   value={title}
                   onChange={event => {
                     setTitle(event.target.value)
-                    setDirty(true)
                     if (!entry) setSlug(slugify(event.target.value))
                   }}
                 />
@@ -2354,7 +2423,6 @@ const Editor = ({
                     aria-label="Web address"
                     onChange={event => {
                       setSlug(event.target.value)
-                      setDirty(true)
                     }}
                   />
                   <Hint id="entry.slug" />
@@ -2552,7 +2620,6 @@ const Editor = ({
                     placeholder="en"
                     onChange={event => {
                       setLocale(event.target.value)
-                      setDirty(true)
                     }}
                   />
                   <span className="fh">A language code such as en or es-MX.</span>
@@ -2568,7 +2635,6 @@ const Editor = ({
                     disabled={!mayEdit}
                     onChange={event => {
                       setSortOrder(Number(event.target.value) || 0)
-                      setDirty(true)
                     }}
                   />
                   <span className="fh">Lower numbers appear first when a site sorts by display order.</span>

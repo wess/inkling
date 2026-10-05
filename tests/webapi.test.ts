@@ -55,6 +55,28 @@ test("save failures preserve field details for the editor's recovery controls", 
   })
 })
 
+test("network failures explain how to retry without clearing the session", async () => {
+  const removed = response("{}", 200, "application/json")
+  mock?.mockRejectedValue(new TypeError("Load failed"))
+  await expect(request("/entries/example", { method: "PUT", body: { title: "Changed" } })).rejects.toMatchObject({
+    status: 0,
+    code: "NETWORK_ERROR",
+    message: "Could not reach the site. Check your connection, then try again. Your edits are still here.",
+  })
+  expect(removed).toEqual([])
+})
+
+test("preview cancellation reaches the fetch and remains distinguishable from a network error", async () => {
+  response("{}", 200, "application/json")
+  const abort = new AbortController()
+  abort.abort()
+  const error = new DOMException("Aborted", "AbortError")
+  mock?.mockRejectedValue(error)
+  const { api } = await import("../src/web/api.ts")
+  await expect(api.previewEntry("example", undefined, abort.signal)).rejects.toBe(error)
+  expect(mock?.mock.calls[0]?.[1]?.signal).toBe(abort.signal)
+})
+
 test("a truncated Inky stream reports interruption instead of silently succeeding", async () => {
   response('event: text\ndata: {"text":"Let me check"}\n\n', 200, "text/event-stream")
   const { runAgent } = await import("../src/web/api.ts")

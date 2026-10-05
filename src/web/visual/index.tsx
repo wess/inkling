@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Eye, EyeOff, Monitor, Smartphone } from "lucide-react"
+import { Monitor, Smartphone } from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api, type ContentType, type Entry, type Field, type VisualPage } from "../api.ts"
 import { FormattedInput } from "../formatted/index.tsx"
@@ -8,6 +8,8 @@ import { type SharedInputs, SharedInspector } from "../website/inspector.tsx"
 import { useSharedContent } from "../website/state.ts"
 import "../website/style.css"
 import { Canvas, type Selection } from "./canvas.tsx"
+import { reorderSections } from "./order.ts"
+import { Sections } from "./sections.tsx"
 import { focusControl } from "./selection.ts"
 import "./style.css"
 
@@ -123,8 +125,9 @@ export const VisualEditor = ({
     setLoading(true)
     if (retry > 0) setFailure("")
     const timer = setTimeout(async () => {
+      const timeout = setTimeout(() => abort.abort(), 15000)
       try {
-        const link = await api.previewEntry(entry.id, JSON.parse(snapshot))
+        const link = await api.previewEntry(entry.id, JSON.parse(snapshot), abort.signal)
         if (!active) return
         if (!link.siteUrl) throw new Error("This page does not have a preview address yet.")
         const url = new URL(link.siteUrl, location.origin)
@@ -143,8 +146,16 @@ export const VisualEditor = ({
           setFailure("")
         }
       } catch (error) {
-        if (active) setFailure(error instanceof Error ? error.message : "The preview could not load.")
+        if (active)
+          setFailure(
+            abort.signal.aborted
+              ? "The preview took too long. Your edits are still here. Try again."
+              : error instanceof Error
+                ? error.message
+                : "The preview could not load.",
+          )
       } finally {
+        clearTimeout(timeout)
         if (active) setLoading(false)
       }
     }, 450)
@@ -180,13 +191,10 @@ export const VisualEditor = ({
     return true
   }
   const move = (id: string, amount: number) => {
-    const next = sections.map(section => section.id)
-    const index = next.indexOf(id)
-    const swap = next[index + amount]
-    if (!swap) return
-    next[index] = swap
-    next[index + amount] = id
-    edit("__layout", { order: next, hidden })
+    if (disabled) return
+    const index = sections.findIndex(section => section.id === id)
+    const order = reorderSections(sections, id, sections[index + amount]?.id ?? "")
+    if (order) edit("__layout", { order, hidden })
   }
   const toggle = (id: string) =>
     edit("__layout", {
@@ -410,48 +418,14 @@ export const VisualEditor = ({
                     ? "Save to update your website."
                     : "Save to keep these changes. Publish when you’re ready."}
                 </p>
-                <ol className="visualsections">
-                  {sections.map((item, index) => (
-                    <li key={item.id}>
-                      <button type="button" className="visualsectionname" onClick={() => select({ section: item.id })}>
-                        {item.label}
-                        <small>{hidden.includes(item.id) ? "Hidden from visitors" : "Visible"}</small>
-                      </button>
-                      <div className="row">
-                        <button
-                          type="button"
-                          className="btn ghost sm"
-                          aria-label={`Move ${item.label} up`}
-                          disabled={index === 0 || item.movable === false || sections[index - 1]?.movable === false}
-                          onClick={() => move(item.id, -1)}
-                        >
-                          <ArrowUp size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn ghost sm"
-                          aria-label={`Move ${item.label} down`}
-                          disabled={
-                            index === sections.length - 1 ||
-                            item.movable === false ||
-                            sections[index + 1]?.movable === false
-                          }
-                          onClick={() => move(item.id, 1)}
-                        >
-                          <ArrowDown size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn ghost sm"
-                          aria-label={`${hidden.includes(item.id) ? "Show" : "Hide"} ${item.label}`}
-                          onClick={() => toggle(item.id)}
-                        >
-                          {hidden.includes(item.id) ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
+                <Sections
+                  sections={sections}
+                  hidden={hidden}
+                  disabled={disabled}
+                  select={id => select({ section: id })}
+                  reorder={order => edit("__layout", { order, hidden })}
+                  toggle={toggle}
+                />
               </>
             )}
           </fieldset>

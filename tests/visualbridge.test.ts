@@ -9,6 +9,51 @@ test("the only preview script matches the policy hash and parses independently",
   expect(() => new Function(BRIDGE)).not.toThrow()
 })
 
+test("save and undo shortcuts in the isolated preview reach the editor instead of the browser", () => {
+  const { document, window } = parseHTML(
+    '<html><head><meta name="inkling-preview"></head><body><section data-inkling-section="hero"></section></body></html>',
+  )
+  document
+    .querySelector("meta")
+    ?.setAttribute("content", JSON.stringify({ channel: "test", origin: "https://site.example" }))
+  const messages: unknown[] = []
+  const parent = { postMessage: (value: unknown) => messages.push(value) }
+  const run = new Function(
+    "document",
+    "parent",
+    "addEventListener",
+    "ResizeObserver",
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+    BRIDGE,
+  )
+  function observer() {
+    return { observe: () => {} }
+  }
+  run(
+    document,
+    parent,
+    () => {},
+    observer,
+    () => 0,
+    () => {},
+  )
+  for (const key of ["s", "z"]) {
+    const event = new window.Event("keydown", { bubbles: true, cancelable: true })
+    Object.assign(event, { key, metaKey: true, ctrlKey: false, shiftKey: key === "z" })
+    document.querySelector("section")?.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(messages.at(-1)).toEqual({
+      channel: "test",
+      kind: "shortcut",
+      key,
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: key === "z",
+    })
+  }
+})
+
 test("preview preparation removes host execution and pins the owned bridge before host content", () => {
   const previous = globalThis.DOMParser
   globalThis.DOMParser = DOMParser as unknown as typeof globalThis.DOMParser

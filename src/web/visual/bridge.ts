@@ -83,6 +83,11 @@ export const BRIDGE = `(() => {
   });
   document.addEventListener('submit', event => event.preventDefault(), true);
   document.addEventListener('keydown', event => {
+    if ((event.metaKey || event.ctrlKey) && ['s', 'z'].includes(event.key.toLowerCase())) {
+      event.preventDefault();
+      send('shortcut', { key: event.key.toLowerCase(), metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
+      return;
+    }
     const selection = selectionAt(event.target);
     if (!selection) return;
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
@@ -105,4 +110,4 @@ export const BRIDGE = `(() => {
   measure();
 })();`
 
-export const BRIDGE_HASH = "ek7OU3hisc3slkycwmzo76cE+IHQ7UVTf/sUC1NWBWo="
+export const BRIDGE_HASH = "ayjZng8UQEHeY3eOboBctEG6/YObUPkwLfvOW3MZpr4="
