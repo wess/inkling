@@ -30,13 +30,18 @@ prompt, transcript, issue, or shell history.
 
 ## Connect
 
-### ChatGPT desktop
+### Desktop setup
 
-Use the HTTPS connection for an ordinary ChatGPT chat. On the site you want to
-edit, the MCP URL is its public origin followed by `/mcp`, for example
-`https://your-site.example/mcp`. In ChatGPT, enable Developer mode under
-**Settings → Security and login**, then add that URL under **ChatGPT Plugins**.
-Choose the connection in a new chat. The account-linking page asks the person
+Open `/mcp/setup` on the site you want to edit. The tutorial includes that site's
+exact HTTPS MCP URL, desktop sign-in steps, a read-only connection check,
+troubleshooting, and downloadable skills. It is linked from Help and Providers.
+
+For Codex in the desktop app, open **Settings → MCP servers → Add server**, choose
+**Streamable HTTP**, enter the URL, save, restart, and authenticate. Use `/mcp` in
+the composer to verify connectivity. For ChatGPT chats, enable Developer mode
+under **Settings → Security and login**, create a personal plugin with the URL,
+install it, and select it with `@` in a Work chat. These are separate setup paths.
+The account-linking page asks the person
 to sign in to that Inkling site. The resulting connection acts as that account,
 is limited to the content tools and the account's current role, and appears as
 **ChatGPT connection** under Agent keys. Revoking that key cuts off the link.
@@ -46,6 +51,34 @@ Unlike Inky's proposals in the admin, MCP write tools save through the admin API
 when called. Review a write before allowing it, then read the result back.
 No local checkout, Bun installation, or copied agent key is needed on the
 person's computer.
+
+Start with `get_connection`: it identifies the website, account name, role,
+effective grants, and read-only mode without changing content. Then call
+`list_types` to discover real field definitions. Legacy protocol headers
+`2025-11-25` and `2025-06-18` use the legacy bridge; `2026-07-28` carries modern
+per-request metadata. A legacy HTTP header must not be promoted to modern metadata.
+
+### Reusable skills
+
+The `skills/` directory contains three workflows: `inklingedit`,
+`inklingcampaign`, and `inklingsitereview`. Downloads are served at
+`/mcp/skills/<name>`; local installation uses `<skills-directory>/<name>/SKILL.md`.
+The review workflow is read-only. Campaign instructions discover each site's
+schema and include the optional Warren hero controls without assuming other
+sites implement them.
+
+Initialization advertises `capabilities.extensions["io.modelcontextprotocol/skills"]`
+and standard resources. `skills/list`, `skills/get`, `resources/list`, and
+`resources/read` expose static instruction files using `skill://inkling/<name>/SKILL.md`
+URIs with SHA-256 resource digests. These public methods contain no account data.
+Only declared URIs can be read; arbitrary filesystem paths are never accepted.
+Plugin builders can import a snapshot through Scan Tools. Connecting MCP alone
+does not install the skills in a client's app. Re-scan after changing a skill.
+
+Desktop setup and import contracts follow the official
+[MCP guidance](https://learn.chatgpt.com/docs/extend/mcp),
+[plugin quickstart](https://developers.openai.com/plugins/quickstart), and
+[skill import contract](https://developers.openai.com/plugins/build/mcp-server#import-skills-from-the-mcp-server).
 
 ### Local coding agents
 

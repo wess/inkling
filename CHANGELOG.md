@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.22.0 — 2026-10-05
+
+### Added
+
+- A site-specific desktop connection tutorial at `/mcp/setup`, linked from Help
+  and Providers, with an exact server URL, account-linking steps, a read-only
+  check, troubleshooting, and reusable skill downloads.
+- Page editing, release campaign, and site review skills, exposed through MCP
+  skill discovery and resource reads with verified import digests.
+- A read-only `get_connection` tool identifying the website, account, role, and
+  effective permissions before an external editor starts work.
+
+### Fixed
+
+- Remote MCP requests with legacy protocol headers keep their legacy handling
+  instead of being rejected as unsupported modern requests.
+- Malformed remote messages return JSON-RPC errors rather than crashing the
+  request handler. Skill resource reads accept only declared files.
+
 Inkling is consumed as a git dependency and pinned by tag, so this file exists
 for one reader: someone deciding whether to move a site from one tag to the
 next. Entries say what changed and what it means for an install, not what was

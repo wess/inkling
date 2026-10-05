@@ -8399,7 +8399,7 @@ const AiProviders = ({ toast }: { toast: (message: string, bad?: boolean) => voi
           <h3 style={{ marginTop: 0 }}>Use your ChatGPT account</h3>
           <p className="dim2">
             You can connect this website inside ChatGPT and work there with your ChatGPT account.{" "}
-            <a href="https://inkling.host/school/chatgpt" target="_blank" rel="noreferrer">
+            <a href="/mcp/setup" target="_blank" rel="noreferrer">
               Follow the connection guide
             </a>
             .

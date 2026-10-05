@@ -6,6 +6,7 @@ import { config } from "../config/index.ts"
 import { sha256 } from "../ids/index.ts"
 import { now } from "../time/index.ts"
 import { oauthRoutes, resource } from "./oauth.ts"
+import { setupRoutes } from "./setup.ts"
 
 type Rpc = {
   jsonrpc: "2.0"
@@ -104,8 +105,9 @@ const denied = (id: string | number): Record<string, unknown> => ({
   },
 })
 
-export const mcpRoutes = (db: Connection): Route[] => [
+export const mcpRoutes = (db: Connection, adminBase = "/"): Route[] => [
   ...oauthRoutes(db),
+  ...setupRoutes(adminBase),
   get("/mcp", c => putHeader(text(c, 405, "Use POST for MCP requests"), "allow", "POST")),
   post("/mcp", async c => {
     const raw = await c.request.text()
@@ -116,8 +118,18 @@ export const mcpRoutes = (db: Connection): Route[] => [
     } catch {
       return json(c, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } })
     }
-    if (rpc.jsonrpc !== "2.0" || typeof rpc.method !== "string") {
-      return json(c, 400, { jsonrpc: "2.0", id: rpc.id ?? null, error: { code: -32600, message: "Invalid request" } })
+    if (
+      !rpc ||
+      typeof rpc !== "object" ||
+      Array.isArray(rpc) ||
+      rpc.jsonrpc !== "2.0" ||
+      typeof rpc.method !== "string" ||
+      (rpc.id !== undefined &&
+        typeof rpc.id !== "string" &&
+        !(typeof rpc.id === "number" && Number.isFinite(rpc.id))) ||
+      (rpc.params !== undefined && (!rpc.params || typeof rpc.params !== "object" || Array.isArray(rpc.params)))
+    ) {
+      return json(c, 400, { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid request" } })
     }
     if (rpc.id === undefined) return text(c, 202, "")
 
@@ -128,7 +140,7 @@ export const mcpRoutes = (db: Connection): Route[] => [
 
     const version = c.request.headers.get("mcp-protocol-version")
     const request: Rpc =
-      rpc.method === "initialize" || !version
+      rpc.method === "initialize" || !version || ["2025-11-25", "2025-06-18"].includes(version)
         ? rpc
         : {
             ...rpc,

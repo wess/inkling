@@ -8,6 +8,7 @@ import { prefixed } from "../src/http/index.ts"
 import { secretToken, sha256 } from "../src/ids/index.ts"
 import { mcpRoutes } from "../src/mcp/index.ts"
 import { oauthRoutes, resource } from "../src/mcp/oauth.ts"
+import { setupPage } from "../src/mcp/setup.ts"
 import { up } from "../src/migrate/index.ts"
 import { agentKeys, mcpOauthCodes } from "../src/schema/index.ts"
 import { createUser } from "../src/users/index.ts"
@@ -43,6 +44,17 @@ test("remote MCP publishes OAuth metadata and prompts an unlinked account", asyn
     expect(listed.result.tools.some(tool => tool.name === "upload_media")).toBe(false)
     expect(listed.result.tools.every(tool => tool.securitySchemes.length > 0)).toBe(true)
     expect(listed.result.tools.find(tool => tool.name === "get_visual_pages")?.annotations.readOnlyHint).toBe(true)
+    for (const version of ["2025-11-25", "2025-06-18", "2026-07-28"]) {
+      const response = await handle(
+        new Request("http://localhost/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json", "mcp-protocol-version": version },
+          body: JSON.stringify({ jsonrpc: "2.0", id: version, method: "tools/list" }),
+        }),
+      )
+      const rpc = (await response.json()) as { result: { tools: { name: string }[] } }
+      expect(rpc.result.tools.some(tool => tool.name === "get_connection")).toBe(true)
+    }
 
     const call = await handle(
       new Request("http://localhost/mcp", {
@@ -53,6 +65,78 @@ test("remote MCP publishes OAuth metadata and prompts an unlinked account", asyn
     )
     const denied = (await call.json()) as { result: { _meta: Record<string, unknown> } }
     expect(denied.result._meta["mcp/www_authenticate"]).toBeDefined()
+  } finally {
+    await db.close()
+  }
+})
+
+test("MCP skill discovery returns importable files with matching digests and refuses unknown paths", async () => {
+  const db = connect({ driver: "sqlite", path: ":memory:" })
+  await up(db, "./migrations")
+  const handle = router(...mcpRoutes(db))
+  const rpc = async (method: string, params = {}) => {
+    const response = await handle(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json", "mcp-protocol-version": "2025-11-25" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "skills", method, params }),
+      }),
+    )
+    return (await response.json()) as Record<string, any>
+  }
+  try {
+    const listed = await rpc("skills/list")
+    expect(listed.result.skills).toHaveLength(3)
+    for (const skill of listed.result.skills) {
+      expect((await rpc("skills/get", { uri: skill.uri })).result.skill).toEqual(skill)
+      const read = await rpc("resources/read", { uri: skill.uri })
+      expect(read.result.contents).toHaveLength(1)
+      const content = read.result.contents[0]
+      expect(content.uri).toBe(skill.uri)
+      expect(Bun.YAML.parse(content.text.split("---")[1])).toEqual(skill.frontmatter)
+      expect(`sha256:${new Bun.CryptoHasher("sha256").update(content.text).digest("hex")}`).toBe(
+        skill.resources[0].digest,
+      )
+    }
+    expect((await rpc("resources/read", { uri: "file:///etc/passwd" })).error.code).toBe(-32602)
+    expect((await rpc("skills/get", { uri: "skill://inkling/../secret" })).error.code).toBe(-32602)
+  } finally {
+    await db.close()
+  }
+})
+
+test("the desktop setup page uses this site's address and serves only declared skill downloads", async () => {
+  const db = connect({ driver: "sqlite", path: ":memory:" })
+  const handle = router(...mcpRoutes(db, "/studio"))
+  try {
+    const page = setupPage("https://publisher.example", "/studio")
+    expect(page).toContain('value="https://publisher.example/mcp"')
+    expect(page).toContain('href="https://publisher.example/studio"')
+    const response = await handle(new Request("http://localhost/mcp/setup"))
+    expect(response.headers.get("content-type")).toContain("text/html")
+    const download = await handle(new Request("http://localhost/mcp/skills/inklingedit"))
+    expect(download.headers.get("content-disposition")).toContain("SKILL.md")
+    expect(await download.text()).toContain("name: inklingedit")
+    expect((await handle(new Request("http://localhost/mcp/skills/secrets"))).status).toBe(404)
+  } finally {
+    await db.close()
+  }
+})
+
+test("malformed remote messages return protocol errors without crashing", async () => {
+  const db = connect({ driver: "sqlite", path: ":memory:" })
+  const handle = router(...mcpRoutes(db))
+  try {
+    for (const body of [
+      null,
+      [],
+      { jsonrpc: "2.0", method: "tools/list", id: {} },
+      { jsonrpc: "2.0", method: "tools/list", id: 1, params: [] },
+    ]) {
+      const response = await handle(new Request("http://localhost/mcp", { method: "POST", body: JSON.stringify(body) }))
+      expect(response.status).toBe(400)
+      expect(((await response.json()) as { error: { code: number } }).error.code).toBe(-32600)
+    }
   } finally {
     await db.close()
   }
@@ -288,6 +372,35 @@ test("a linked account can call a read tool through the remote bridge", async ()
     const visual = (await layout.json()) as { result: { isError: boolean; content: { text: string }[] } }
     expect(visual.result.isError).toBe(false)
     expect(JSON.parse(visual.result.content[0]?.text ?? "")).toEqual({ data: pages })
+    const call = async (name: string, args = {}) => {
+      const response = await fetch(resource, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${key}`,
+          "content-type": "application/json",
+          "mcp-protocol-version": "2025-11-25",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: name, method: "tools/call", params: { name, arguments: args } }),
+      })
+      return (await response.json()) as {
+        result: { isError: boolean; content: { text: string }[]; _meta?: Record<string, unknown> }
+      }
+    }
+    const identity = await call("get_connection")
+    expect(identity.result.isError).toBe(false)
+    expect(JSON.parse(identity.result.content[0]?.text ?? "")).toMatchObject({
+      name: "Reader",
+      role: "viewer",
+      grants: ["content.read"],
+    })
+    expect((await call("update_entry", { id: "anything", data: {} })).result.isError).toBe(true)
+    const keyHash = await sha256(key)
+    await db.execute(
+      from(agentKeys)
+        .update({ revoked_at: new Date().toISOString() })
+        .where(q => q("hashed_key").equals(keyHash)),
+    )
+    expect((await call("list_types")).result._meta?.["mcp/www_authenticate"]).toBeDefined()
   } finally {
     server.stop(true)
     await db.close()

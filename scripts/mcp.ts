@@ -45,6 +45,7 @@
 // or the client sees a parse error instead of a response.
 
 import pkg from "../package.json"
+import { skillCatalog, skillResource } from "../src/mcp/skills.ts"
 
 const BASE = process.env.INKLING_URL ?? ""
 const KEY = process.env.INKLING_KEY ?? ""
@@ -199,6 +200,14 @@ const fetchable = (raw: string): URL => {
 }
 
 const TOOLS: readonly Tool[] = [
+  {
+    name: "get_connection",
+    description:
+      "Check which Inkling website and account this connection uses, and which actions it permits. This does not change content.",
+    inputSchema: object({}),
+    needs: "content.read",
+    run: async () => ({ site: BASE, name: me.name, role: me.role, grants: [...held], readOnly: READONLY }),
+  },
   {
     name: "list_types",
     description:
@@ -599,9 +608,11 @@ const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
 const CACHE_MS = 300_000
 
 const instructions =
-  `Content tools for the Inkling site at ${BASE}, acting as ${me.name || me.email}. ` +
-  "Call list_types first — field names differ per site, and create_entry/update_entry are validated against " +
-  "them. New entries are drafts until publish_entry is called. " +
+  `Inkling website: ${BASE}. Start with get_connection and list_types, then get_entry before editing. ` +
+  "Editing a published entry changes the live website immediately. New entries are drafts until publish_entry. " +
+  "Read get_shared_areas for headers, colors, menus, and footers; shared changes affect every page. " +
+  "Send only requested fields, preserve unrelated list rows, and read back saved values. " +
+  "Read get_visual_pages before changing layout. Skill workflows are available through skills/list and resources/read. " +
   `This credential is limited to: ${[...held].join(", ")}. Anything not listed is refused by the site, not ` +
   "by this tool — do not plan around it."
 
@@ -679,7 +690,7 @@ const handle = async (request: Request): Promise<void> => {
       reply(request.id, {
         resultType: "complete",
         supportedVersions: [...SUPPORTED_PROTOCOLS],
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, extensions: { "io.modelcontextprotocol/skills": {} } },
         _meta: { [SERVER_INFO_META]: { name: "inkling", version: pkg.version } },
         instructions,
         ttlMs: CACHE_MS,
@@ -697,11 +708,43 @@ const handle = async (request: Request): Promise<void> => {
         protocolVersion: LEGACY_PROTOCOLS.includes(request.params?.protocolVersion)
           ? request.params.protocolVersion
           : LEGACY_PROTOCOLS[0],
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, extensions: { "io.modelcontextprotocol/skills": {} } },
         serverInfo: { name: "inkling", version: pkg.version },
         instructions,
       })
       return
+
+    case "skills/list":
+      reply(request.id, complete(modern, { skills: skillCatalog }))
+      return
+
+    case "skills/get": {
+      const skill = skillCatalog.find(skill => skill.uri === request.params?.uri)
+      if (!skill) fail(request.id, -32602, "Unknown skill")
+      else reply(request.id, complete(modern, { skill }))
+      return
+    }
+
+    case "resources/list":
+      reply(
+        request.id,
+        complete(modern, {
+          resources: skillCatalog.map(skill => ({
+            uri: skill.uri,
+            name: skill.frontmatter.name,
+            description: skill.frontmatter.description,
+            mimeType: "text/markdown",
+          })),
+        }),
+      )
+      return
+
+    case "resources/read": {
+      const content = skillResource(String(request.params?.uri ?? ""))
+      if (!content) fail(request.id, -32602, "Unknown skill resource")
+      else reply(request.id, complete(modern, { contents: [content] }))
+      return
+    }
 
     case "tools/list":
       reply(

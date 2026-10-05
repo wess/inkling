@@ -642,6 +642,18 @@ const inkling = await createInkling({ adminBase: "/admin", website })</pre></div
       than showing one message for the whole form.
     </p>
 
+    <h2 id="desktop">Desktop connections and skills</h2>
+    <p>Each site serves its own desktop setup tutorial at <code>/mcp/setup</code>,
+      linked from Help. It includes the site's connection URL, sign-in steps,
+      a read-only check, troubleshooting, and three reusable skills.
+      <a href="https://inkling.host/mcp/setup">Open the setup tutorial</a>.</p>
+    <p>The remote MCP and stdio bridge publish static skills through
+      <code>skills/list</code>, <code>skills/get</code>, and
+      <code>resources/read</code>. Initialization advertises the skills extension.
+      Importing a skill into a distributed plugin creates a snapshot; connection
+      alone does not install it. See the <a href="../agent-guide.md">agent guide</a>
+      for the protocol and installation contract.</p>
+
     <div class="onward">
       <a class="cta ghost" href="../tutorials/">← Tutorials</a>
       <a class="cta" href="https://github.com/wess/inkling">Source →</a>

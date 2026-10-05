@@ -1,6 +1,6 @@
 {
   "name": "inkling",
-  "version": "1.21.0",
+  "version": "1.22.0",
   "description": "A headless CMS with a plugin system and an agent that can work the whole of it.",
   "type": "module",
   "license": "MIT",
@@ -11,7 +11,13 @@
     "url": "git+https://github.com/wess/inkling.git"
   },
   "bugs": "https://github.com/wess/inkling/issues",
-  "keywords": ["cms", "headless-cms", "bun", "typescript", "postgres"],
+  "keywords": [
+    "cms",
+    "headless-cms",
+    "bun",
+    "typescript",
+    "postgres"
+  ],
   "private": true,
   "exports": {
     ".": "./src/app.ts",

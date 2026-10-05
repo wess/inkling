@@ -39,6 +39,12 @@ ordinary admin API still checks the key's grants and its owner's current role
 on every operation. OAuth discovery and consent live beside `/mcp`, while the
 existing stdio bridge remains available for local clients.
 
+`/mcp/setup` is a public, site-specific desktop tutorial; `/mcp/skills/:name`
+downloads packaged instruction files. Skill and resource discovery expose only
+these static files, including import digests, and never account content. Tool
+calls still require the linked account. Legacy HTTP protocol headers stay in
+the legacy bridge rather than becoming modern per-request metadata.
+
 They share one origin and are separated by path. Everything session-gated is
 mounted through `prefixed("/api", …)`; everything public keeps a root path,
 because those paths are pasted into other people's code — a media URL is stored

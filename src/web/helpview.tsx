@@ -73,6 +73,12 @@ export const HelpScreen = (): React.JSX.Element => {
         Find an answer, or follow a guide at your own pace. The (?) buttons around Inkling open the same advice right
         where you need it.
       </p>
+      <p className="helpintro">
+        <a href="/mcp/setup" target="_blank" rel="noreferrer">
+          Connect ChatGPT or Codex desktop to this website
+        </a>
+        {" · "}Setup, a first connection check, and reusable website skills.
+      </p>
       <label className="helpsearch">
         <span>Search help</span>
         <input

@@ -193,7 +193,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   // a session-gated route exports two arrays (see mediaRoutes / mediaFileRoutes)
   // rather than being mounted twice.
   const routes = [
-    ...mcpRoutes(db),
+    ...mcpRoutes(db, adminBase),
     ...prefixed("/api", [
       ...authRoutes(db),
       ...userRoutes(db),
