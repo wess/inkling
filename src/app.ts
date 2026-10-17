@@ -37,6 +37,7 @@ import { taxonomyRoutes } from "./taxonomy/index.ts"
 import { now } from "./time/index.ts"
 import { createUser, userRoutes } from "./users/index.ts"
 import { type VisualPages, visualRoutes } from "./visual/index.ts"
+import type { AdminOptions } from "./web/options.ts"
 import { buildAdmin } from "./web/serve.ts"
 import { registerWebhookBridge, webhookRoutes } from "./webhooks/index.ts"
 import { type Website, websiteRoutes } from "./website/index.ts"
@@ -59,7 +60,7 @@ const fromRoot = (path: string): string => (isAbsolute(path) ? path : resolve(RO
 
 export type { Surface, Surfaces } from "./design/index.ts"
 export type { VisualLayout, VisualPage, VisualPages, VisualSection } from "./visual/index.ts"
-
+export type { AdminOptions } from "./web/options.ts"
 export type { SharedPart, Website } from "./website/index.ts"
 
 export type InklingOptions = {
@@ -78,6 +79,7 @@ export type InklingOptions = {
   design?: Surfaces
   website?: Website
   visual?: VisualPages
+  admin?: AdminOptions
 }
 
 // Bun.serve hands `fetch` a server exposing the raw socket peer. It is optional
@@ -245,7 +247,7 @@ export const createInkling = async (options: InklingOptions = {}): Promise<Inkli
   // 6. Bundle the admin before starting anything that needs explicit cleanup.
   // An embedding host may catch a failed boot and try again in the same
   // process; starting intervals first would leave the failed attempt running.
-  const admin = await buildAdmin(adminBase)
+  const admin = await buildAdmin(adminBase, options.admin)
 
   // 7. Background sweeps. Small enough not to justify a job runner; each is
   // wrapped so a failure logs rather than killing the interval.

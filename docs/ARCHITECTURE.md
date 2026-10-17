@@ -117,7 +117,17 @@ site can mount its own CMS instead of deploying one beside itself:
 ```ts
 import { createInkling } from "inkling"
 
-const inkling = await createInkling({ adminBase: "/admin", siteKeyName: "site" })
+const inkling = await createInkling({
+  adminBase: "/admin",
+  siteKeyName: "site",
+  admin: {
+    name: "Example site",
+    guide: { title: "Editing guide", description: "Start with the everyday tasks.", href: "/guide.pdf" },
+    showAssistant: false,
+    showSocial: false,
+    groupFields: true,
+  },
+})
 
 Bun.serve({
   // Body ceiling and idle timeout, decided by Inkling so a host cannot drift.

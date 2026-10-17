@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.23.0 — 2026-10-17
+
+### Added
+
+- Embedded sites can name their admin, link a site-specific PDF from Help, and trim assistant and social navigation until those tools are needed.
+- Long forms can group adjacent fields whose labels share a section prefix, so a page with many editable areas opens as a short list of sections.
+
+
 ## 1.22.0 — 2026-10-05
 
 ### Added

@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { HELP, type HelpEntry } from "./help.ts"
+import type { AdminOptions } from "./options.ts"
 
 export const HelpContent = ({ entry }: { entry: HelpEntry }): React.JSX.Element => (
   <div className="helpbody">
@@ -56,7 +57,13 @@ const groups = [
   },
 ]
 
-export const HelpScreen = (): React.JSX.Element => {
+export const HelpScreen = ({
+  guide,
+  showConnections = true,
+}: {
+  guide?: AdminOptions["guide"]
+  showConnections?: boolean
+}): React.JSX.Element => {
   const [query, setQuery] = useState("")
   const words = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
   const entries = Object.entries(HELP).filter(([, entry]) => {
@@ -73,12 +80,25 @@ export const HelpScreen = (): React.JSX.Element => {
         Find an answer, or follow a guide at your own pace. The (?) buttons around Inkling open the same advice right
         where you need it.
       </p>
-      <p className="helpintro">
-        <a href="/mcp/setup" target="_blank" rel="noreferrer">
-          Connect ChatGPT or Codex desktop to this website
-        </a>
-        {" · "}Setup, a first connection check, and reusable website skills.
-      </p>
+      {guide?.href.startsWith("/") && !guide.href.startsWith("//") ? (
+        <div className="siteguide">
+          <div>
+            <h2>{guide.title}</h2>
+            <p>{guide.description}</p>
+          </div>
+          <a className="btn primary" href={guide.href} target="_blank" rel="noopener noreferrer">
+            Open guide (PDF)
+          </a>
+        </div>
+      ) : null}
+      {showConnections ? (
+        <p className="helpintro">
+          <a href="/mcp/setup" target="_blank" rel="noreferrer">
+            Connect a desktop editor to this website
+          </a>
+          {" · "}Setup, a first connection check, and reusable website skills.
+        </p>
+      ) : null}
       <label className="helpsearch">
         <span>Search help</span>
         <input

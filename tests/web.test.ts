@@ -26,3 +26,18 @@ test("the admin serves one in-memory build with immutable assets", async () => {
 
   expect((await handle(new URL("http://localhost/admin/missing.js"))).status).toBe(404)
 })
+
+test("embedded admin options reach the document without breaking its CSP", async () => {
+  const handle = await buildAdmin("/backroom", {
+    name: "Undercover Comics",
+    guide: { title: "Shop guide", description: "Start here", href: "/onboarding.pdf" },
+    showSocial: false,
+    groupFields: true,
+  })
+  const response = await handle(new URL("http://localhost/backroom/help"))
+  const html = await response.text()
+  expect(html).toContain("<title>Undercover Comics</title>")
+  expect(html).toContain('window.__INKLING_ADMIN__={"name":"Undercover Comics"')
+  expect(html).toContain("/onboarding.pdf")
+  expect(response.headers.get("content-security-policy")).toContain("'sha256-")
+})

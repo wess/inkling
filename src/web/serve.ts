@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { config } from "../config/index.ts"
+import type { AdminOptions } from "./options.ts"
 import { BRIDGE_HASH } from "./visual/bridge.ts"
 
 // The admin is bundled by the same process that serves the API, and handed back
@@ -63,7 +64,7 @@ const documentCsp = async (inlineScript: string): Promise<string> => {
 // when a host owns the root. It has to reach three places — the emitted asset
 // URLs, the asset lookup, and the SPA's own routing — so it is injected into the
 // document rather than baked into the bundle, and the same build serves either.
-export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
+export const buildAdmin = async (base = "/", options: AdminOptions = {}): Promise<AdminHandler> => {
   const prefix = base === "/" ? "" : base.replace(/\/+$/, "")
 
   const result = await Bun.build({
@@ -99,11 +100,16 @@ export const buildAdmin = async (base = "/"): Promise<AdminHandler> => {
   // served from the root, so the paths are made absolute.
   // The SPA reads its own routes off location.pathname, so it has to be told
   // what part of the path is the mount point rather than a route.
-  const baseScript = `window.__INKLING_BASE__=${JSON.stringify(prefix)}`
+  const boot = JSON.stringify(options).replace(/</g, "\\u003c")
+  const baseScript = `window.__INKLING_BASE__=${JSON.stringify(prefix)};window.__INKLING_ADMIN__=${boot}`
 
   const indexHtml = (await index.text())
     .replace(/ crossorigin(?=[\s>])/g, "")
     .replace(/(src|href)="\.\/(chunk-)/g, `$1="${prefix}/$2`)
+    .replace(
+      "<title>Inkling</title>",
+      `<title>${(options.name ?? "Inkling").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>`,
+    )
     .replace("</head>", `<script>${baseScript}</script></head>`)
 
   const csp = await documentCsp(baseScript)

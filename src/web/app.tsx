@@ -86,6 +86,7 @@ import type {
 } from "./api.ts"
 import { api, clearToken, getToken, setToken } from "./api.ts"
 import { useDraft } from "./draft/index.ts"
+import { fieldGroups } from "./fieldgroups.ts"
 import type { HelpId } from "./help.ts"
 import { HELP, helpFor } from "./help.ts"
 import { HelpContent, HelpScreen } from "./helpview.tsx"
@@ -102,6 +103,7 @@ import {
   useInky,
 } from "./inkystore.ts"
 import { websiteNavigation } from "./navigation.ts"
+import type { AdminOptions } from "./options.ts"
 import { VisualEditor } from "./visual/index.tsx"
 import { SharedScreen } from "./website/index.tsx"
 import { MenuLink } from "./website/link.tsx"
@@ -241,6 +243,7 @@ type Route =
 // owns the origin; "/admin" or similar when a site does. Every route the SPA
 // reads or writes is relative to it.
 const BASE: string = (window as Window & { __INKLING_BASE__?: string }).__INKLING_BASE__ ?? ""
+const ADMIN: AdminOptions = (window as Window & { __INKLING_ADMIN__?: AdminOptions }).__INKLING_ADMIN__ ?? {}
 
 const relative = (pathname: string): string =>
   BASE && pathname.startsWith(BASE) ? pathname.slice(BASE.length) || "/" : pathname
@@ -1516,10 +1519,21 @@ const Dashboard = ({ go, types, role }: { go: (route: Route) => void; types: Con
     <div className="home">
       <div>
         <h1>
-          Your website <Hint id="home.start" />
+          {ADMIN.name ?? "Your website"} <Hint id="home.start" />
         </h1>
         <p className="dim">Choose what you want to update. You can return here any time.</p>
       </div>
+      {ADMIN.guide ? (
+        <div className="homeguide">
+          <div>
+            <strong>New here? Start with the site guide.</strong>
+            <p>{ADMIN.guide.description}</p>
+          </div>
+          <button type="button" className="btn primary" onClick={() => go({ name: "help" })}>
+            Open Help
+          </button>
+        </div>
+      ) : null}
       <section aria-labelledby="homecontent">
         <h2 id="homecontent">Website content</h2>
         <div className="homecontent">
@@ -1560,7 +1574,7 @@ const Dashboard = ({ go, types, role }: { go: (route: Route) => void; types: Con
         <button type="button" className="btn" onClick={() => go({ name: "media" })}>
           <ImageIcon size={16} /> Photos & files
         </button>
-        {hasRole(role, "author") ? (
+        {ADMIN.showSocial !== false && hasRole(role, "author") ? (
           <button type="button" className="btn" onClick={() => go({ name: "socialcompose", id: null })}>
             <Send size={16} /> Write a social post
           </button>
@@ -2435,15 +2449,32 @@ const Editor = ({
                 {type.fields.length === 0 ? (
                   <Empty title="No fields defined" hint={`Add fields to "${type.label}" to start capturing content.`} />
                 ) : (
-                  type.fields.map(field => (
-                    <FieldInput
-                      key={field.key}
-                      field={field}
-                      value={data[field.key]}
-                      error={errors[field.key]}
-                      onChange={value => edit(field.key, value)}
-                    />
-                  ))
+                  (ADMIN.groupFields
+                    ? fieldGroups(type.fields)
+                    : [{ name: null, fields: type.fields.map(field => ({ field, label: field.label })) }]
+                  ).map((group, index, groups) => {
+                    const inputs = group.fields.map(({ field, label }) => (
+                      <FieldInput
+                        key={field.key}
+                        field={label === field.label ? field : { ...field, label }}
+                        value={data[field.key]}
+                        error={errors[field.key]}
+                        onChange={value => edit(field.key, value)}
+                      />
+                    ))
+                    if (!group.name) return <div key={`plain-${group.fields[0]?.field.key}`}>{inputs}</div>
+                    const first = groups.findIndex(item => item.name !== null)
+                    return (
+                      <details
+                        className="editorgroup"
+                        key={`${group.name}-${group.fields[0]?.field.key}`}
+                        open={index === first || group.fields.some(({ field }) => Boolean(errors[field.key]))}
+                      >
+                        <summary>{group.name}</summary>
+                        <div className="editorgroupfields">{inputs}</div>
+                      </details>
+                    )
+                  })
                 )}
               </div>
             </div>
@@ -10313,7 +10344,7 @@ const App = () => {
       case "media":
         return <MediaLibrary canManage={hasRole(me.role, "author")} toast={toast} />
       case "help":
-        return <HelpScreen />
+        return <HelpScreen guide={ADMIN.guide} showConnections={ADMIN.showAssistant !== false} />
       case "types":
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin manages content types.</Note>
         return <TypesScreen types={types} editing={route.type} go={go} onChanged={loadWorkspace} toast={toast} />
@@ -10427,8 +10458,8 @@ const App = () => {
     <div className="shell">
       <aside className="side">
         <div className="brand">
-          <div className="brandmark">I</div>
-          <span>Inkling</span>
+          <div className="brandmark">{ADMIN.name?.charAt(0) ?? "I"}</div>
+          <span>{ADMIN.name ?? "Inkling"}</span>
           <button
             type="button"
             className="btn ghost mobilenav"
@@ -10444,7 +10475,9 @@ const App = () => {
           <div className="navgroup">
             {nav({ name: "dashboard" }, "Home", LayoutGrid)}
             {nav({ name: "media" }, "Photos & files", ImageIcon)}
-            {hasRole(me.role, "author") ? nav({ name: "ai" }, "Ask Inky", Sparkles) : null}
+            {ADMIN.showAssistant !== false && hasRole(me.role, "author")
+              ? nav({ name: "ai" }, "Ask Inky", Sparkles)
+              : null}
             {nav({ name: "help" }, "Help", CircleHelp)}
           </div>
 
@@ -10477,7 +10510,7 @@ const App = () => {
             </details>
           ) : null}
 
-          {hasRole(me.role, "author") ? (
+          {ADMIN.showSocial !== false && hasRole(me.role, "author") ? (
             <details
               className="navgroup navsection"
               key={`social-${route.name.startsWith("social")}`}
@@ -10585,7 +10618,9 @@ const App = () => {
 
       {changingPassword ? <ChangePassword onClose={() => setChangingPassword(false)} toast={toast} /> : null}
 
-      {hasRole(me.role, "author") ? <InkyDock route={route} types={types} toast={toast} go={go} /> : null}
+      {ADMIN.showAssistant !== false && hasRole(me.role, "author") ? (
+        <InkyDock route={route} types={types} toast={toast} go={go} />
+      ) : null}
 
       {message ? <div className={cx("toast", message.bad && "bad")}>{message.text}</div> : null}
     </div>

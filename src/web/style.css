@@ -172,6 +172,22 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 24px;
 }
+.homeguide,
+.siteguide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.homeguide p,
+.siteguide p {
+  margin-top: 4px;
+  color: var(--text2);
+}
 .contentchoice {
   display: flex;
   align-items: center;
@@ -355,6 +371,19 @@ a {
 }
 .helppage h1 {
   margin-bottom: 8px;
+}
+.siteguide {
+  margin-top: 20px;
+}
+.siteguide h2 {
+  font-size: 16px;
+}
+@media (max-width: 600px) {
+  .homeguide,
+  .siteguide {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 .helpintro,
 .helpresult {
@@ -1307,6 +1336,21 @@ tbody tr.click:hover {
   border: 1px solid var(--line);
   border-radius: var(--radius2);
   padding: 9px 10px;
+}
+.editorgroup {
+  border-top: 1px solid var(--line);
+}
+.editorgroup > summary {
+  padding: 18px 0;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.editorgroup[open] > summary {
+  padding-bottom: 12px;
+}
+.editorgroupfields {
+  padding-bottom: 10px;
 }
 .schedulebox summary {
   color: var(--text2);
