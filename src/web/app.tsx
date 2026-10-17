@@ -10344,7 +10344,7 @@ const App = () => {
       case "media":
         return <MediaLibrary canManage={hasRole(me.role, "author")} toast={toast} />
       case "help":
-        return <HelpScreen guide={ADMIN.guide} showConnections={ADMIN.showAssistant !== false} />
+        return <HelpScreen guide={ADMIN.guide} showConnections={ADMIN.showConnections !== false} />
       case "types":
         if (!hasRole(me.role, "admin")) return <Note kind="warn">An admin manages content types.</Note>
         return <TypesScreen types={types} editing={route.type} go={go} onChanged={loadWorkspace} toast={toast} />

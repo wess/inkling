@@ -124,6 +124,7 @@ const inkling = await createInkling({
     name: "Example site",
     guide: { title: "Editing guide", description: "Start with the everyday tasks.", href: "/guide.pdf" },
     showAssistant: false,
+    showConnections: false,
     showSocial: false,
     groupFields: true,
   },

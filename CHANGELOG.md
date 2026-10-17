@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.23.2 — 2026-10-17
+
+### Fixed
+
+- Embedded sites can hide desktop-connection instructions in Help without hiding their configured in-admin assistant.
+
+
 ## 1.23.1 — 2026-10-17
 
 ### Fixed
