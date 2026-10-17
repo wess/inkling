@@ -77,7 +77,7 @@ export const HelpScreen = ({
     <div className="helppage">
       <h1>Help</h1>
       <p className="helpintro">
-        Find an answer, or follow a guide at your own pace. The (?) buttons around Inkling open the same advice right
+        Find an answer, or follow a guide at your own pace. The (?) buttons around this admin open the same advice right
         where you need it.
       </p>
       {guide?.href.startsWith("/") && !guide.href.startsWith("//") ? (

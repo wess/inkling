@@ -6843,9 +6843,9 @@ const Login = ({ onDone }: { onDone: (identity: Identity) => void }) => {
     <div className="login">
       <div className="loginbox">
         <div className="loginhead">
-          <div className="brandmark">I</div>
-          <h1>Inkling</h1>
-          <p>{setupRequired ? "Create the owner account for this site." : "Sign in to manage your content."}</p>
+          <div className="brandmark">{ADMIN.name?.charAt(0) ?? "I"}</div>
+          <h1>{ADMIN.name ?? "Inkling"}</h1>
+          <p>{setupRequired ? "Create the owner account for this site." : "Sign in to update your website."}</p>
         </div>
 
         <form className="card" onSubmit={submit}>

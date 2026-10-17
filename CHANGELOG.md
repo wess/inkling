@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.23.1 — 2026-10-17
+
+### Fixed
+
+- Embedded sites now show their own name on the sign-in screen as well as in the admin shell and browser title.
+
+
 ## 1.23.0 — 2026-10-17
 
 ### Added
