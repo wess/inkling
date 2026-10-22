@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
-import { connect, from } from "atlas/db"
-import { router } from "atlas/server"
+import { from } from "@wess/atlas/db/query"
+import { connect } from "@wess/atlas/db/sqlite"
+import { router } from "@wess/atlas/server"
 import { agentRoutes } from "../src/ai/agent.ts"
 import { seal } from "../src/ai/secrets.ts"
 import { issueSession } from "../src/auth/index.ts"
@@ -232,7 +233,7 @@ test("the tool list on the wire is the one the asking role could apply", async (
 
   const asAuthor = await setup("author")
   await frames(asAuthor.db, asAuthor.token, "What is in my menus?")
-  const authorTools = (mock.seen[0]?.tools as { name: string }[]).map(tool => tool.name)
+  const authorTools = ((mock.seen[0]?.tools ?? []) as { name: string }[]).map(tool => tool.name)
   expect(authorTools).toContain("propose_entry_update")
   expect(authorTools).not.toContain("propose_settings_update")
   expect(authorTools).not.toContain("get_social_setup")
@@ -244,7 +245,7 @@ test("the tool list on the wire is the one the asking role could apply", async (
   const beforeOwner = mock.seen.length
   const asOwner = await setup("owner")
   await frames(asOwner.db, asOwner.token, "What is in my menus?")
-  const ownerTools = (mock.seen[beforeOwner]?.tools as { name: string }[]).map(tool => tool.name)
+  const ownerTools = ((mock.seen[beforeOwner]?.tools ?? []) as { name: string }[]).map(tool => tool.name)
   expect(ownerTools).toContain("propose_settings_update")
   expect(ownerTools).toContain("get_social_setup")
   expect(ownerTools.length).toBeGreaterThan(authorTools.length)

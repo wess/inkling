@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
-import { verify } from "atlas/auth"
-import { connect, from } from "atlas/db"
+import { verify } from "@wess/atlas/auth/password"
+import { from } from "@wess/atlas/db/query"
+import { connect } from "@wess/atlas/db/sqlite"
 import { id } from "../src/ids/index.ts"
 import { up } from "../src/migrate/index.ts"
 import { auditEvents, sessions, users } from "../src/schema/index.ts"
@@ -91,7 +92,7 @@ const reset = async (db: Db, userId: string, passwordHash: string) => {
 
 test("a reset replaces the password and the old one stops verifying", async () => {
   const { db, owner } = await ready()
-  const { hash } = await import("atlas/auth")
+  const { hash } = await import("@wess/atlas/auth")
 
   expect(await verify("the-original-password", await hashOf(db, owner.id))).toBe(true)
 
@@ -106,7 +107,7 @@ test("a reset replaces the password and the old one stops verifying", async () =
 
 test("every live session for that account is revoked, and only that account's", async () => {
   const { db, owner } = await ready()
-  const { hash } = await import("atlas/auth")
+  const { hash } = await import("@wess/atlas/auth")
 
   const other = await createUser(db, {
     email: "editor@example.com",
@@ -134,7 +135,7 @@ test("every live session for that account is revoked, and only that account's", 
 
 test("the reset is recorded as an out-of-band event", async () => {
   const { db, owner } = await ready()
-  const { hash } = await import("atlas/auth")
+  const { hash } = await import("@wess/atlas/auth")
 
   await reset(db, owner.id, await hash("a-brand-new-password"))
 

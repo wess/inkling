@@ -13,7 +13,7 @@ Inkling and Atlas as dependencies of the project that contains your plugin.
 Use the Atlas version pinned by your Inkling release.
 
 ```ts
-import { get, json, pipeline } from "atlas/server"
+import { get, json, pipeline } from "@wess/atlas/server"
 import { can, definePlugin, requireAuth, requireCan } from "inkling/plugins"
 
 export default definePlugin({

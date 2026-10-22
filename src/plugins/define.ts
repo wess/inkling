@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import type { Route } from "atlas/server"
+import type { Connection } from "@wess/atlas/db/query"
+import type { Route } from "@wess/atlas/server"
 import type { Field } from "../fields/index.ts"
 import type { EmitMap, EmitName, FilterMap, FilterName } from "./hooks.ts"
 

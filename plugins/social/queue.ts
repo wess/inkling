@@ -1,4 +1,4 @@
-import type { Connection } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
 import { byId, loadType, preview, refTitle, text } from "./entries.ts"
 import { STAGE_LABELS } from "./model.ts"
 import { labelNetworks, overLimit } from "./networks.ts"

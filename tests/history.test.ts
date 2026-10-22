@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect, from } from "atlas/db"
+import { from } from "@wess/atlas/db/query"
+import { connect } from "@wess/atlas/db/sqlite"
 import type { Proposal } from "../src/ai/tools/index.ts"
 import { runTool, toolsFor } from "../src/ai/tools/index.ts"
 import { id } from "../src/ids/index.ts"

@@ -1,5 +1,5 @@
-import { from } from "atlas/db"
-import { badRequest, del, get, json, parseJson, pipeline, post, tooManyRequests } from "atlas/server"
+import { from } from "@wess/atlas/db/query"
+import { badRequest, del, get, json, parseJson, pipeline, post, tooManyRequests } from "@wess/atlas/server"
 import { requireAuth, requireCan } from "../../src/auth/guard.ts"
 import { can } from "../../src/auth/roles.ts"
 import { corsAll } from "../../src/http/index.ts"

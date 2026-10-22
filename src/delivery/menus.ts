@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
 import { rows } from "../db/dialect.ts"
 import { type KeyIdentity, keyAllows } from "../keys/index.ts"
 import { type MenuItem, safeUrl } from "../menus/index.ts"

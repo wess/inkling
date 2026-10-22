@@ -172,6 +172,23 @@ test("a private bucket is never widened to public-read behind your back", async 
   expect(headers[0]?.get("x-amz-acl")).toBeNull()
 })
 
+test("public uploads preserve blobs instead of buffering a second copy", async () => {
+  const driver = createS3Driver({ ...settings, publicUrl: "https://cdn.example.com" })
+  const blob = new Blob([new Uint8Array(1024 * 1024)], { type: "image/png" })
+  blob.arrayBuffer = async () => {
+    throw new Error("the public upload buffered its blob")
+  }
+  let sent: BodyInit | null | undefined
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    sent = init?.body
+    return new Response(null, { status: 200 })
+  }) as typeof fetch
+
+  await driver.put("a.png", blob, "image/png")
+
+  expect(sent).toBe(blob)
+})
+
 test("a rejected public upload fails loudly rather than recording a missing object", async () => {
   const driver = createS3Driver({ ...settings, publicUrl: "https://cdn.example.com" })
   respondWith(403, "AccessDenied")

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect } from "atlas/db"
-import { router } from "atlas/server"
+import { connect } from "@wess/atlas/db/sqlite"
+import { router } from "@wess/atlas/server"
 import type { Proposal } from "../src/ai/tools/index.ts"
 import { runTool, specsFor, toolsFor } from "../src/ai/tools/index.ts"
 import { issueSession } from "../src/auth/index.ts"

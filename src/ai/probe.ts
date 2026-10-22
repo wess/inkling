@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
-import { createProvider } from "atlas/ai"
+import { createProvider } from "@wess/atlas/ai"
 import { claudeExtras, type ResolvedCredential } from "./complete.ts"
 import { endpointFor } from "./providers.ts"
 

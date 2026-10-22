@@ -251,7 +251,7 @@ has the same shape as a row read in production.
 | Timestamp | `TEXT` ISO-8601 | Postgres `TIMESTAMPTZ` returns a `Date`; SQLite returns a string. ISO text also makes lexical sort equal chronological sort. |
 | Boolean | `INTEGER` 0/1 | Postgres `BOOLEAN` returns `true/false`; SQLite returns `0/1`. |
 | JSON | `TEXT` | Postgres `JSONB` arrives pre-parsed; SQLite doesn't. |
-| Column names | snake_case | `atlas/db` emits identifiers **unquoted**. Postgres folds camelCase to lowercase, SQLite preserves it — so a camelCase column returns a differently-spelled key per driver. |
+| Column names | snake_case | `@wess/atlas/db` emits identifiers **unquoted**. Postgres folds camelCase to lowercase, SQLite preserves it — so a camelCase column returns a differently-spelled key per driver. |
 
 The two places dialects genuinely differ are isolated in `src/db/dialect.ts`:
 `contains()` picks `ILIKE` vs `LOWER(...) LIKE`, and `countRows()` normalizes
@@ -266,7 +266,7 @@ reachable, and skips otherwise so the default `bun test` needs no setup.
 
 ### The migration runner
 
-`src/migrate/index.ts` replaces `atlas/migrate#up`, which hands a whole
+`src/migrate/index.ts` replaces `@wess/atlas/migrate#up`, which hands a whole
 `up.sql` to `db.execute` as a single statement — and bun:sqlite's
 `prepare(sql).run()` executes only the *first* statement of a multi-statement
 string while reporting success. Ours splits on statement-terminating semicolons
@@ -662,9 +662,9 @@ modal the Keys screen uses.
 
 Inky runs on any of the three providers, because all three can call tools. What
 differs is the wire format, and there are only two: Claude's own, through the
-official SDK, and OpenAI's, through `atlas/ai`. **Ollama takes the OpenAI path**
+official SDK, and OpenAI's, through `@wess/atlas/ai`. **Ollama takes the OpenAI path**
 — it serves an OpenAI-compatible endpoint at `/v1` both locally and as Ollama
-Cloud, so the difference between the two is a base URL. Going through `atlas/ai`'s
+Cloud, so the difference between the two is a base URL. Going through `@wess/atlas/ai`'s
 *native* Ollama provider would not work: it drops tools when streaming and sends
 no `Authorization` header, which puts the cloud out of reach entirely.
 
@@ -721,7 +721,7 @@ the visitor is on, and returns a configured line rather than guessing when the
 answer isn't there.
 
 Claude is the default and goes through the official Anthropic SDK. Other providers
-go through `atlas/ai`'s abstraction rather than being bent into an
+go through `@wess/atlas/ai`'s abstraction rather than being bent into an
 Anthropic-shaped client.
 
 ## Plugins
@@ -1308,6 +1308,11 @@ current URL, which is fine at `/` and 404s on any deep link like
 `src/storage/` is the only place blob backends are touched: a `StorageDriver`
 interface (`put` / `get` / `drop`), a discriminated config, and a dispatcher.
 Adding a backend is a new file plus a case.
+
+The S3 adapter uses Atlas uploads with a per-object `public-read` ACL only when
+a public/CDN base is configured. Other uploads omit the ACL. Blob hashing streams
+through Atlas without creating a second complete byte buffer; bucket prefixes and
+stored media keys keep their existing layout.
 
 The interface deliberately omits `signedUrl`. Every read goes through the API so
 access rules stay enforceable in one place; adding presigning would create a

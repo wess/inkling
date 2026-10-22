@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { withSecurityHeaders } from "atlas/security"
-import { get, json, pipe, putHeader, router } from "atlas/server"
+import { withSecurityHeaders } from "@wess/atlas/security"
+import { get, json, pipe, putHeader, router } from "@wess/atlas/server"
 import { storedMime } from "../src/media/index.ts"
 import { checkOutboundUrl, clientIp, isPrivateHost } from "../src/security/index.ts"
 

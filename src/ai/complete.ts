@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
-import { createProvider } from "atlas/ai"
+import { createProvider } from "@wess/atlas/ai"
 import type { ProviderName } from "./providers.ts"
 import { endpointFor, PROVIDERS } from "./providers.ts"
 

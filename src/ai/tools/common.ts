@@ -1,4 +1,4 @@
-import type { Connection } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
 import type { Capability, Scope } from "../../auth/roles.ts"
 import type { Change, Surfaces } from "../../design/index.ts"
 import type { Field } from "../../fields/index.ts"

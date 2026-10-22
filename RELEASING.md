@@ -13,7 +13,9 @@ a redeploy. Nothing is published to npm.
 | warren | https://warren.wess.dev | `/admin` | `warrenpublishing` (local) | gohan |
 | undercover | https://undercover.wess.dev | `/backroom` | `undercover` (local) | gohan |
 | schorror | https://schorror.wess.dev | `/admin` | `schorror` (local) | gohan |
-| aaa | https://aaa.wess.dev | `/admin` | `aaa` (local) | gohan |
+
+AAA was retired on 2026-10-09. Its URL redirects to `wess.dev`; retained archives
+and databases are outside the active rollout.
 
 `inkling.host` is the School — this project's own documentation, running on
 this project. `inkling.wess.dev` still serves the same container as a fallback

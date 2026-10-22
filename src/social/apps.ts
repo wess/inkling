@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
 import { open, seal } from "../ai/secrets.ts"
 import { one, rows as query } from "../db/dialect.ts"
 import { fromBit, toBit } from "../json/index.ts"

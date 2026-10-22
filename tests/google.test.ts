@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { connect } from "atlas/db"
+import { connect } from "@wess/atlas/db/sqlite"
 import { summarize as summarizeAds } from "../plugins/google/ads.ts"
 import {
   measurementIdFor,
@@ -360,7 +360,7 @@ const site = async () => {
   const { issueSession } = await import("../src/auth/index.ts")
   const { createUser } = await import("../src/users/index.ts")
   const { ensureNamedKey } = await import("../src/keys/index.ts")
-  const { router } = await import("atlas/server")
+  const { router } = await import("@wess/atlas/server")
 
   const hooks = createHooks(() => {})
   const registry = await createRegistry(connection, hooks, "./plugins")

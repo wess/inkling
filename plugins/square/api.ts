@@ -1,4 +1,4 @@
-import { badRequest } from "atlas/server"
+import { badRequest } from "@wess/atlas/server"
 import type { Settings } from "./config.ts"
 import { host, VERSION } from "./config.ts"
 

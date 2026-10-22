@@ -1,4 +1,4 @@
-import { badRequest } from "atlas/server"
+import { badRequest } from "@wess/atlas/server"
 import { config } from "../../src/config/index.ts"
 import type { PluginContext } from "../../src/plugins/define.ts"
 

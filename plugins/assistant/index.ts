@@ -1,4 +1,4 @@
-import { from } from "atlas/db"
+import { from } from "@wess/atlas/db/query"
 import {
   badRequest,
   conflict,
@@ -12,7 +12,7 @@ import {
   putHeader,
   text,
   tooManyRequests,
-} from "atlas/server"
+} from "@wess/atlas/server"
 import { complete, resolveCredential } from "../../src/ai/index.ts"
 import { contains, rows as query } from "../../src/db/dialect.ts"
 import { corsAll, preflight } from "../../src/http/index.ts"

@@ -1,5 +1,5 @@
-import type { Route } from "atlas/server"
-import { get, putHeader, text } from "atlas/server"
+import type { Route } from "@wess/atlas/server"
+import { get, putHeader, text } from "@wess/atlas/server"
 import { config } from "../config/index.ts"
 import { skillCatalog, skillDownload } from "./skills.ts"
 
