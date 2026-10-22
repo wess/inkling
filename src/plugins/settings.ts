@@ -1,4 +1,4 @@
-import type { Connection } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
 import { open, seal } from "../ai/secrets.ts"
 import { readSetting, writeSetting } from "../settings/index.ts"
 import type { PluginSetting } from "./define.ts"

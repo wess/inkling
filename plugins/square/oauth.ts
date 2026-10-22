@@ -1,5 +1,5 @@
-import { from } from "atlas/db"
-import { badRequest, del, get, json, pipeline, post, putHeader, redirect } from "atlas/server"
+import { from } from "@wess/atlas/db/query"
+import { badRequest, del, get, json, pipeline, post, putHeader, redirect } from "@wess/atlas/server"
 import { auth, requireAuth, requireCan } from "../../src/auth/guard.ts"
 import { can } from "../../src/auth/roles.ts"
 import { one } from "../../src/db/dialect.ts"

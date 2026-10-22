@@ -1,4 +1,4 @@
-import { column, defineSchema } from "atlas/db"
+import { column, defineSchema } from "@wess/atlas/db/query"
 
 // The TypeScript mirror of `migrations/`. Migrations are the runtime source of
 // truth — this file is what gives queries their row types. When you change one,

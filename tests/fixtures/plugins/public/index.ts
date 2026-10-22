@@ -1,4 +1,4 @@
-import { get, json, pipeline } from "atlas/server"
+import { get, json, pipeline } from "@wess/atlas/server"
 import { auth, can, definePlugin, requireAuth, requireCan } from "inkling/plugins"
 
 export default definePlugin({

@@ -1,4 +1,4 @@
-import { from } from "atlas/db"
+import { from } from "@wess/atlas/db/query"
 import { can } from "../../auth/roles.ts"
 import { decodeArray } from "../../json/index.ts"
 import type { MenuItem } from "../../menus/index.ts"

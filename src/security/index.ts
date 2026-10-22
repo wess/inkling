@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { from, raw } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
+import { from, raw } from "@wess/atlas/db/query"
 import { config } from "../config/index.ts"
 import { id } from "../ids/index.ts"
 import { encode } from "../json/index.ts"

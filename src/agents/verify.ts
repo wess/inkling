@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
 import type { Scope } from "../auth/roles.ts"
 import { isGrantable } from "../auth/roles.ts"
 import { decodeArray } from "../json/index.ts"

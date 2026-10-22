@@ -1,4 +1,4 @@
-import { badRequest, forbidden, get, json, parseJson, pipeline, post } from "atlas/server"
+import { badRequest, forbidden, get, json, parseJson, pipeline, post } from "@wess/atlas/server"
 import { rows } from "../../src/db/dialect.ts"
 import { body, noStore } from "../../src/http/index.ts"
 import { keyAllows, keyIdentity, requireApiKey } from "../../src/keys/index.ts"

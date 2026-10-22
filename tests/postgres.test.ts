@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test"
-import { connect, from } from "atlas/db"
+import { connect } from "@wess/atlas/db/postgres"
+import { from } from "@wess/atlas/db/query"
 import { countRows } from "../src/db/dialect.ts"
 import { id } from "../src/ids/index.ts"
 import { encode } from "../src/json/index.ts"

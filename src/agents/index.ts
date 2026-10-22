@@ -1,7 +1,7 @@
-import { verify } from "atlas/auth"
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
-import type { Route } from "atlas/server"
+import { verify } from "@wess/atlas/auth/password"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
+import type { Route } from "@wess/atlas/server"
 import {
   badRequest,
   del,
@@ -14,7 +14,7 @@ import {
   post,
   tooManyRequests,
   unauthorized,
-} from "atlas/server"
+} from "@wess/atlas/server"
 import { auth, requireAuth, requireHuman } from "../auth/guard.ts"
 import type { Capability, Scope } from "../auth/roles.ts"
 import { can, GRANTABLE_SCOPES, isGrantable, SCOPE_LABELS } from "../auth/roles.ts"

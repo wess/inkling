@@ -1,4 +1,4 @@
-import { badRequest } from "atlas/server"
+import { badRequest } from "@wess/atlas/server"
 
 export type VisualLayout = { order: string[]; hidden: string[] }
 

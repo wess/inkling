@@ -20,8 +20,8 @@
 // prompts for nothing — it just needs to be reachable when someone is locked
 // out, at 2am, over SSH.
 
-import { hash } from "atlas/auth"
-import { from } from "atlas/db"
+import { hash } from "@wess/atlas/auth/password"
+import { from } from "@wess/atlas/db/query"
 import { openDb } from "../src/db/index.ts"
 import { id } from "../src/ids/index.ts"
 import { auditEvents, sessions, users } from "../src/schema/index.ts"

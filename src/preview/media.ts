@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
 import type { Field } from "../fields/index.ts"
 import type { MediaRow } from "../media/index.ts"
 import { present } from "../media/index.ts"

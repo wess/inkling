@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
-import { connect } from "atlas/db"
-import { router } from "atlas/server"
+import { connect } from "@wess/atlas/db/sqlite"
+import { router } from "@wess/atlas/server"
 import { parseHTML } from "linkedom"
 import { issueSession } from "../src/auth/index.ts"
 import { up } from "../src/migrate/index.ts"

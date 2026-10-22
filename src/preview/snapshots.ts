@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { badRequest } from "atlas/server"
+import type { Connection } from "@wess/atlas/db/query"
+import { badRequest } from "@wess/atlas/server"
 import type { EntryRow } from "../entries/index.ts"
 
 const MAX_BYTES = 16 * 1024 * 1024

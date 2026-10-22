@@ -1,4 +1,4 @@
-import { badRequest, get, json, parseJson, pipeline, post } from "atlas/server"
+import { badRequest, get, json, parseJson, pipeline, post } from "@wess/atlas/server"
 import { auth, requireAuth, requireCan } from "../../src/auth/guard.ts"
 import { can } from "../../src/auth/roles.ts"
 import { rows } from "../../src/db/dialect.ts"

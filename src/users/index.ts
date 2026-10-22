@@ -1,8 +1,20 @@
-import { hash } from "atlas/auth"
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
-import type { Route } from "atlas/server"
-import { badRequest, conflict, del, forbidden, get, json, notFound, parseJson, pipeline, post, put } from "atlas/server"
+import { hash } from "@wess/atlas/auth/password"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
+import type { Route } from "@wess/atlas/server"
+import {
+  badRequest,
+  conflict,
+  del,
+  forbidden,
+  get,
+  json,
+  notFound,
+  parseJson,
+  pipeline,
+  post,
+  put,
+} from "@wess/atlas/server"
 import { auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can, isRole, ROLE_LABELS, rank } from "../auth/roles.ts"
 import { countRows, paging } from "../db/dialect.ts"

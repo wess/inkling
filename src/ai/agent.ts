@@ -1,9 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { Message, ToolCall, ToolDef } from "atlas/ai"
-import { createProvider, toolMessage } from "atlas/ai"
-import type { Connection } from "atlas/db"
-import type { Route } from "atlas/server"
-import { badRequest, conflict, json, parseJson, pipeline, post, putHeader, stream, tooManyRequests } from "atlas/server"
+import type { Message, ToolCall, ToolDef } from "@wess/atlas/ai"
+import { createProvider, toolMessage } from "@wess/atlas/ai"
+import type { Connection } from "@wess/atlas/db/query"
+import type { Route } from "@wess/atlas/server"
+import {
+  badRequest,
+  conflict,
+  json,
+  parseJson,
+  pipeline,
+  post,
+  putHeader,
+  stream,
+  tooManyRequests,
+} from "@wess/atlas/server"
 import { allows, auth, requireAuth, requireCan } from "../auth/guard.ts"
 import { can, scopesFor } from "../auth/roles.ts"
 import type { Surfaces } from "../design/index.ts"
@@ -318,14 +328,14 @@ export type Markable = { cache_control?: { type: "ephemeral" } | null }
 
 const MAX_ROLLING = 2
 
-const blocksOf = (message: { content: unknown }): Markable[] =>
+const blocksOf = (message: { content?: unknown }): Markable[] =>
   Array.isArray(message.content) ? (message.content.filter(b => b && typeof b === "object") as Markable[]) : []
 
 // A transcript arrives from the browser carrying the markers the previous turn
 // left on it. Without this they accumulate across turns and the request is
 // eventually rejected for exceeding the ceiling — a failure that only shows up
 // on a conversation someone kept going.
-export const clearBreakpoints = (messages: readonly { content: unknown }[]): void => {
+export const clearBreakpoints = (messages: readonly { content?: unknown }[]): void => {
   for (const message of messages) {
     for (const block of blocksOf(message)) delete block.cache_control
   }
@@ -334,7 +344,7 @@ export const clearBreakpoints = (messages: readonly { content: unknown }[]): voi
 // Marks the newest turn and retires the oldest mark once more than MAX_ROLLING
 // are live. Messages whose content is a plain string carry no blocks to mark,
 // which is fine — the system breakpoint already covers everything before them.
-export const roll = (messages: readonly { content: unknown }[], rolling: Markable[]): void => {
+export const roll = (messages: readonly { content?: unknown }[], rolling: Markable[]): void => {
   const tail = blocksOf(messages[messages.length - 1] ?? { content: null }).at(-1)
   if (!tail || rolling.includes(tail)) return
 

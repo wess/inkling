@@ -1,4 +1,4 @@
-import { from } from "atlas/db"
+import { from } from "@wess/atlas/db/query"
 import { can } from "../../auth/roles.ts"
 import type { ContentTypeRow } from "../../contenttypes/index.ts"
 import { present as presentType, byId as typeById, byName as typeByName } from "../../contenttypes/index.ts"

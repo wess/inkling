@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { get, json, pipeline, type Route } from "atlas/server"
+import type { Connection } from "@wess/atlas/db/query"
+import { get, json, pipeline, type Route } from "@wess/atlas/server"
 import { requireAuth, requireCan } from "../auth/guard.ts"
 import { can } from "../auth/roles.ts"
 import type { MenuItem } from "../menus/index.ts"

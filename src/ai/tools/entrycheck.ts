@@ -1,5 +1,5 @@
-import type { Connection } from "atlas/db"
-import { isHttpError } from "atlas/server"
+import type { Connection } from "@wess/atlas/db/query"
+import { isHttpError } from "@wess/atlas/server"
 import type { ContentTypeRow } from "../../contenttypes/index.ts"
 import { validateAgainstType, validateRelations } from "../../entries/index.ts"
 import type { Field } from "../../fields/index.ts"

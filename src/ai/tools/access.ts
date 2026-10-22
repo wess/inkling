@@ -1,4 +1,4 @@
-import { from } from "atlas/db"
+import { from } from "@wess/atlas/db/query"
 import { can, isRole, ROLE_LABELS, ROLES, rank } from "../../auth/roles.ts"
 import { rows } from "../../db/dialect.ts"
 import { decodeArray, fromBit } from "../../json/index.ts"

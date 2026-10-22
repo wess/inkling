@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from "node:fs"
-import type { Connection } from "atlas/db"
+import type { Connection } from "@wess/atlas/db/query"
 
 // Inkling runs its own migration runner instead of `atlas/migrate#up`.
 // Reason: that runner hands a whole up.sql to `db.execute` as one statement.

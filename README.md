@@ -303,7 +303,7 @@ These plugins ship with Inkling:
 | `google` | Google Analytics and Google Ads. A `guide` panel that walks a non-technical operator through setup and ticks itself off as they go, two `stats` panels, and a `secret` setting whose value the API can never hand back |
 
 ```ts
-import { get, json } from "atlas/server"
+import { get, json } from "@wess/atlas/server"
 import { definePlugin } from "inkling/plugins"
 
 export default definePlugin({
@@ -421,11 +421,9 @@ bun add github:wess/inkling          # or follow main
 Pin a site you care about. The unpinned form resolves to whatever `main` is at
 install time, which is right for trying it and wrong for a site in production.
 
-Nothing else is needed to make it resolve: Inkling imports Atlas as bare
-`atlas/<pkg>` specifiers that go through Atlas's own `exports` map, so no
-`tsconfig.json` `paths` entry is involved. (An aliased `@atlas/<pkg>` would not
-survive the trip — Bun does not apply a consuming project's tsconfig paths to
-files under `node_modules`.)
+Inkling imports released Atlas libraries through `@wess/atlas/<package>`.
+The coordinated GitHub release URLs are pinned in its manifest and lockfile;
+consuming sites need no local Atlas checkout or TypeScript path aliases.
 
 `createInkling` returns a handler rather than a server:
 

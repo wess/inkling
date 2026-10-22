@@ -1,7 +1,7 @@
-import type { Connection } from "atlas/db"
-import { from } from "atlas/db"
-import type { Conn, Route } from "atlas/server"
-import { forbidden, get, json, notFound, options, pipeline, putHeader } from "atlas/server"
+import type { Connection } from "@wess/atlas/db/query"
+import { from } from "@wess/atlas/db/query"
+import type { Conn, Route } from "@wess/atlas/server"
+import { forbidden, get, json, notFound, options, pipeline, putHeader } from "@wess/atlas/server"
 import type { ContentTypeRow } from "../contenttypes/index.ts"
 import { byName as typeByName } from "../contenttypes/index.ts"
 // Aliased — the list route already binds `rows` to its own page of entries.

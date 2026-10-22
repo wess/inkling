@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.23.3 — 2026-10-22
+
+### Fixed
+
+- Install only the Atlas libraries Inkling uses, pinned to versioned GitHub release assets. Embedded sites no longer need an Atlas checkout or source aliases. Bun 1.4.4 or newer is required.
+- Update dependencies and provider SDK types together, with the PostgreSQL and embedded-site compatibility checks retained.
+- Use Atlas per-object ACLs for public media uploads, preserving Blob bodies without a second full-size buffer. Private uploads retain their existing access rules.
+- Exclude the retired AAA site from active fleet health checks.
+
 ## 1.23.2 — 2026-10-17
 
 ### Fixed

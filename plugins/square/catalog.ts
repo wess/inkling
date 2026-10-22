@@ -1,4 +1,4 @@
-import { badRequest } from "atlas/server"
+import { badRequest } from "@wess/atlas/server"
 import type { Client } from "./api.ts"
 
 export type Money = { amount: number; currency: string }

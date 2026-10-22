@@ -44,13 +44,6 @@ const SITES: readonly Site[] = [
     container: "schorror",
   },
   {
-    name: "aaa",
-    url: "https://aaa.wess.dev",
-    admin: "/admin",
-    host: "gohan",
-    container: "aaa",
-  },
-  {
     name: "apothecary",
     url: "https://apothecary.wess.dev",
     admin: "/admin",
