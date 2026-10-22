@@ -1,6 +1,6 @@
 {
   "name": "inkling",
-  "version": "1.23.3",
+  "version": "1.23.4",
   "description": "A headless CMS with a plugin system and an agent that can work the whole of it.",
   "type": "module",
   "license": "MIT",
@@ -41,7 +41,7 @@
     "format": "biome format src/ plugins/ scripts/ tests/ templates/",
     "check": "biome check src/ plugins/ scripts/ tests/ templates/",
     "tidy": "biome check --write src/ plugins/ scripts/ tests/ templates/",
-    "check:atlas": "bunx --package https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-cli-0.4.7.tgz atlas check"
+    "check:atlas": "bunx --package https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-cli-0.4.9.tgz atlas check"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
@@ -55,14 +55,14 @@
     "lucide-react": "^1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-0.4.7.tgz",
-    "@wess/atlas-ai": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-ai-0.4.7.tgz",
-    "@wess/atlas-server": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-server-0.4.7.tgz",
-    "@wess/atlas-auth": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-auth-0.4.7.tgz",
-    "@wess/atlas-db": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-db-0.4.7.tgz",
-    "@wess/atlas-config": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-config-0.4.7.tgz",
-    "@wess/atlas-security": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-security-0.4.7.tgz",
-    "@wess/atlas-storage": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-storage-0.4.7.tgz"
+    "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-0.4.9.tgz",
+    "@wess/atlas-ai": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-ai-0.4.9.tgz",
+    "@wess/atlas-server": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-server-0.4.9.tgz",
+    "@wess/atlas-auth": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-auth-0.4.9.tgz",
+    "@wess/atlas-db": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-db-0.4.9.tgz",
+    "@wess/atlas-config": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-config-0.4.9.tgz",
+    "@wess/atlas-security": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-security-0.4.9.tgz",
+    "@wess/atlas-storage": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-storage-0.4.9.tgz"
   },
   "peerDependencies": {
     "typescript": "^7.0.2"
