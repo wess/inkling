@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.23.4 — 2026-10-22
+
+### Fixed
+
+- Align the selected Atlas libraries with release 0.4.9 and retain the verified text-message provider behavior.
+
 ## 1.23.3 — 2026-10-22
 
 ### Fixed

@@ -6,14 +6,14 @@
       "name": "inkling",
       "dependencies": {
         "@anthropic-ai/sdk": "^1.1.0",
-        "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-0.4.7.tgz",
-        "@wess/atlas-ai": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-ai-0.4.7.tgz",
-        "@wess/atlas-auth": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-auth-0.4.7.tgz",
-        "@wess/atlas-config": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-config-0.4.7.tgz",
-        "@wess/atlas-db": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-db-0.4.7.tgz",
-        "@wess/atlas-security": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-security-0.4.7.tgz",
-        "@wess/atlas-server": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-server-0.4.7.tgz",
-        "@wess/atlas-storage": "https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-storage-0.4.7.tgz",
+        "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-0.4.9.tgz",
+        "@wess/atlas-ai": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-ai-0.4.9.tgz",
+        "@wess/atlas-auth": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-auth-0.4.9.tgz",
+        "@wess/atlas-config": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-config-0.4.9.tgz",
+        "@wess/atlas-db": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-db-0.4.9.tgz",
+        "@wess/atlas-security": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-security-0.4.9.tgz",
+        "@wess/atlas-server": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-server-0.4.9.tgz",
+        "@wess/atlas-storage": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-storage-0.4.9.tgz",
         "linkedom": "^0.18.14",
         "lucide-react": "^1.61.0",
         "react": "^19.3.1",
@@ -111,21 +111,21 @@
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
-    "@wess/atlas": ["@wess/atlas@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-0.4.7.tgz", { "peerDependencies": { "@wess/atlas-admin": "0.4.7", "@wess/atlas-ai": "0.4.7", "@wess/atlas-auth": "0.4.7", "@wess/atlas-billing": "0.4.7", "@wess/atlas-cache": "0.4.7", "@wess/atlas-cli": "0.4.7", "@wess/atlas-config": "0.4.7", "@wess/atlas-db": "0.4.7", "@wess/atlas-edge": "0.4.7", "@wess/atlas-email": "0.4.7", "@wess/atlas-mcp": "0.4.7", "@wess/atlas-migrate": "0.4.7", "@wess/atlas-oauth": "0.4.7", "@wess/atlas-request": "0.4.7", "@wess/atlas-security": "0.4.7", "@wess/atlas-server": "0.4.7", "@wess/atlas-share": "0.4.7", "@wess/atlas-social": "0.4.7", "@wess/atlas-sso": "0.4.7", "@wess/atlas-storage": "0.4.7", "@wess/atlas-ui": "0.4.7" }, "optionalPeers": ["@wess/atlas-admin", "@wess/atlas-ai", "@wess/atlas-auth", "@wess/atlas-billing", "@wess/atlas-cache", "@wess/atlas-cli", "@wess/atlas-config", "@wess/atlas-db", "@wess/atlas-edge", "@wess/atlas-email", "@wess/atlas-mcp", "@wess/atlas-migrate", "@wess/atlas-oauth", "@wess/atlas-request", "@wess/atlas-security", "@wess/atlas-server", "@wess/atlas-share", "@wess/atlas-social", "@wess/atlas-sso", "@wess/atlas-storage", "@wess/atlas-ui"] }, "sha512-9MFOgZgpPTvkl1qBXd1ktjhg94bbNo2UJLBOnp/v+eaP9w47cJx/rmptI6qfR5jV8VsmfqpfCtcTeW8l15FE4Q=="],
+    "@wess/atlas": ["@wess/atlas@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-0.4.9.tgz", { "peerDependencies": { "@wess/atlas-admin": "0.4.9", "@wess/atlas-ai": "0.4.9", "@wess/atlas-auth": "0.4.9", "@wess/atlas-billing": "0.4.9", "@wess/atlas-cache": "0.4.9", "@wess/atlas-cli": "0.4.9", "@wess/atlas-config": "0.4.9", "@wess/atlas-db": "0.4.9", "@wess/atlas-edge": "0.4.9", "@wess/atlas-email": "0.4.9", "@wess/atlas-mcp": "0.4.9", "@wess/atlas-migrate": "0.4.9", "@wess/atlas-oauth": "0.4.9", "@wess/atlas-request": "0.4.9", "@wess/atlas-security": "0.4.9", "@wess/atlas-server": "0.4.9", "@wess/atlas-share": "0.4.9", "@wess/atlas-social": "0.4.9", "@wess/atlas-sso": "0.4.9", "@wess/atlas-storage": "0.4.9", "@wess/atlas-ui": "0.4.9" }, "optionalPeers": ["@wess/atlas-admin", "@wess/atlas-ai", "@wess/atlas-auth", "@wess/atlas-billing", "@wess/atlas-cache", "@wess/atlas-cli", "@wess/atlas-config", "@wess/atlas-db", "@wess/atlas-edge", "@wess/atlas-email", "@wess/atlas-mcp", "@wess/atlas-migrate", "@wess/atlas-oauth", "@wess/atlas-request", "@wess/atlas-security", "@wess/atlas-server", "@wess/atlas-share", "@wess/atlas-social", "@wess/atlas-sso", "@wess/atlas-storage", "@wess/atlas-ui"] }, "sha512-inHyUypAxGa6U6xGfEf3Rtr5kRpKBME5/YL7yvPk3X0mic8S9NRlRhDHcBkvewkxI/p1MbJETPJkcpMoxQzBig=="],
 
-    "@wess/atlas-ai": ["@wess/atlas-ai@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-ai-0.4.7.tgz", { "peerDependencies": { "@wess/atlas-server": "0.4.7" }, "optionalPeers": ["@wess/atlas-server"] }, "sha512-02NFjpP8sfUPZit/k/jpsU/MIV4/oxtrfdamAu+zjCsAt02HeyhnSeO96liWYSrtKzGxSYB7MXRySGRcY8N98w=="],
+    "@wess/atlas-ai": ["@wess/atlas-ai@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-ai-0.4.9.tgz", { "peerDependencies": { "@wess/atlas-server": "0.4.9" }, "optionalPeers": ["@wess/atlas-server"] }, "sha512-p+rJvQ4KhEHBb7CCe60U2eqDlC9gSzFvjPAI5TBk2RdWrHdu/x0fu7pFWb1ueO/vSYZTeAbZDw9UcCzn7VPfjQ=="],
 
-    "@wess/atlas-auth": ["@wess/atlas-auth@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-auth-0.4.7.tgz", { "peerDependencies": { "@wess/atlas-db": "0.4.7", "@wess/atlas-server": "0.4.7" }, "optionalPeers": ["@wess/atlas-db", "@wess/atlas-server"] }, "sha512-+cmrnNz2DbxUXurAyfQKoQmSWcu7QATr0jUKDs5h80uQkjPSTnEO3QewtQdRlMMKS1e+7+zni7Ixtcw3G6pC6w=="],
+    "@wess/atlas-auth": ["@wess/atlas-auth@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-auth-0.4.9.tgz", { "peerDependencies": { "@wess/atlas-db": "0.4.9", "@wess/atlas-server": "0.4.9" }, "optionalPeers": ["@wess/atlas-db", "@wess/atlas-server"] }, "sha512-QTnpgZbY7Ha02oa8aPv3H/mhjYEx2Yl8b7h1bPs2Wt4gy0OaLHPB+tZ1Z4OSGUsqswGCD7+mW/MOHjwvjtxtsg=="],
 
-    "@wess/atlas-config": ["@wess/atlas-config@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-config-0.4.7.tgz", {}, "sha512-ALp/BConYOsMiKD9RcjOrKsner7loy2S6HeE/k1W9UpMJuFYyYmT+V88Xli0i1V5Yoa0rDIsZVPTG0pt2QmYVw=="],
+    "@wess/atlas-config": ["@wess/atlas-config@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-config-0.4.9.tgz", {}, "sha512-MajkbpSIrDwQWNQZ5HjqcerNRYbakAybrgQlaOeBg8bNk4mryqb4j2kxeVr4WuIXUxsNFyh6k4bN44khNqxrYg=="],
 
-    "@wess/atlas-db": ["@wess/atlas-db@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-db-0.4.7.tgz", {}, "sha512-6Nct3MngDhlXBOS9ylzNw9rBsSPb67AJEhE9PBayEaTpVZkyVhqtiEK8r5v6NvMMLACnTrB01zhSesUjfmxHEA=="],
+    "@wess/atlas-db": ["@wess/atlas-db@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-db-0.4.9.tgz", {}, "sha512-Q+2TI2OABveLsNVc+1PtiEfdygply/UDAChntp/mMY6UI4I3v0Sc4i/tlf/iN95MTdvvMZLGoVLqkEK2ufMSOg=="],
 
-    "@wess/atlas-security": ["@wess/atlas-security@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-security-0.4.7.tgz", { "peerDependencies": { "@wess/atlas-auth": "0.4.7", "@wess/atlas-db": "0.4.7" }, "optionalPeers": ["@wess/atlas-auth", "@wess/atlas-db"] }, "sha512-PFhHH0kTOKbTr7PxHE3A7u5U/ItDjdcERPRejoQB5TvcrJWaizU73dsdx0yPhe9eANMEvVQB474ehFKWmHMiJQ=="],
+    "@wess/atlas-security": ["@wess/atlas-security@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-security-0.4.9.tgz", { "peerDependencies": { "@wess/atlas-auth": "0.4.9", "@wess/atlas-db": "0.4.9" }, "optionalPeers": ["@wess/atlas-auth", "@wess/atlas-db"] }, "sha512-bAX8VBKbub7tKHUnIp82Ytd5PCiDgfQ9Eowh6jqg/nEiw6uFKhi0apIwnlDz51C9XQL532W1VD48KSkr0mb7/w=="],
 
-    "@wess/atlas-server": ["@wess/atlas-server@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-server-0.4.7.tgz", {}, "sha512-wdHrDOtmjOrBNXTpUClHM1ECl+5g6nsoxye7YGua7YN0FbfRmDA8n3Q5Bcbh8xKEziWZX7JodbBLwUaL+SP6fA=="],
+    "@wess/atlas-server": ["@wess/atlas-server@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-server-0.4.9.tgz", {}, "sha512-5EnrfmeLFxL2t/ZJzhdZnKtEf0CYjiztDeS6RQ/9zxVDTg/OpABMMi0eaHMJ4luUMarvzV0S0X14G1JGMye6KA=="],
 
-    "@wess/atlas-storage": ["@wess/atlas-storage@https://github.com/wess/atlas/releases/download/v0.4.7/wess-atlas-storage-0.4.7.tgz", {}, "sha512-yX2MiX+OkGyE2JQIfL65pqaL83sT+llYqN0wSuT5wdJBMx8WQjVNBNj9sWnIoxJ+D0xy2gmldRaBWhg3iBiMlQ=="],
+    "@wess/atlas-storage": ["@wess/atlas-storage@https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-storage-0.4.9.tgz", {}, "sha512-tK3EEJPrB5jP9BrWL22gac32Na7jShLCoZCsft4uEQWupp09a30oTKrDkZ6BXNODuLegMKurqqGby0fHq2Enzg=="],
 
     "boolbase": ["boolbase@2.0.0", "", {}, "sha512-DkVaaQHymRhpYEYo9x1oo7Q7B0Y6KJUsjm3c9eTyFDby4MHLBTwZ6ZDWBel5zrYxj1WsZgC5oLpiz+93MluXeA=="],
 
