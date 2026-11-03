@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.23.5 — 2026-11-03
+
+### Fixed
+
+- Update the Bun, Biome, provider SDK, icon, and DOM dependency set to the current compatible security-patched releases.
+
 ## 1.23.4 — 2026-10-22
 
 ### Fixed

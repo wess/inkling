@@ -1,6 +1,7 @@
 {
   "name": "inkling",
-  "version": "1.23.4",
+  "version": "1.23.5",
+  "packageManager": "bun@1.4.4",
   "description": "A headless CMS with a plugin system and an agent that can work the whole of it.",
   "type": "module",
   "license": "MIT",
@@ -41,18 +42,18 @@
     "format": "biome format src/ plugins/ scripts/ tests/ templates/",
     "check": "biome check src/ plugins/ scripts/ tests/ templates/",
     "tidy": "biome check --write src/ plugins/ scripts/ tests/ templates/",
-    "check:atlas": "bunx --package https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-cli-0.4.9.tgz atlas check"
+    "check:atlas": "bunx --package https://github.com/wess/atlas/releases/download/v0.4.10/wess-atlas-cli-0.4.10.tgz atlas check"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.2",
-    "@types/bun": "^1.4.3",
+    "@biomejs/biome": "2.6.4",
+    "@types/bun": "^1.4.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.1.0",
-    "linkedom": "^0.18.14",
-    "lucide-react": "^1.61.0",
+    "@anthropic-ai/sdk": "^1.4.0",
+    "linkedom": "^0.18.15",
+    "lucide-react": "^1.67.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-0.4.9.tgz",
