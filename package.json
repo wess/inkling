@@ -42,7 +42,7 @@
     "format": "biome format src/ plugins/ scripts/ tests/ templates/",
     "check": "biome check src/ plugins/ scripts/ tests/ templates/",
     "tidy": "biome check --write src/ plugins/ scripts/ tests/ templates/",
-    "check:atlas": "bunx --package https://github.com/wess/atlas/releases/download/v0.4.10/wess-atlas-cli-0.4.10.tgz atlas check"
+    "check:atlas": "bunx --package https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-cli-0.5.1.tgz atlas check"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
@@ -52,18 +52,18 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
+    "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-0.5.1.tgz",
+    "@wess/atlas-ai": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-ai-0.5.1.tgz",
+    "@wess/atlas-auth": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-auth-0.5.1.tgz",
+    "@wess/atlas-config": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-config-0.5.1.tgz",
+    "@wess/atlas-db": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-db-0.5.1.tgz",
+    "@wess/atlas-security": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-security-0.5.1.tgz",
+    "@wess/atlas-server": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-server-0.5.1.tgz",
+    "@wess/atlas-storage": "https://github.com/wess/atlas/releases/download/v0.5.1/wess-atlas-storage-0.5.1.tgz",
     "linkedom": "^0.18.15",
     "lucide-react": "^1.67.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "@wess/atlas": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-0.4.9.tgz",
-    "@wess/atlas-ai": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-ai-0.4.9.tgz",
-    "@wess/atlas-server": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-server-0.4.9.tgz",
-    "@wess/atlas-auth": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-auth-0.4.9.tgz",
-    "@wess/atlas-db": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-db-0.4.9.tgz",
-    "@wess/atlas-config": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-config-0.4.9.tgz",
-    "@wess/atlas-security": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-security-0.4.9.tgz",
-    "@wess/atlas-storage": "https://github.com/wess/atlas/releases/download/v0.4.9/wess-atlas-storage-0.4.9.tgz"
+    "react-dom": "^19.3.1"
   },
   "peerDependencies": {
     "typescript": "^7.0.2"
